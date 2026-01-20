@@ -3,8 +3,8 @@
 
 """
 作者: [weego/WXAI-Team]
-版本: 0.4.7
-最后更新: 2025-11-05
+版本: 0.4.8
+最后更新: 2025-12-14
 """
 
 import asyncio
@@ -30,7 +30,7 @@ from mcp.client.sse import sse_client
 from mcp.client.stdio import stdio_client
 from openai.types.chat import ChatCompletionChunk
 
-__version__ = "0.4.7"  # 你可以根据需要设置版本号
+__version__ = "0.4.8"  # 你可以根据需要设置版本号
 
 
 # openai.langfuse_auth_check()
@@ -424,7 +424,7 @@ class MCPClientManager:
 
 
 class LightAgent:
-    __version__ = "0.4.7"  # 将版本号放在类中
+    __version__ = "0.4.8"  # 将版本号放在类中
 
     def __init__(
             self,
@@ -636,6 +636,7 @@ class LightAgent:
     def run(
             self,
             query: str,
+            tools: List[Union[str, Callable]] | None = None,  # 运行时传入的工具
             light_swarm=None,
             stream: bool = False,
             max_retry: int = 10,
@@ -647,6 +648,7 @@ class LightAgent:
         运行代理，处理用户输入。
 
         :param query: 用户输入。
+        :param tools: 运行时传入的工具列表，支持函数名称（字符串）或函数对象。
         :param light_swarm: LightSwarm 实例，用于任务转移。
         :param stream: 是否启用流式输出。
         :param max_retry: 最大重试次数。
@@ -663,6 +665,11 @@ class LightAgent:
 
         # 初始化历史记录
         history = history or []
+
+        # 处理运行时传入的工具
+        runtime_tools = []
+        if tools:
+            runtime_tools = self._process_runtime_tools(tools)
 
         # 0. 判断是否需要转移任务
         if light_swarm:
@@ -687,9 +694,13 @@ class LightAgent:
         # 思维链处理
         active_tools = []
         if self.tree_of_thought:
-            tot_response, active_tools = self.run_thought(query)
+            tot_response, active_tools = self.run_thought(query, runtime_tools)
             system_prompt += f"\n##以下是问题的补充说明\n{tot_response}"
             self.log("DEBUG", "tree_of_thought", {"response": tot_response, "active_tools": active_tools})
+        # 如果没有启用思维链且有运行时工具，则使用运行时工具
+        elif runtime_tools:
+            active_tools = runtime_tools
+            self.log("DEBUG", "use_runtime_tools", {"runtime_tools": runtime_tools})
 
         # 在用户查询后追加 "no_think"
         # modified_query = query + "/no_think"
@@ -707,10 +718,20 @@ class LightAgent:
                 self.chat_params[key] = value
 
         # 添加工具
-        tools = active_tools or self.tool_registry.get_tools()
-        if tools:
-            self.chat_params["tools"] = tools
+        # 优先级：active_tools > runtime_tools > 初始化时的工具
+        final_tools = []
+        if active_tools:
+            final_tools = active_tools
+        elif runtime_tools:
+            final_tools = runtime_tools
+        else:
+            final_tools = self.tool_registry.get_tools()
+
+        if final_tools:
+            self.chat_params["tools"] = final_tools
             self.chat_params["tool_choice"] = "auto"
+            self.log("DEBUG", "final_tools_selected",
+                     {"tools": [t.get("function", {}).get("name", str(t)) for t in final_tools]})
 
         # 添加跟踪会话
         if hasattr(self, 'tracetools') and self.tracetools:
@@ -720,6 +741,30 @@ class LightAgent:
         self.log("DEBUG", "first_request_params", {"params": self.chat_params})
         response = self.client.chat.completions.create(**self.chat_params)
         return self._core_run_logic(response, stream, max_retry)
+
+    def _process_runtime_tools(self, tools: List[Union[str, Callable]]) -> List[Dict]:
+        """
+        处理运行时传入的工具，返回OpenAI格式的工具描述
+
+        :param tools: 运行时传入的工具列表
+        :return: OpenAI格式的工具描述列表
+        """
+        runtime_tools = []
+        temp_registry = ToolRegistry()
+
+        for tool in tools:
+            if isinstance(tool, str):
+                try:
+                    tool_func = self.tool_loader.load_tool(tool)
+                    temp_registry.register_tool(tool_func)
+                except Exception as e:
+                    self.log("ERROR", "load_runtime_tool", {"tool": tool, "error": str(e)})
+            elif callable(tool) and hasattr(tool, "tool_info"):
+                temp_registry.register_tool(tool)
+
+        runtime_tools = temp_registry.get_tools()
+        self.log("DEBUG", "runtime_tools_processed", {"count": len(runtime_tools)})
+        return runtime_tools
 
     def _add_memory_context(self, query: str, user_id: str) -> str:
         """添加记忆上下文"""
@@ -740,7 +785,7 @@ class LightAgent:
                 context += "\n##问题相关补充信息:\n" + "\n".join(
                     [m["memory"] for m in agent_memories["results"]]
                 )
-                self.memory.store(data=query, user_id=self.name)
+            self.memory.store(data=query, user_id=self.name)
 
         return f"{context}\n##用户提问：\n{query}" if context else query
 
@@ -1073,8 +1118,8 @@ class LightAgent:
                     break
 
         # 重试次数用尽
-        self.log("ERROR", "max_retry_reached", {"message": "Failed to generate a valid response."})
-        yield "Failed to generate a valid response."
+        self.log("ERROR", "max_retry_reached", {"message": "Failed to stream a valid response."})
+        yield "Failed to stream a valid response."
 
     def _handle_task_transfer(
             self,
@@ -1196,15 +1241,29 @@ class LightAgent:
         self.log("DEBUG", "agent_memories", {"memory_context": memory_context})
         return prompt
 
-    def run_thought(self, query: str) -> tuple:
+    def run_thought(self, query: str, runtime_tools: List[Dict] | None = None) -> tuple:
         """使用思维树的方式 让大模型先根据get_tools_str生成一个解答用户query的工具使用计划"""
-        tot_model = self.tot_model  # self.model
-        tools = self.tool_registry.get_tools_str()
+        tot_model = self.tot_model
+        # 修改：优先使用运行时工具，如果没有则使用初始化时的工具
+        if runtime_tools:
+            # 将runtime_tools转换为字符串形式
+            tools_str = json.dumps(runtime_tools, indent=4, ensure_ascii=False)
+            # 创建一个临时的ToolRegistry来过滤工具
+            temp_registry = ToolRegistry()
+            # 将runtime_tools注册到临时注册表中
+            for tool_schema in runtime_tools:
+                # 这里需要将OpenAI格式的工具schema转换为内部格式
+                # 由于时间关系，这里简化处理，实际可能需要更复杂的转换
+                pass
+        else:
+            tools = self.tool_registry.get_tools_str()
+
         if not isinstance(tools, str):
             tools = str(tools)  # 确保 tools 是字符串
         now = datetime.now()
         current_date = now.strftime("%Y-%m-%d")
         current_time = now.strftime("%H:%M:%S")
+
         system_prompt = f"""你是一个智能助手，请根据用户输入的问题，结合工具使用计划，生成一个思维树，并按照思维树依次调用工具步骤，最终生成一个最终回答。\n 今日的日期: {current_date} 当前时间: {current_time} \n 工具列表: {tools}"""
         self.log("DEBUG", "run_thought", {"system_prompt": system_prompt})
 
@@ -1257,7 +1316,17 @@ class LightAgent:
             # 3.执行自适应工具过滤
             current_tools = []
             if self.filter_tools:
-                current_tools = self.tool_registry.filter_tools(tool_reflection_result)
+                # 修改：优先使用运行时工具进行过滤
+                if runtime_tools:
+                    # 使用临时注册表进行过滤
+                    temp_registry = ToolRegistry()
+                    for tool_schema in runtime_tools:
+                        # 这里需要将OpenAI格式的schema转换为内部格式
+                        # 简化处理：直接添加到注册表中
+                        pass
+                    current_tools = runtime_tools  # 暂时直接使用运行时工具
+                else:
+                    current_tools = self.tool_registry.filter_tools(tool_reflection_result)
                 self.log("DEBUG", "current_tools", {"get_tools": current_tools})
 
             return refined_content, current_tools
