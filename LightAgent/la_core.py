@@ -522,7 +522,7 @@ class LightAgent:
 
         if tools is None:
             self.tools = []
-        if tools:
+        if tools is not None:
             self.tools = tools
             # 初始化工具列表
             self.load_tools(tools)
