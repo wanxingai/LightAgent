@@ -606,11 +606,14 @@ class LightAgent:
                 try:
                     tool_func = self.tool_loader.load_tool(tool)
                     self.tool_registry.register_tool(tool_func)
+                    self.loaded_tools[tool] = tool_func
                     self.log("DEBUG", "load_tools", {"tool": tool, "status": "success"})
                 except Exception as e:
                     self.log("ERROR", "load_tools", {"tool": tool, "error": str(e)})
             elif callable(tool) and hasattr(tool, "tool_info"):
                 if self.tool_registry.register_tool(tool):
+                    tool_name = tool.tool_info.get("tool_name") or tool.__name__
+                    self.loaded_tools[tool_name] = tool
                     self.log("DEBUG", "register_tool", {"tool": tool.__name__, "status": "success"})
 
     async def setup_mcp(
