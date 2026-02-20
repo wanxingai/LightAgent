@@ -3,8 +3,8 @@
 
 """
 作者: [weego/WXAI-Team]
-版本: 0.4.8
-最后更新: 2025-12-14
+版本: 0.5.0
+最后更新: 2026-02-07
 """
 
 import asyncio
@@ -17,6 +17,7 @@ import os
 import random
 import re
 import traceback
+import uuid
 from contextlib import AsyncExitStack
 from copy import deepcopy
 from datetime import datetime
@@ -30,7 +31,7 @@ from mcp.client.sse import sse_client
 from mcp.client.stdio import stdio_client
 from openai.types.chat import ChatCompletionChunk
 
-__version__ = "0.4.8"  # 你可以根据需要设置版本号
+__version__ = "0.5.0"  # 你可以根据需要设置版本号
 
 
 # openai.langfuse_auth_check()
@@ -424,7 +425,7 @@ class MCPClientManager:
 
 
 class LightAgent:
-    __version__ = "0.4.8"  # 将版本号放在类中
+    __version__ = "0.5.0"  # 将版本号放在类中
 
     def __init__(
             self,
@@ -522,7 +523,7 @@ class LightAgent:
 
         if tools is None:
             self.tools = []
-        if tools:
+        if tools is not None:
             self.tools = tools
             # 初始化工具列表
             self.load_tools(tools)
@@ -606,11 +607,14 @@ class LightAgent:
                 try:
                     tool_func = self.tool_loader.load_tool(tool)
                     self.tool_registry.register_tool(tool_func)
+                    self.loaded_tools[tool] = tool_func
                     self.log("DEBUG", "load_tools", {"tool": tool, "status": "success"})
                 except Exception as e:
                     self.log("ERROR", "load_tools", {"tool": tool, "error": str(e)})
             elif callable(tool) and hasattr(tool, "tool_info"):
                 if self.tool_registry.register_tool(tool):
+                    tool_name = tool.tool_info.get("tool_name") or tool.__name__
+                    self.loaded_tools[tool_name] = tool
                     self.log("DEBUG", "register_tool", {"tool": tool.__name__, "status": "success"})
 
     async def setup_mcp(
@@ -809,6 +813,8 @@ class LightAgent:
                 function_call_name = ""
                 tool_calls = response.choices[0].message.tool_calls
                 self.log("DEBUG", "non_stream tool_calls", {"tool_calls": tool_calls})
+                # 将工具调用和响应添加到消息列表中
+                self.chat_params["messages"].append(response.choices[0].message)
 
                 # 遍历所有工具调用
                 for tool_call in tool_calls:
@@ -868,27 +874,18 @@ class LightAgent:
                     self.log("INFO", "non_stream single_tool_response",
                              {"single_tool_response": single_tool_response})
 
+                    self.chat_params["messages"].append({
+                        "role": "tool",
+                        "type": "function_call_output",
+                        "tool_call_id": tool_call.id,  # 必须和上面的 id 一致
+                        "content": f"{single_tool_response}"
+                    })
+
                     # 将单个工具的响应结果添加到列表中
                     tool_responses.append(single_tool_response)
 
-                # 将所有工具调用的结果合并为一个字符串
+                # # 将所有工具调用的结果合并为一个字符串
                 self.log("DEBUG", "non_stream tool_responses", {"tool_responses": tool_responses})
-
-                combined_tool_response = "\n".join(tool_responses)
-
-                # 将工具调用和响应添加到消息列表中
-                self.chat_params["messages"].append(
-                    {
-                        "role": "assistant",
-                        "content": f"使用工具： \n {json.dumps([tool_call.function.model_dump() for tool_call in tool_calls], ensure_ascii=False)}\n",
-                    }
-                )
-                self.chat_params["messages"].append(
-                    {
-                        "role": "user",
-                        "content": f"工具响应内容：\n {combined_tool_response} \n 请给出下一步输出",
-                    }
-                )
             else:
                 # 返回最终回复
                 reply = response.choices[0].message.content
@@ -918,11 +915,11 @@ class LightAgent:
             tool_calls = []  # 用于存储所有工具调用的信息
             tool_responses = []  # 用于存储所有工具调用的结果
             finish_called = False  # 标记是否调用了finish工具
-            reasoning_content = ""
-            content = ""
 
             for chunk in response:
-
+                reasoning_content = ""
+                content = ""
+                choice = ""
                 if chunk.choices and len(chunk.choices) > 0:
                     choice = chunk.choices[0]
 
@@ -951,7 +948,11 @@ class LightAgent:
 
                         # 如果工具调用信息尚未记录，初始化一个空字典
                         if len(tool_calls) <= tool_call_index:
-                            tool_calls.append({"name": "", "arguments": "", "index": tool_call_index, "title": ""})
+                            tool_calls.append({"name": "", "arguments": "", "index": tool_call_index, "title": "", "id": ""})
+
+                        # 更新工具调用的 ID
+                        if hasattr(tool_call_delta, "id") and tool_call_delta.id:
+                            tool_calls[tool_call_index]["id"] = tool_call_delta.id
 
                         # 更新工具调用的名称
                         if hasattr(tool_call_delta.function, "name") and tool_call_delta.function.name:
@@ -1003,12 +1004,6 @@ class LightAgent:
                             try:
                                 # 使用正则表达式将多个 JSON 对象拆分开
                                 json_objects = re.findall(r'\{.*?\}', tool_call_info["arguments"])
-
-                                # 解析每个 JSON 对象并调用工具
-                                # for json_obj in json_objects:
-                                #     function_args = json.loads(json_obj)
-                                #     tool_response = dispatch_tool(function_call["name"], function_args)
-                                #     tool_responses.append(tool_response)
 
                                 for json_obj in json_objects:
                                     # 尝试自动修复常见转义问题
@@ -1093,24 +1088,37 @@ class LightAgent:
                         return
 
                     # 准备下一轮请求
-                    combined_tool_response = "\n".join(tool_responses)
-                    tool_str = json.dumps(
-                        [{"name": tool_call["name"], "arguments": tool_call["arguments"]} for tool_call in tool_calls],
-                        ensure_ascii=False)
-
                     # 添加工具调用和响应到消息历史
-                    self.chat_params["messages"].append(
-                        {
-                            "role": "assistant",
-                            "content": f"使用工具： \n {tool_str}\n"
-                        }
-                    )
-                    self.chat_params["messages"].append(
-                        {
-                            "role": "user",
-                            "content": combined_tool_response,
-                        }
-                    )
+                    assistant_message = {
+                        "role": "assistant",
+                        "content": "",  # 必须使用空字符串，不能是 None
+                        "tool_calls": []
+                    }
+
+                    # 为每个工具调用构建正确的格式
+                    for i, tool_call in enumerate(tool_calls):
+                        if tool_call["name"]:  # 确保工具调用有名称
+                            # 使用模型返回的 ID，如果没有则生成一个
+                            tool_call_id = tool_call.get("id") or f"call_{uuid.uuid4().hex[:8]}"
+                            assistant_message["tool_calls"].append({
+                                "id": tool_call_id,
+                                "type": "function",
+                                "function": {
+                                    "name": tool_call["name"],
+                                    "arguments": tool_call["arguments"]
+                                }
+                            })
+                    # 添加 assistant 消息到历史
+                    self.chat_params["messages"].append(assistant_message)
+
+                    # 添加工具响应消息（role 必须是 "tool"）
+                    for i, (tool_call, tool_response) in enumerate(zip(tool_calls, tool_responses)):
+                        if tool_call["name"]:  # 确保工具调用有名称
+                            self.chat_params["messages"].append({
+                                "role": "tool",
+                                "tool_call_id": assistant_message["tool_calls"][i]["id"],  # 使用对应的 call_id
+                                "content": str(tool_response)  # 确保是字符串格式
+                            })
 
                     # 创建新的响应流
                     self.log("DEBUG", "stream next_request_params", {"params": self.chat_params})
@@ -1247,7 +1255,7 @@ class LightAgent:
         # 修改：优先使用运行时工具，如果没有则使用初始化时的工具
         if runtime_tools:
             # 将runtime_tools转换为字符串形式
-            tools_str = json.dumps(runtime_tools, indent=4, ensure_ascii=False)
+            tools = json.dumps(runtime_tools, indent=4, ensure_ascii=False)
             # 创建一个临时的ToolRegistry来过滤工具
             temp_registry = ToolRegistry()
             # 将runtime_tools注册到临时注册表中
@@ -1358,10 +1366,10 @@ class LightAgent:
         prompt = f"""请分析以下用户输入的意图，如果需要转移任务，请返回目标代理的名称格式如下。
         transfer to agent_name
         以下是所有可用代理的信息：
-    {agents_info_str}
-    用户输入: {query}
-请返回目标代理的名称：
-"""
+            {agents_info_str}
+        用户输入: {query}
+        请返回目标代理的名称：
+        """
 
         # 调用大模型进行意图判断
         response = self.client.chat.completions.create(

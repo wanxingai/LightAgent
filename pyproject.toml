@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "LightAgent"
-version = "0.4.7"
+version = "0.5.0"
 description = "LightAgent: Lightweight AI agent framework with memory, tools & tree-of-thought. Supports multi-agent collaboration, self-learning, and major LLMs (OpenAI/DeepSeek/Qwen). Open-source with MCP/SSE protocol integration."
 authors = ["caiweige <caiweige@qq.com>"]
 license = "Apache 2.0"
