@@ -54,6 +54,12 @@
 - **Agent Self-Learning** 🧠️: Each agent has its own scene memory capabilities and the ability to self-learn from user conversations.
 - **Adaptive Tool Mechanism** 🛠️: Supports adding an unlimited number of tools, allowing the large model to first select a candidate tool set from thousands of tools, filtering irrelevant tools before submitting context to the large model, significantly reducing token consumption.
 
+## 🧩 Multi-agent troubleshooting (failure map)
+
+If you are using LightSwarm or other multi-agent patterns and start seeing role drift, cross-agent memory issues or confusing logs, you can check the
+[Multi-agent failure map](docs/multi_agent_failure_map.md) for a small symptom → mode → debug checklist.  
+This page is docs-only and does not change any framework code.
+
 ---
 ## News
 - <img src="https://img.alicdn.com/imgextra/i3/O1CN01SFL0Gu26nrQBFKXFR_!!6000000007707-2-tps-500-500.png" alt="new" width="30" height="30"/>**[2026-02-21]** LightAgent v0.5.0 Released: Adds session-level toolset constraints for granular control, fixes tool call history in multi-turn conversations, and improves LightSwarm stability.
