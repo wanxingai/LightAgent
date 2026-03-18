@@ -1,5 +1,3 @@
-[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/wxai-space-lightagent-badge.png)](https://mseep.ai/app/wxai-space-lightagent)
-
 
 ![LightAgent Banner](docs/images/lightagent-banner.jpg)
 <div align="center">
@@ -58,7 +56,11 @@
 
 ---
 ## News
-- <img src="https://img.alicdn.com/imgextra/i3/O1CN01SFL0Gu26nrQBFKXFR_!!6000000007707-2-tps-500-500.png" alt="new" width="30" height="30"/>**[2025-09-16]** Our paper is now available as a preprint on arXiv: https://arxiv.org/pdf/2509.09292. We invite the research community to read and cite our work.
+- <img src="https://img.alicdn.com/imgextra/i3/O1CN01SFL0Gu26nrQBFKXFR_!!6000000007707-2-tps-500-500.png" alt="new" width="30" height="30"/>**[2026-02-21]** LightAgent v0.5.0 Released: Adds session-level toolset constraints for granular control, fixes tool call history in multi-turn conversations, and improves LightSwarm stability.
+- **[2026-01-20]** LightAgent v0.4.8 Released: Introduces runtime toolset constraints for session-level control and enhanced debug settings.
+- **[2025-11-15]** LightAgent v0.4.7 Released: Improved debug configuration and fixes for LightSwarm-related bugs.
+- **[2025-10-28]** LightAgent v0.4.6 Released: Adds support for model extension parameters (e.g., Qwen3 thinking mode) and enhanced metadata handling.
+- **[2025-09-16]** Our paper is now available as a preprint on arXiv: https://arxiv.org/pdf/2509.09292. We invite the research community to read and cite our work.
 - **[2025-06-12]** We are pleased to announce the official release of LightAgent v0.4.0! This version upgrade brings architectural improvements, with significant enhancements in performance, stability, and maintainability.
 - **[2025-05-05]** LightAgent v0.3.3 Released: Deep [Langfuse](https://langfuse.com/) Logging Integration, Enhanced Context Management and Tool Invocation Stability [View](#8-integrating-langfuse-log-tracking)
 - **[2025-04-21]** LightAgent v0.3.2 adds an adaptive Tools mechanism, supports unlimited intelligent tool filtering, reduces Token consumption by 80%, and improves response speed by 52%! [View](#4-tree-of-thought-tot)
@@ -74,6 +76,7 @@
 
 - **Agent Collaborative Communication** 🛠️: Agents can also share information and transmit messages, achieving complex information communication and task collaboration.
 - **Agent Assessment** 📊: Built-in agent assessment tool for conveniently evaluating and optimizing the agents you build, aligning with business scenarios, and continuously improving intelligence levels.  
+- **Support for Agent Skills** ✨: Provides plug-inable skill modules for intelligent agents, enabling rapid expansion of the agent's capability boundaries and supporting the development of custom skills as well as community sharing.
 
 ## Built-in "Thought Flow"
 ### ToT now supports DeepSeek-R1.
