@@ -8,6 +8,7 @@
 """
 
 import asyncio
+import concurrent.futures
 import importlib
 import importlib.util
 import inspect
@@ -16,13 +17,14 @@ import logging
 import os
 import random
 import re
+import threading
 import traceback
 import uuid
 from contextlib import AsyncExitStack
 from copy import deepcopy
 from datetime import datetime
 from functools import partial
-from typing import List, Dict, Any, Callable, Union, Optional, Generator, AsyncGenerator, Protocol
+from typing import List, Dict, Any, Callable, Union, Optional, Generator, AsyncGenerator, Protocol, TypeVar, Coroutine
 from uuid import uuid4
 
 import httpx
@@ -32,6 +34,41 @@ from mcp.client.stdio import stdio_client
 from openai.types.chat import ChatCompletionChunk
 
 __version__ = "0.5.0"  # 你可以根据需要设置版本号
+
+# TypeVar for generic coroutine return type
+T = TypeVar('T')
+
+
+def run_async_safely(coro: Coroutine[Any, Any, T]) -> T:
+    """
+    Safely run an async coroutine, handling the case where we're already
+    inside an event loop (e.g., FastAPI, Jupyter, etc.).
+
+    This solves the "RuntimeError: asyncio.run() cannot be called from a
+    running event loop" issue by detecting the current context and using
+    the appropriate execution strategy.
+
+    Args:
+        coro: The coroutine to execute
+
+    Returns:
+        The result of the coroutine
+
+    Raises:
+        Any exception raised by the coroutine
+    """
+    try:
+        # Check if we're already in an event loop
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        # No running event loop, safe to use asyncio.run()
+        return asyncio.run(coro)
+
+    # We're inside an event loop - need alternative execution strategy
+    # Run the coroutine in a separate thread with its own event loop
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+        future = executor.submit(asyncio.run, coro)
+        return future.result()
 
 
 # openai.langfuse_auth_check()
@@ -828,7 +865,7 @@ class LightAgent:
                     function_args = json.loads(fixed_args)
 
                     # 调用工具并获取响应
-                    tool_response = asyncio.run(self.tool_dispatcher.dispatch(function_call.name, function_args))
+                    tool_response = run_async_safely(self.tool_dispatcher.dispatch(function_call.name, function_args))
                     function_call_name = function_call.name
                     combined_response = ""
                     single_tool_response = ""
@@ -1014,7 +1051,7 @@ class LightAgent:
                                     function_args = json.loads(fixed_args)
 
                                     # 调用工具
-                                    tool_response = asyncio.run(self.tool_dispatcher.dispatch(tool_name, function_args))
+                                    tool_response = run_async_safely(self.tool_dispatcher.dispatch(tool_name, function_args))
 
                                     # 处理不同类型的工具响应
                                     combined_response = ""
