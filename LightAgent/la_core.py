@@ -619,7 +619,7 @@ class LightAgent:
         """
         获取对话的history的描述（OpenAI 格式）
         """
-        return deepcopy(self.chat_params['messages'])
+        return deepcopy(self.chat_params.get('messages', []))
 
     def get_tools(self) -> List[Dict[str, Any]]:
         """
