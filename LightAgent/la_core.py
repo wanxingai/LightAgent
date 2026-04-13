@@ -548,6 +548,8 @@ class LightAgent:
             os.makedirs(log_dir)
         # 将 log_file 路径设置为 log 目录下的文件
         if debug:
+            if not log_file:
+                log_file = f"{self.name}.log"
             self.log_file = os.path.join(log_dir, log_file)
             # Set up the logger
             # 初始化日志系统
@@ -555,7 +557,7 @@ class LightAgent:
                 name=self.name,
                 debug=debug,
                 log_level=log_level,
-                log_file=log_file
+                log_file=self.log_file
             )
 
         if tools is None:
