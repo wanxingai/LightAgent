@@ -857,12 +857,10 @@ class LightAgent:
                 for tool_call in tool_calls:
                     function_call = tool_call.function
 
-                    # 尝试自动修复常见转义问题
-                    fixed_args = function_call.arguments.replace('\\"', '"').replace('\\\\', '\\')
-                    self.log("DEBUG", "non_stream function_call", {"function_call": fixed_args})
+                    self.log("DEBUG", "non_stream function_call", {"function_call": function_call.arguments})
 
                     # 解析函数参数
-                    function_args = json.loads(fixed_args)
+                    function_args = json.loads(function_call.arguments)
 
                     # 调用工具并获取响应
                     tool_response = run_async_safely(self.tool_dispatcher.dispatch(function_call.name, function_args))
