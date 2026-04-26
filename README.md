@@ -30,10 +30,27 @@
   </p>
 </div>
 <div align="center">
-  <h1>LightAgent🚀 (Production-level open-source Agentic AI development framework)</h1>
+  <h1>LightAgent🚀 – small footprint, big potential. 🌟(Open-source Agentic framework)</h1>
 </div>
 
-**LightAgent** is an extremely lightweight active Agentic Framework with memory (`mem0`), tools (`Tools`), and a tree of thought (`ToT`), and it is completely open source. It supports simpler multi-agent collaboration than OpenAI Swarm, allowing you to build self-learning agents in just one step, and supports connecting to the MCP protocol via stdio and sse. The underlying models support OpenAI, Zhiyuan ChatGLM, DeepSeek, Jieyue Xingchen, Qwen Tongyi Qianwen large models, and more. At the same time, LightAgent supports OpenAI streaming format API service output, seamlessly integrating with major mainstream Chat frameworks. 🌟
+LightAgent is an ultra‑lightweight, open‑source framework that now natively supports Skills — letting you compose reusable capabilities with persistent memory, tool use, and tree‑of‑thought reasoning. It streamlines multi‑agent collaboration (build self‑learning agents in one step), connects to MCP over stdio and SSE, runs on any modern LLM (OpenAI, DeepSeek, Qwen, and more), and outputs OpenAI‑compatible streaming APIs for instant drop‑in with any chat interface. Small, modular, and skill‑ready — spin it up in five minutes.
+
+---
+## News
+- <img src="https://img.alicdn.com/imgextra/i3/O1CN01SFL0Gu26nrQBFKXFR_!!6000000007707-2-tps-500-500.png" alt="new" width="30" height="30"/>**[2026-04-26]** LightAgent v0.6.0 Released: Completely refactors the core system architecture and introduces native skill support, enabling more modular, extensible, and task-oriented agent capabilities.
+- **[2026-02-21]** LightAgent v0.5.0 Released: Adds session-level toolset constraints for granular control, fixes tool call history in multi-turn conversations, and improves LightSwarm stability.
+- **[2026-01-20]** LightAgent v0.4.8 Released: Introduces runtime toolset constraints for session-level control and enhanced debug settings.
+- **[2025-11-15]** LightAgent v0.4.7 Released: Improved debug configuration and fixes for LightSwarm-related bugs.
+- **[2025-10-28]** LightAgent v0.4.6 Released: Adds support for model extension parameters (e.g., Qwen3 thinking mode) and enhanced metadata handling.
+- **[2025-09-16]** Our paper is now available as a preprint on arXiv: https://arxiv.org/pdf/2509.09292. We invite the research community to read and cite our work.
+- **[2025-06-12]** We are pleased to announce the official release of LightAgent v0.4.0! This version upgrade brings architectural improvements, with significant enhancements in performance, stability, and maintainability.
+- **[2025-05-05]** LightAgent v0.3.3 Released: Deep [Langfuse](https://langfuse.com/) Logging Integration, Enhanced Context Management and Tool Invocation Stability [View](#8-integrating-langfuse-log-tracking)
+- **[2025-04-21]** LightAgent v0.3.2 adds an adaptive Tools mechanism, supports unlimited intelligent tool filtering, reduces Token consumption by 80%, and improves response speed by 52%! [View](#4-tree-of-thought-tot)
+- **[2025-04-01]** LightAgent v0.3.0 Support browser interaction [browser_use](https://github.com/browser-use/browser-use) and fully supports the MCP protocol, enabling collaborative work with multiple models and tools to achieve more efficient handling of complex tasks.<a href="mcp_release.md">View MCP release introduction.>></a>
+- **[2025-02-19]** LightAgent v0.2.7  supports deepseek-r1 model for tot now.Significantly enhances the multi-tool planning capability for complex tasks.
+- **[2025-02-06]** LightAgent version 0.2.5 is released now.
+- **[2025-01-20]** LightAgent version 0.2.0 is released now.
+- **[2025-01-05]** LightAgent version 0.1.0 is released now.
 
 ---
 
@@ -61,50 +78,12 @@ If you are using LightSwarm or other multi-agent patterns and start seeing role 
 This page is docs-only and does not change any framework code.
 
 ---
-## News
-- <img src="https://img.alicdn.com/imgextra/i3/O1CN01SFL0Gu26nrQBFKXFR_!!6000000007707-2-tps-500-500.png" alt="new" width="30" height="30"/>**[2026-04-26]** LightAgent v0.6.0 Released: Completely refactors the core system architecture and introduces native skill support, enabling more modular, extensible, and task-oriented agent capabilities.
-- **[2026-02-21]** LightAgent v0.5.0 Released: Adds session-level toolset constraints for granular control, fixes tool call history in multi-turn conversations, and improves LightSwarm stability.
-- **[2026-01-20]** LightAgent v0.4.8 Released: Introduces runtime toolset constraints for session-level control and enhanced debug settings.
-- **[2025-11-15]** LightAgent v0.4.7 Released: Improved debug configuration and fixes for LightSwarm-related bugs.
-- **[2025-10-28]** LightAgent v0.4.6 Released: Adds support for model extension parameters (e.g., Qwen3 thinking mode) and enhanced metadata handling.
-- **[2025-09-16]** Our paper is now available as a preprint on arXiv: https://arxiv.org/pdf/2509.09292. We invite the research community to read and cite our work.
-- **[2025-06-12]** We are pleased to announce the official release of LightAgent v0.4.0! This version upgrade brings architectural improvements, with significant enhancements in performance, stability, and maintainability.
-- **[2025-05-05]** LightAgent v0.3.3 Released: Deep [Langfuse](https://langfuse.com/) Logging Integration, Enhanced Context Management and Tool Invocation Stability [View](#8-integrating-langfuse-log-tracking)
-- **[2025-04-21]** LightAgent v0.3.2 adds an adaptive Tools mechanism, supports unlimited intelligent tool filtering, reduces Token consumption by 80%, and improves response speed by 52%! [View](#4-tree-of-thought-tot)
-- **[2025-04-01]** LightAgent v0.3.0 Support browser interaction [browser_use](https://github.com/browser-use/browser-use) and fully supports the MCP protocol, enabling collaborative work with multiple models and tools to achieve more efficient handling of complex tasks.<a href="mcp_release.md">View MCP release introduction.>></a>
-- **[2025-02-19]** LightAgent v0.2.7  supports deepseek-r1 model for tot now.Significantly enhances the multi-tool planning capability for complex tasks.
-- **[2025-02-06]** LightAgent version 0.2.5 is released now.
-- **[2025-01-20]** LightAgent version 0.2.0 is released now.
-- **[2025-01-05]** LightAgent version 0.1.0 is released now.
-
----
 
 ## 🚧 Coming Soon
 
 - **Agent Collaborative Communication** 🛠️: Agents can also share information and transmit messages, achieving complex information communication and task collaboration.
 - **Agent Assessment** 📊: Built-in agent assessment tool for conveniently evaluating and optimizing the agents you build, aligning with business scenarios, and continuously improving intelligence levels.  
-- **Support for Agent Skills** ✨: Provides plug-inable skill modules for intelligent agents, enabling rapid expansion of the agent's capability boundaries and supporting the development of custom skills as well as community sharing.
 
-## Built-in "Thought Flow"
-### ToT now supports DeepSeek-R1.
-The Thought Flow method effectively addresses challenges in complex scenarios through systematic, structured, and flexible thinking processes. Here are the specific implementation steps:
-```text
-Problem Definition: Clarify the core problems and objectives.
-
-Information Collection: Systematically gather relevant information and data.
-
-Problem Decomposition: Break down complex problems into multiple subproblems or modules.
-
-Multi-dimensional Analysis: Analyze each subproblem from different angles and levels.
-
-Establish Connections: Identify the relationships and dependencies between subproblems.
-
-Generate Solutions: Propose possible solutions for each subproblem.
-
-Evaluation and Selection: Assess the feasibility and impact of each solution, choosing the best one.
-
-Implementation and Feedback: Implement the selected solution and adjust based on feedback.
-```
 
 ---
 ## 🌟 Why Choose LightAgent?

@@ -33,13 +33,43 @@
 </div>
 
 <div align="center">
-  <h1>LightAgent🚀（生产级开源Agentic AI开发框架）</h1>
+  <h1>LightAgent🚀 超轻量、可“成长”的智能体框架，现已原生支持Skill</h1>
 </div>
 
 
+🚀 **LightAgent** 
+不再只是“聊天”，而是真正的“完成任务”。LightAgent 把记忆（`mem0`）、工具（`Tools`）、思维树（`ToT`）和多智能体协作融合进一个极简的包中，而你只需 **一行代码** 就能构建一个**能自我学习、按需加载Skill**的智能体 —— 就像给大模型装上“招式库”与“执行大脑”。
+
+🔥 为什么开发者会爱上它？
+
+- **Skill 原生支持**：像管理代码一样管理 AI 能力。把 PDF 处理、代码审查、SOP 流程打包成可复用的 Skill，Agent 按需调用 —— 告别 prompt 堆积，迎接工程化 AI。
+- **比 OpenAI Swarm 更简易的多智能体协作**：无需复杂编排，轻松构建“Agent 小分队”，并行拆解复杂任务。
+- **MCP 协议（stdio/sse）开箱即连**：无缝接入外部数据源与工具，Agent 的“手”从此无限延伸。
+- **零成本切换底层模型**：OpenAI、智谱 ChatGLM、DeepSeek、阶跃星辰、通义千问…… 想用哪个用哪个。
+- **开箱即用的 API 服务**：标准 OpenAI 流式输出格式，可直接接入主流 Chat 前端（如 NextChat、LobeChat），秒变生产级应用。
+
+🌟 **LightAgent = 轻 + 灵 + 可扩展**  
+从个人脚本到企业级 Workflow，它帮你把“聪明的模型”变成“可靠的员工”。  
+**Star 我们，尝试你的第一个 Skill 驱动的 Agent —— 改动几行代码，见证 AI 真正“动手做事”。**
 
 
-**LightAgent** 是一个极其轻量的带记忆（`mem0`）、工具（`Tools`）、思维树（`ToT`）的主动式 Agentic Framework（自主性框架），并且完全开源。它支持比Openai Swarm更简单的多智能体协同，简单一步即可构建具备自我学习能力的agent，并支持stdio和sse方式接入MCP协议。底层模型支持 OpenAI、智谱 ChatGLM、DeepSeek、阶跃星辰、Qwen通义千问大模型等。同时，LightAgent 支持 OpenAI 流格式 API 服务输出，无缝接入各大主流 Chat 框架。🌟
+---
+## 新闻
+- <img src="https://img.alicdn.com/imgextra/i3/O1CN01SFL0Gu26nrQBFKXFR_!!6000000007707-2-tps-500-500.png" alt="new" width="30" height="30"/>**[2026-04-26]** LightAgent v0.6.0 正式发布：彻底重构了核心系统架构，并引入了原生skill技能支持，内置script执行安全沙箱，从而实现了更加模块化、可扩展且任务导向的代理功能。
+- **[2026-02-21]** LightAgent v0.5.0 正式发布：新增会话级工具集约束以实现精细控制，修复多轮对话中的工具调用历史记录问题，并提升 LightSwarm 稳定性。
+- **[2026-01-20]** LightAgent v0.4.8 正式发布：引入运行时工具集约束以支持会话级控制，并增强调试配置。
+- **[2025-11-15]** LightAgent v0.4.7 正式发布：改进调试配置，修复 LightSwarm 相关错误。
+- **[2025-10-28]** LightAgent v0.4.6 正式发布：新增对模型扩展参数的支持（如 Qwen3 的思考模式控制），并增强元数据处理能力。
+- **[2025-09-16]** 我们的论文发布在了arXiv <a href="https://arxiv.org/abs/2509.09292">https://arxiv.org/pdf/2509.09292 </a>，欢迎大家阅读和引用！
+- **[2025-06-12]** 我们很高兴地宣布 LightAgent v0.4.0 正式发布！本次版本升级带来了架构级改进，在性能、稳定性和可维护性方面均有显著提升。
+- **[2025-05-05]** LightAgent v0.3.3版本发布：深度集成Langfuse日志跟踪，优化上下文管理与工具调用稳定性 [查看>>](#8-集成langfuse日志跟踪)
+- **[2025-04-21]** LightAgent v0.3.2 新增自适应Tools机制，支持无限量工具智能筛选，Token消耗降低80%，响应速度提升52%！ [查看>>](#4-思维树tot)
+- **[2025-04-01]** LightAgent v0.3.0 支持浏览器交互 [browser_use](https://github.com/browser-use/browser-use)，并全面支持MCP协议，支持多模型多工具的协同工作，实现更高效的复杂任务处理。<a href="mcp_release.zh-CN.md">查看MCP发布简介>></a>
+- **[2025-02-19]** LightAgent v0.2.7 支持单独采用 deepseek-r1 作为的agent推理规划ToT引擎，大幅度提升复杂任务的多工具Plan能力.
+- **[2025-02-06]** LightAgent version 0.2.5 is released now.
+- **[2025-01-20]** LightAgent version 0.2.0 is released now.
+- **[2025-01-05]** LightAgent version 0.1.0 is released now.
+
 
 ---
 ![lightswarm_demo_cn.png](docs%2Fimages%2Flightswarm_demo_cn.png)
@@ -59,51 +89,12 @@
 - **自适应tools机制** 🛠️：支持添加无限量tools，在上万个工具中让大模型过滤无关工具后再发送给大模型，可大幅度降低Token消耗。
 
 ---
-## 新闻
-- <img src="https://img.alicdn.com/imgextra/i3/O1CN01SFL0Gu26nrQBFKXFR_!!6000000007707-2-tps-500-500.png" alt="new" width="30" height="30"/>**[2026-04-26]** LightAgent v0.6.0 正式发布：彻底重构了核心系统架构，并引入了原生skill技能支持，内置script执行安全沙箱，从而实现了更加模块化、可扩展且任务导向的代理功能。
-- **[2026-02-21]** LightAgent v0.5.0 正式发布：新增会话级工具集约束以实现精细控制，修复多轮对话中的工具调用历史记录问题，并提升 LightSwarm 稳定性。
-- **[2026-01-20]** LightAgent v0.4.8 正式发布：引入运行时工具集约束以支持会话级控制，并增强调试配置。
-- **[2025-11-15]** LightAgent v0.4.7 正式发布：改进调试配置，修复 LightSwarm 相关错误。
-- **[2025-10-28]** LightAgent v0.4.6 正式发布：新增对模型扩展参数的支持（如 Qwen3 的思考模式控制），并增强元数据处理能力。
-- **[2025-09-16]** 我们的论文发布在了arXiv <a href="https://arxiv.org/abs/2509.09292">https://arxiv.org/pdf/2509.09292 </a>，欢迎大家阅读和引用！
-- **[2025-06-12]** 我们很高兴地宣布 LightAgent v0.4.0 正式发布！本次版本升级带来了架构级改进，在性能、稳定性和可维护性方面均有显著提升。
-- **[2025-05-05]** LightAgent v0.3.3版本发布：深度集成Langfuse日志跟踪，优化上下文管理与工具调用稳定性 [查看>>](#8-集成langfuse日志跟踪)
-- **[2025-04-21]** LightAgent v0.3.2 新增自适应Tools机制，支持无限量工具智能筛选，Token消耗降低80%，响应速度提升52%！ [查看>>](#4-思维树tot)
-- **[2025-04-01]** LightAgent v0.3.0 支持浏览器交互 [browser_use](https://github.com/browser-use/browser-use)，并全面支持MCP协议，支持多模型多工具的协同工作，实现更高效的复杂任务处理。<a href="mcp_release.zh-CN.md">查看MCP发布简介>></a>
-- **[2025-02-19]** LightAgent v0.2.7 支持单独采用 deepseek-r1 作为的agent推理规划ToT引擎，大幅度提升复杂任务的多工具Plan能力.
-- **[2025-02-06]** LightAgent version 0.2.5 is released now.
-- **[2025-01-20]** LightAgent version 0.2.0 is released now.
-- **[2025-01-05]** LightAgent version 0.1.0 is released now.
-
----
 
 ## 🚧 即将推出
 
 - **智能体协同通讯** 🛠️：智能体之间还可以共享信息和传递消息，实现复杂的信息通讯和任务协同。
 - **Agent 测评** 📊：内置 Agent 测评工具，方便评估和优化你构建的Agent，对齐业务场景，持续提升智能水平。
-- **支持Agent Skills** ✨：为智能体提供可插拔的技能模块，快速扩展智能体的能力边界，支持自定义技能开发和社区共享。
 
-## 🔥内置 “思考流”
-### ToT现已支持DeepSeek-R1
-（Thought Flow）方法通过系统性、结构化和灵活的思维过程，能够有效应对复杂场景中的挑战。
- 以下是具体实施步骤：
-```text
-问题定义：明确核心问题和目标。
-
-信息收集：系统地收集相关信息和数据。
-
-分解问题：将复杂问题分解为多个子问题或模块。
-
-多维度分析：从不同角度和层面分析每个子问题。
-
-建立关联：识别子问题之间的关联和依赖关系。
-
-生成解决方案：针对每个子问题提出可能的解决方案。
-
-评估与选择：评估各解决方案的可行性和影响，选择最优方案。
-
-实施与反馈：实施选定方案，并根据反馈进行调整。
-```
 
 ---
 ## 🌟 为什么选择 LightAgent？
