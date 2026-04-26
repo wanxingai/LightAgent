@@ -561,20 +561,19 @@ Integriertes Agentenbewertungstool zur einfachen Bewertung und Optimierung der A
 Kompatibel mit verschiedenen großen Modellen, einschließlich OpenAI, Zhiyu ChatGLM, DeepSeek, Qwen-Serie große Modelle.
 
 #### Derzeit getestete kompatible große Modelle
-Openai-Serie
+OpenAI Series
  - gpt-3.5-turbo
  - gpt-4
  - gpt-4o
  - gpt-4o-mini
- - o4-mini
  - gpt-4.1
  - gpt-4.1-mini
  - gpt-4.1-nano
- - gpt-5
- - gpt-5-mini
- - gpt-5-nano
+ - and GPT-5、GPT-5.1、GPT-5.2、GPT-5.3、GPT-5.4 
 
 ChatGLM
+ - GLM-5.1
+ - GLM-4.7
  - GLM-4.5
  - GLM-4.5-Air
  - GLM-4.5-X
@@ -593,17 +592,18 @@ ChatGLM
 DeepSeek Series
  - DeepSeek-r1
  - DeepSeek-v3
+ - DeepSeek-v4
 
-StepFun
+stepfun
  - step-1-8k
  - step-1-32k
- - step-1-128k (Probleme bei der Verwendung mehrerer Werkzeuge)
- - step-1-256k (Probleme bei der Verwendung mehrerer Werkzeuge)
- - step-1-flash (dieses Modell wird empfohlen, da es ein gutes Preis-Leistungs-Verhältnis bietet)
- - step-2-16k (Probleme bei der Verwendung mehrerer Werkzeuge)
+ - step-1-128k (issues with multi-tool calls)
+ - step-1-256k (issues with multi-tool calls)
+ - step-1-flash (recommended, cost-effective)
+ - step-2-16k (issues with multi-tool calls)
+ - step-3.5-flash
 
-
-Qwen-Serie
+Qwen Series
  - qwen-plus-2024-11-25
  - qwen-plus-2024-11-27
  - qwen-plus-1220
@@ -628,6 +628,23 @@ Qwen-Serie
  - qwen3-235b-a22b
  - Qwen3-30B-A3B-Thinking-2507
  - Qwen3-30B-A3B-Instruct-2507
+ - Qwen3.5
+ - Qwen3.6
+
+
+MiniMax Series
+- MiniMax-M2.7
+- MiniMax-M2.5
+- MiniMax-M2.1
+- MiniMax-M2
+
+
+Moonshot Series (Kimi)
+- moonshot-v1-8k
+- moonshot-v1-32k
+- moonshot-v1-128k
+- Kimi K2.6
+
 
 
 

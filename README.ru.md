@@ -545,15 +545,19 @@ OpenAI Series
  - gpt-4
  - gpt-4o
  - gpt-4o-mini
- - o4-mini
  - gpt-4.1
  - gpt-4.1-mini
  - gpt-4.1-nano
- - gpt-5
- - gpt-5-mini
- - gpt-5-nano
+ - and GPT-5、GPT-5.1、GPT-5.2、GPT-5.3、GPT-5.4 
 
 ChatGLM
+ - GLM-5.1
+ - GLM-4.7
+ - GLM-4.5
+ - GLM-4.5-Air
+ - GLM-4.5-X
+ - GLM-4.5-AirX
+ - GLM-4.5-Flash
  - GLM-4-Plus
  - GLM-4-Air-0111
  - GLM-4-Flash
@@ -565,9 +569,9 @@ ChatGLM
  - GLM-4-9B-Chat
 
 DeepSeek Series
- - DeepSeek-chat (API)
- - DeepSeekv2.5
- - DeepSeekv3
+ - DeepSeek-r1
+ - DeepSeek-v3
+ - DeepSeek-v4
 
 stepfun
  - step-1-8k
@@ -576,6 +580,7 @@ stepfun
  - step-1-256k (issues with multi-tool calls)
  - step-1-flash (recommended, cost-effective)
  - step-2-16k (issues with multi-tool calls)
+ - step-3.5-flash
 
 Qwen Series
  - qwen-plus-2024-11-25
@@ -602,6 +607,23 @@ Qwen Series
  - qwen3-235b-a22b
  - Qwen3-30B-A3B-Thinking-2507
  - Qwen3-30B-A3B-Instruct-2507
+ - Qwen3.5
+ - Qwen3.6
+
+
+MiniMax Series
+- MiniMax-M2.7
+- MiniMax-M2.5
+- MiniMax-M2.1
+- MiniMax-M2
+
+
+Moonshot Series (Kimi)
+- moonshot-v1-8k
+- moonshot-v1-32k
+- moonshot-v1-128k
+- Kimi K2.6
+
 
 ---
 ## Сценарии использования
