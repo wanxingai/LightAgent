@@ -60,7 +60,12 @@
 
 ---
 ## 新闻
+<<<<<<< Updated upstream
 - <img src="https://img.alicdn.com/imgextra/i3/O1CN01SFL0Gu26nrQBFKXFR_!!6000000007707-2-tps-500-500.png" alt="new" width="30" height="30"/>**[2026-02-21]** LightAgent v0.5.0 正式发布：新增会话级工具集约束以实现精细控制，修复多轮对话中的工具调用历史记录问题，并提升 LightSwarm 稳定性。
+=======
+- <img src="https://img.alicdn.com/imgextra/i3/O1CN01SFL0Gu26nrQBFKXFR_!!6000000007707-2-tps-500-500.png" alt="new" width="30" height="30"/>**[2026-04-26]** LightAgent v0.6.0 正式发布：彻底重构了核心系统架构，并引入了原生skill技能支持，内置script执行安全沙箱，从而实现了更加模块化、可扩展且任务导向的代理功能。
+- **[2026-02-21]** LightAgent v0.5.0 正式发布：新增会话级工具集约束以实现精细控制，修复多轮对话中的工具调用历史记录问题，并提升 LightSwarm 稳定性。
+>>>>>>> Stashed changes
 - **[2026-01-20]** LightAgent v0.4.8 正式发布：引入运行时工具集约束以支持会话级控制，并增强调试配置。
 - **[2025-11-15]** LightAgent v0.4.7 正式发布：改进调试配置，修复 LightSwarm 相关错误。
 - **[2025-10-28]** LightAgent v0.4.6 正式发布：新增对模型扩展参数的支持（如 Qwen3 的思考模式控制），并增强元数据处理能力。
@@ -660,20 +665,19 @@ Langfuse跟踪的LLM调用日志如下图：
 兼容多种大模型，包括 OpenAI、智谱ChatGLM、DeepSeek、Qwen系列大模型。
 
 #### 目前已经测试兼容的大模型
-Openai系列
+OpenAI Series
  - gpt-3.5-turbo
  - gpt-4
  - gpt-4o
  - gpt-4o-mini
- - o4-mini
  - gpt-4.1
  - gpt-4.1-mini
  - gpt-4.1-nano
- - gpt-5
- - gpt-5-mini
- - gpt-5-nano
+ - and GPT-5、GPT-5.1、GPT-5.2、GPT-5.3、GPT-5.4 
 
 ChatGLM
+ - GLM-5.1
+ - GLM-4.7
  - GLM-4.5
  - GLM-4.5-Air
  - GLM-4.5-X
@@ -689,21 +693,21 @@ ChatGLM
  - ChatGLM3-6B
  - GLM-4-9B-Chat
 
-DeepSeek
+DeepSeek Series
  - DeepSeek-r1
  - DeepSeek-v3
+ - DeepSeek-v4
 
 阶跃星辰
  - step-1-8k
  - step-1-32k
- - step-1-128k（在多工具调用中存在问题）
- - step-1-256k（在多工具调用中存在问题）
- - step-1-flash（推荐用此模型，性价比高）
- - step-2-16k（在多工具调用中存在问题）
- - step-2-mini
+ - step-1-128k 
+ - step-1-256k
+ - step-1-flash
+ - step-2-16k 
+ - step-3.5-flash (recommended, cost-effective)
 
-
-Qwen系列
+Qwen大模型
  - qwen-plus-2024-11-25
  - qwen-plus-2024-11-27
  - qwen-plus-1220
@@ -728,8 +732,21 @@ Qwen系列
  - qwen3-235b-a22b
  - Qwen3-30B-A3B-Thinking-2507
  - Qwen3-30B-A3B-Instruct-2507
+ - Qwen3.5
+ - Qwen3.6
+
+MiniMax Series
+- MiniMax-M2.7
+- MiniMax-M2.5
+- MiniMax-M2.1
+- MiniMax-M2
 
 
+Moonshot Series (Kimi)
+- moonshot-v1-8k
+- moonshot-v1-32k
+- moonshot-v1-128k
+- Kimi K2.6
 
 
 ---

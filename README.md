@@ -62,7 +62,12 @@ This page is docs-only and does not change any framework code.
 
 ---
 ## News
+<<<<<<< Updated upstream
 - <img src="https://img.alicdn.com/imgextra/i3/O1CN01SFL0Gu26nrQBFKXFR_!!6000000007707-2-tps-500-500.png" alt="new" width="30" height="30"/>**[2026-02-21]** LightAgent v0.5.0 Released: Adds session-level toolset constraints for granular control, fixes tool call history in multi-turn conversations, and improves LightSwarm stability.
+=======
+- <img src="https://img.alicdn.com/imgextra/i3/O1CN01SFL0Gu26nrQBFKXFR_!!6000000007707-2-tps-500-500.png" alt="new" width="30" height="30"/>**[2026-04-26]** LightAgent v0.6.0 Released: Completely refactors the core system architecture and introduces native skill support, enabling more modular, extensible, and task-oriented agent capabilities.
+- **[2026-02-21]** LightAgent v0.5.0 Released: Adds session-level toolset constraints for granular control, fixes tool call history in multi-turn conversations, and improves LightSwarm stability.
+>>>>>>> Stashed changes
 - **[2026-01-20]** LightAgent v0.4.8 Released: Introduces runtime toolset constraints for session-level control and enhanced debug settings.
 - **[2025-11-15]** LightAgent v0.4.7 Released: Improved debug configuration and fixes for LightSwarm-related bugs.
 - **[2025-10-28]** LightAgent v0.4.6 Released: Adds support for model extension parameters (e.g., Qwen3 thinking mode) and enhanced metadata handling.
@@ -649,8 +654,11 @@ OpenAI Series
  - gpt-4.1
  - gpt-4.1-mini
  - gpt-4.1-nano
+ - and GPT-5、GPT-5.1、GPT-5.2、GPT-5.3、GPT-5.4 
 
 ChatGLM
+ - GLM-5.1
+ - GLM-4.7
  - GLM-4.5
  - GLM-4.5-Air
  - GLM-4.5-X
@@ -669,6 +677,7 @@ ChatGLM
 DeepSeek Series
  - DeepSeek-r1
  - DeepSeek-v3
+ - DeepSeek-v4
 
 stepfun
  - step-1-8k
@@ -677,6 +686,7 @@ stepfun
  - step-1-256k (issues with multi-tool calls)
  - step-1-flash (recommended, cost-effective)
  - step-2-16k (issues with multi-tool calls)
+ - step-3.5-flash
 
 Qwen Series
  - qwen-plus-2024-11-25
@@ -703,6 +713,22 @@ Qwen Series
  - qwen3-235b-a22b
  - Qwen3-30B-A3B-Thinking-2507
  - Qwen3-30B-A3B-Instruct-2507
+ - Qwen3.5
+ - Qwen3.6
+
+
+MiniMax Series
+- MiniMax-M2.7
+- MiniMax-M2.5
+- MiniMax-M2.1
+- MiniMax-M2
+
+
+Moonshot Series (Kimi)
+- moonshot-v1-8k
+- moonshot-v1-32k
+- moonshot-v1-128k
+- Kimi K2.6
 
 ---
 
