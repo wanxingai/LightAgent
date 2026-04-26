@@ -55,7 +55,7 @@
 
 ---
 ## 新闻
-- <img src="https://img.alicdn.com/imgextra/i3/O1CN01SFL0Gu26nrQBFKXFR_!!6000000007707-2-tps-500-500.png" alt="new" width="30" height="30"/>**[2026-04-26]** LightAgent v0.6.0 正式发布：彻底重构了核心系统架构，并引入了原生skill技能支持，内置script执行安全沙箱，从而实现了更加模块化、可扩展且任务导向的代理功能。
+- <img src="https://img.alicdn.com/imgextra/i3/O1CN01SFL0Gu26nrQBFKXFR_!!6000000007707-2-tps-500-500.png" alt="new" width="30" height="30"/>**[2026-04-26]** 我们很高兴发布 LightAgent v0.6.0 — 这是向可组合、技能驱动的智能体开发迈出的重要一步。本次更新彻底重构了核心系统架构，引入了原生 Skill 支持，并内置了脚本执行的安全沙箱，从而实现了更加模块化、可扩展且任务导向的智能体能力。LightAgent 不再只是“聊天”，而是真正地“完成任务”。
 - **[2026-02-21]** LightAgent v0.5.0 正式发布：新增会话级工具集约束以实现精细控制，修复多轮对话中的工具调用历史记录问题，并提升 LightSwarm 稳定性。
 - **[2026-01-20]** LightAgent v0.4.8 正式发布：引入运行时工具集约束以支持会话级控制，并增强调试配置。
 - **[2025-11-15]** LightAgent v0.4.7 正式发布：改进调试配置，修复 LightSwarm 相关错误。
