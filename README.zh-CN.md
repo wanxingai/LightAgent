@@ -60,12 +60,8 @@
 
 ---
 ## 新闻
-<<<<<<< Updated upstream
-- <img src="https://img.alicdn.com/imgextra/i3/O1CN01SFL0Gu26nrQBFKXFR_!!6000000007707-2-tps-500-500.png" alt="new" width="30" height="30"/>**[2026-02-21]** LightAgent v0.5.0 正式发布：新增会话级工具集约束以实现精细控制，修复多轮对话中的工具调用历史记录问题，并提升 LightSwarm 稳定性。
-=======
 - <img src="https://img.alicdn.com/imgextra/i3/O1CN01SFL0Gu26nrQBFKXFR_!!6000000007707-2-tps-500-500.png" alt="new" width="30" height="30"/>**[2026-04-26]** LightAgent v0.6.0 正式发布：彻底重构了核心系统架构，并引入了原生skill技能支持，内置script执行安全沙箱，从而实现了更加模块化、可扩展且任务导向的代理功能。
 - **[2026-02-21]** LightAgent v0.5.0 正式发布：新增会话级工具集约束以实现精细控制，修复多轮对话中的工具调用历史记录问题，并提升 LightSwarm 稳定性。
->>>>>>> Stashed changes
 - **[2026-01-20]** LightAgent v0.4.8 正式发布：引入运行时工具集约束以支持会话级控制，并增强调试配置。
 - **[2025-11-15]** LightAgent v0.4.7 正式发布：改进调试配置，修复 LightSwarm 相关错误。
 - **[2025-10-28]** LightAgent v0.4.6 正式发布：新增对模型扩展参数的支持（如 Qwen3 的思考模式控制），并增强元数据处理能力。
