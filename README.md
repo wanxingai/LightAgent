@@ -785,6 +785,147 @@ We look forward to your feedback and work together to make LightAgent even stron
 
 **LightAgent** —— A lightweight, flexible, and powerful active Agent framework that assists you in quickly building intelligent applications!
 
+
+## FAQ
+
+### General
+
+**What is LightAgent?**
+
+LightAgent is an ultra-lightweight, open-source AI agent framework with native support for Skills, persistent memory, MCP tools, and tree-of-thought reasoning. It enables multi-agent collaboration (LightSwarm), runs on any modern LLM, and outputs OpenAI-compatible streaming APIs.
+
+**How does LightAgent differ from LangChain or CrewAI?**
+
+LightAgent is:
+- **Lighter**: ~1000 lines of core code, no LangChain/LlamaIndex dependencies
+- **Skill-native**: Built-in skill system with persistent memory
+- **MCP-first**: Native MCP support (stdio/SSE) for tool extensibility
+- **ToT-enabled**: Built-in Tree of Thought with reflection for complex tasks
+- **Streaming-ready**: OpenAI-compatible API output for instant chat integration
+
+### Installation
+
+**How do I install LightAgent?**
+
+```bash
+pip install lightagent
+pip install mem0ai  # Optional, for persistent memory
+```
+
+**What Python version is required?**
+
+Python 3.8+ is supported.
+
+### LLM Providers
+
+**Which LLM providers are supported?**
+
+LightAgent uses LiteLLM internally, supporting:
+- OpenAI (GPT-4, GPT-4.1)
+- Anthropic (Claude)
+- DeepSeek (including deepseek-r1)
+- Qwen (including Qwen3 thinking mode)
+- ChatGLM/Zhipu
+- Baichuan
+- StepFun
+- Local models via Ollama/vLLM
+
+**How do I configure the LLM?**
+
+```python
+agent = LightAgent(
+    model="gpt-4.1",
+    api_key="your_api_key",
+    base_url="your_base_url"  # Optional
+)
+```
+
+### Skills & Memory
+
+**What are Skills in LightAgent?**
+
+Skills are reusable capabilities with persistent memory, tool use, and task-oriented execution. They're defined in `SKILL.md` files and auto-discovered by the framework.
+
+**How do I use persistent memory?**
+
+Install `mem0ai` and LightAgent automatically manages user-specific memory during conversations. Memory persists across sessions.
+
+**What is Tree of Thought (ToT)?**
+
+ToT is a built-in module that decomposes complex tasks into multi-step reasoning paths with reflection. It enhances task processing for goals requiring planning and iteration.
+
+### Multi-Agent
+
+**What is LightSwarm?**
+
+LightSwarm is LightAgent's multi-agent collaboration mode. It handles intent recognition and task delegation, routing user input to specialized agents as needed.
+
+**How do I set up multi-agent collaboration?**
+
+Define multiple agents and connect them via LightSwarm. The orchestrator agent handles intent recognition and delegates to worker agents.
+
+**Why am I seeing role drift or cross-agent memory issues?**
+
+See the [Multi-agent failure map](docs/multi_agent_failure_map.md) for troubleshooting steps.
+
+### MCP Tools
+
+**How do I add MCP tools?**
+
+LightAgent supports MCP over stdio and SSE. Configure MCP servers in your agent setup and tools are automatically injected.
+
+**What is the adaptive tool mechanism?**
+
+LightAgent can filter thousands of tools by selecting a candidate set before context submission. This reduces token consumption by ~80%.
+
+### API & Streaming
+
+**How do I use the streaming API?**
+
+LightAgent outputs OpenAI-compatible streaming format. Call `agent.run()` with streaming enabled and integrate with any chat framework.
+
+**Can I deploy LightAgent as an API service?**
+
+Yes, use the FastAPI backend for REST endpoints. See the API section in documentation.
+
+### Troubleshooting
+
+**Agent is not calling tools.**
+
+- Verify tool definitions include proper type hints
+- Check that the tool is registered via `tools` parameter
+- Ensure the model supports tool calling
+
+**Memory is not persisting.**
+
+- Install `mem0ai` package
+- Check memory provider configuration
+- Verify user_id is set for user-specific memory
+
+**ToT is not working for complex tasks.**
+
+- Ensure task requires multi-step reasoning
+- Check ToT configuration parameters
+- Verify model supports extended reasoning (e.g., deepseek-r1)
+
+**Streaming API not working with chat framework.**
+
+- Confirm OpenAI-compatible format is enabled
+- Check SSE/WebSocket configuration
+- Verify streaming flag in `agent.run()`
+
+**How do I debug LightAgent?**
+
+Enable debug settings in configuration. LightAgent outputs detailed logs for tool calls, reasoning steps, and agent state.
+
+### Resources
+
+**Where can I find more documentation?**
+
+- Full docs: https://sufe-aiflm-lab.github.io/LightAgent/
+- Paper: https://arxiv.org/abs/2509.09292
+- Examples: See `examples/` directory
+
 ## Star History
 
 [![Star History Chart](https://api.star-history.com/svg?repos=wxai-space/LightAgent&type=Date)](https://star-history.com/#wxai-space/LightAgent&Date)
