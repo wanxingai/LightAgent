@@ -94,6 +94,11 @@ This page is docs-only and does not change any framework code.
 - **High Performance** ⚡: Optimized design, efficient operation, meeting high concurrency requirements.  
 
 ---
+## 📋 FAQ
+
+For frequently asked questions about LightAgent, see [FAQ](docs/FAQ.md).
+
+---
 
 ## 🛠️ Quick Start
 
