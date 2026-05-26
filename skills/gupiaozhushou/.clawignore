@@ -1,0 +1,34 @@
+# 忽略缓存文件
+__pycache__/
+*.py[cod]
+*$py.class
+
+# 忽略虚拟环境
+venv/
+env/
+.venv/
+
+# 忽略IDE文件
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 忽略系统文件
+.DS_Store
+Thumbs.db
+
+# 忽略测试数据
+test_data/
+temp/
+tmp/
+
+# 忽略大文件
+*.zip
+*.tar.gz
+*.pkl
+*.h5
+
+# 忽略日志文件
+*.log
+logs/

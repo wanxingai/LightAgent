@@ -77,6 +77,10 @@ If you are using LightSwarm or other multi-agent patterns and start seeing role 
 [Multi-agent failure map](docs/multi_agent_failure_map.md) for a small symptom → mode → debug checklist.  
 This page is docs-only and does not change any framework code.
 
+## 📋 FAQ
+
+For common installation, model provider, tool, memory, MCP, Skills, streaming, and LightSwarm questions, see [FAQ](docs/FAQ.md).
+
 ---
 
 ## 🚧 Coming Soon
@@ -92,11 +96,6 @@ This page is docs-only and does not change any framework code.
 - **Easy to Get Started** 🎯: Detailed documentation, rich examples, quick to get started, easy integration into your project.  
 - **Community Support** 👥: An active developer community ready to assist and provide answers at any time.  
 - **High Performance** ⚡: Optimized design, efficient operation, meeting high concurrency requirements.  
-
----
-## 📋 FAQ
-
-For frequently asked questions about LightAgent, see [FAQ](docs/FAQ.md).
 
 ---
 

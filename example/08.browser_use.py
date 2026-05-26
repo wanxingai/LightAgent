@@ -15,7 +15,11 @@ async def fetch_data_with_browser(task_description: str) -> str:
     Fetch data using a browser for tasks that cannot be directly accessed by other tools.
     """
     time_start = time.time()
-    llm = ChatOpenAI(model='gpt-4.1-mini')
+    llm = ChatOpenAI(
+        base_url='http://api.openai.com/v1',
+        model='gpt-4.1-mini',
+        api_key="sk-**********************************"
+    )
     agent = Agent(
         task=task_description,
         llm=llm,

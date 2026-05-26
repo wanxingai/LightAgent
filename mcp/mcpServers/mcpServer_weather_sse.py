@@ -36,7 +36,7 @@ MCP SSE Weather Service (FastMCP 实现版)
 import httpx
 from mcp.server.fastmcp import FastMCP
 
-mcp = FastMCP("WeatherServer")
+mcp = FastMCP("WeatherServer", port=8001)
 
 
 @mcp.tool()
@@ -69,7 +69,8 @@ def show_client_help(host: str, port: int):
     print("请将以下url添加到MCP客户端sse配置中:")
     print(f"\033[1;32mhttp://{host}:{port}/sse\033[0m")  # 绿色高亮显示
     print("lightagent添加lightagent_mcp_settings.json配置示例：")
-    print(f"\033[1;33m    \"example-sse\": {{\n      \"url\": \"http://{host}:{port}/sse\",\n      \"disabled\": false \n   }}\033[0m")  # 黄色高亮配置块
+    print(
+        f"\033[1;33m    \"example-sse\": {{\n      \"url\": \"http://{host}:{port}/sse\",\n      \"disabled\": false \n   }}\033[0m")  # 黄色高亮配置块
     print("=" * 50 + "\n")
 
 

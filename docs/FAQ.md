@@ -1,18 +1,12 @@
-## 📋 FAQ
+## FAQ
 
 ### What is LightAgent?
 
-LightAgent is an ultra-lightweight, open-source Python AI Agent framework with native Skills support. It enables you to build self-learning agents with persistent memory, tool integration, and tree-of-thought reasoning. Key features include LightSwarm for multi-agent collaboration, MCP protocol support, and OpenAI-compatible streaming APIs. The core code is only ~1000 lines with no LangChain/LlamaIndex dependencies.
+LightAgent is a lightweight Python agent framework for building tool-using agents, memory-enabled agents, Tree-of-Thought workflows, MCP integrations, and LightSwarm multi-agent collaboration. It uses OpenAI-compatible chat completion APIs, so it can work with OpenAI and compatible providers by configuring `model`, `api_key`, and `base_url`.
 
-### How does LightAgent differ from LangChain or CrewAI?
+### How is LightAgent different from LangChain or CrewAI?
 
-| Framework | Philosophy | Key Differentiator |
-|-----------|-----------|-------------------|
-| **LightAgent** | Ultra-lightweight, Skills-native | 1000-line core, no external dependencies, LightSwarm multi-agent, Tree-of-Thought, adaptive tool filtering (80% token reduction) |
-| **LangChain** | Chain-based orchestration | Heavy dependency chain, complex abstraction layers |
-| **CrewAI** | Role-playing agents | Actor-based, Crew concept for team collaboration |
-
-LightAgent focuses on **minimal footprint, big potential** — lightweight design without sacrificing capabilities.
+LightAgent focuses on a small core, direct Python tool registration, OpenAI-compatible streaming output, MCP tool integration, and a simple LightSwarm abstraction for multi-agent routing. It avoids requiring LangChain or LlamaIndex as core dependencies.
 
 ### How do I install LightAgent?
 
@@ -20,126 +14,151 @@ LightAgent focuses on **minimal footprint, big potential** — lightweight desig
 pip install lightagent
 ```
 
-Optional: Install Mem0 for memory support:
+Memory examples that use Mem0 also require:
 
 ```bash
 pip install mem0ai
 ```
 
-### What LLM providers does LightAgent support?
+### How do I create a basic agent?
 
-LightAgent is compatible with:
-- **OpenAI** (GPT-4, GPT-3.5)
-- **DeepSeek** (deepseek-r1 for ToT)
-- **Qwen** (Qwen series, Qwen3 thinking mode)
-- **Zhipu ChatGLM**
-- **Baichuan Large Model**
-- **StepFun**
-- And other OpenAI-compatible APIs
+```python
+from LightAgent import LightAgent
 
-Configure via `model`, `api_key`, and `base_url` parameters:
+agent = LightAgent(
+    model="gpt-4.1",
+    api_key="your_api_key",
+    base_url="your_base_url",
+)
+
+response = agent.run("Hello, who are you?")
+print(response)
+```
+
+### Which model providers are supported?
+
+LightAgent can use OpenAI-compatible chat completion endpoints. The README examples cover OpenAI, DeepSeek, Qwen, Zhipu ChatGLM, Baichuan, StepFun, and other compatible providers. For OpenRouter or a self-hosted gateway, set `base_url` to the provider's OpenAI-compatible endpoint.
+
+Example OpenRouter configuration:
+
+```python
+from LightAgent import LightAgent
+
+agent = LightAgent(
+    model="openai/gpt-4.1",
+    api_key="your_openrouter_api_key",
+    base_url="https://openrouter.ai/api/v1",
+)
+```
+
+### Does LightAgent support local models?
+
+Yes, when the local runtime exposes an OpenAI-compatible endpoint. For example, with a local gateway, Ollama-compatible proxy, or vLLM server, pass the endpoint through `base_url` and use the matching model name.
+
+### How do I add a custom tool?
+
+Define a Python function and attach `tool_info`, then pass the function through the `tools` argument.
+
+```python
+from LightAgent import LightAgent
+
+def get_weather(city_name: str) -> str:
+    return f"Query result: {city_name} is sunny."
+
+get_weather.tool_info = {
+    "tool_name": "get_weather",
+    "tool_description": "Get current weather information for the specified city.",
+    "tool_params": [
+        {
+            "name": "city_name",
+            "description": "The city name to query",
+            "type": "string",
+            "required": True,
+        },
+    ],
+}
+
+agent = LightAgent(
+    model="gpt-4.1",
+    api_key="your_api_key",
+    base_url="your_base_url",
+    tools=[get_weather],
+)
+
+print(agent.run("Please check the weather in Shanghai."))
+```
+
+### Can tools be passed at runtime?
+
+The public API accepts `run(..., tools=[...])`, but runtime tool dispatch needs to be validated against the installed LightAgent version. If a runtime tool is advertised to the model but not registered with the dispatcher, the model may call a tool that cannot be executed. Prefer constructor-level `tools=[...]` until your version includes the runtime dispatch fix.
+
+### What is the memory system?
+
+LightAgent accepts a custom memory object through the `memory` parameter. The object should provide `store(data, user_id)` and `retrieve(query, user_id)` methods. The README includes a Mem0-based example, and other memory backends can be integrated by implementing the same small interface.
+
+### What is Tree of Thought?
+
+Tree of Thought is an optional planning and reflection mode enabled with `tree_of_thought=True`. It uses a reasoning model to create a tool-use plan and can filter tools before the final model call.
 
 ```python
 agent = LightAgent(
     model="gpt-4.1",
     api_key="your_api_key",
-    base_url="your_base_url"
+    base_url="your_base_url",
+    tree_of_thought=True,
+    tot_model="deepseek-r1",
 )
 ```
 
-### What is the Memory system?
-
-LightAgent natively supports `mem0` for persistent, user-specific memory:
-- Automatically manages conversation history
-- Stores personalized user preferences
-- Enables cross-session context retention
-- Can use Qdrant as vector database backend
-
-Enable memory with `CustomMemory()` class implementing `store()` and `retrieve()` methods.
-
-### How do I add custom Tools?
-
-Define tools as Python functions with `tool_info` attribute:
-
-```python
-def get_weather(city_name: str) -> str:
-    """Get current weather for city"""
-    return f"Query result: {city_name} is sunny."
-
-get_weather.tool_info = {
-    "tool_name": "get_weather",
-    "tool_description": "Get current weather information.",
-    "tool_params": [
-        {"name": "city_name", "description": "City name", "type": "string", "required": True}
-    ]
-}
-
-agent = LightAgent(model="gpt-4.1", api_key="...", tools=[get_weather])
-```
-
-LightAgent supports **unlimited tools** with adaptive filtering (reduces token consumption by 80%).
-
-### What is Tree-of-Thought (ToT)?
-
-ToT enables complex task decomposition and multi-step reasoning:
-- Reflects on intermediate results
-- Decomposes complex goals into subtasks
-- Supports multi-tool planning
-- Especially effective with DeepSeek-r1 model
-
-Enable with `tree_of_thought=True` parameter.
-
 ### What is LightSwarm?
 
-LightSwarm simplifies multi-agent collaboration:
-- Intent recognition for task delegation
-- Automatic routing to specialized agents
-- Easier than Swarm framework implementation
-- Handles user input intelligently across agents
+LightSwarm is LightAgent's multi-agent collaboration helper. You register multiple `LightAgent` instances and run a selected agent through the swarm so tasks can be routed to specialized agents.
 
-Use LightSwarm for multi-agent scenarios where different agents handle different domains.
+```python
+from LightAgent import LightAgent, LightSwarm
 
-### What is MCP support?
+swarm = LightSwarm()
+support_agent = LightAgent(
+    name="SupportAgent",
+    role="Handle support questions.",
+    model="gpt-4.1",
+    api_key="your_api_key",
+    base_url="your_base_url",
+)
 
-LightAgent fully supports MCP (Model Context Protocol):
-- Connects to MCP servers via stdio and SSE
-- Integrates MCP tools seamlessly
-- Enables tool sharing across agents
-- Supports browser_use integration
+swarm.register_agent(support_agent)
+response = swarm.run(support_agent, "Help me troubleshoot this issue.")
+print(response)
+```
 
-See `mcp_release.md` for MCP integration details.
+### How do I use MCP tools?
 
-### What are Skills?
+Configure MCP server settings and call `setup_mcp()` before running the agent. LightAgent supports stdio and SSE MCP transports; see `mcp_release.md` and the examples under `mcp/` for complete configuration examples.
 
-Skills (v0.6.0+) are reusable, composable capabilities:
-- Task-oriented agent modules
-- Persistent memory integration
-- Tool use encapsulation
-- Tree-of-thought reasoning built-in
+### How do I use Skills?
 
-Skills enable modular agent design with better maintainability.
+Skills are discovered from skill directories containing `SKILL.md` files. By default, LightAgent looks under `skills/` and can expose skill activation tools when skills are discovered. Keep skill instructions focused and pair them with normal Python tools when external actions are required.
 
-### How do I use the Tool Generator?
+### How do I enable streaming?
 
-Provide your API documentation to the Tool Generator:
-- Automatically creates exclusive tools
-- Build hundreds of custom tools in ~1 hour
-- Reduces manual tool development effort
+Pass `stream=True` to `run()`. The method returns a generator that yields model chunks and tool events.
 
-### How do I troubleshoot multi-agent issues?
+```python
+response = agent.run("Tell me a short story.", stream=True)
+for chunk in response:
+    print(chunk)
+```
 
-Check the [Multi-agent failure map](docs/multi_agent_failure_map.md) for:
-- Role drift symptoms
-- Cross-agent memory issues
-- Debug checklist
-- Common failure patterns
+### Where should I start troubleshooting?
+
+- For tool issues, confirm the tool has `tool_info`, is passed through `tools=[...]`, and the selected model supports tool calls.
+- For memory issues, confirm your memory object implements both `store()` and `retrieve()` and that you pass a stable `user_id`.
+- For multi-agent issues, see the [Multi-agent failure map](multi_agent_failure_map.md).
+- For MCP issues, verify that the MCP server command or SSE endpoint starts independently before connecting it to LightAgent.
 
 ### Where can I get help?
 
-- **Documentation**: https://sufe-aiflm-lab.github.io/LightAgent/
-- **Issues**: https://github.com/wanxingai/LightAgent/issues
-- **Paper**: https://arxiv.org/abs/2509.09292
-- **Community**: Active developer community for Q&A
-
----
-
+- Documentation: https://sufe-aiflm-lab.github.io/LightAgent/
+- Issues: https://github.com/wanxingai/LightAgent/issues
+- PyPI: https://pypi.org/project/lightagent/
+- Paper: https://arxiv.org/abs/2509.09292
