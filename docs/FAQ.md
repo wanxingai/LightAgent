@@ -37,7 +37,7 @@ print(response)
 
 ### Which model providers are supported?
 
-LightAgent can use OpenAI-compatible chat completion endpoints. The README examples cover OpenAI, DeepSeek, Qwen, Zhipu ChatGLM, Baichuan, StepFun, and other compatible providers. For OpenRouter or a self-hosted gateway, set `base_url` to the provider's OpenAI-compatible endpoint.
+LightAgent can use OpenAI-compatible chat completion endpoints. The README examples cover OpenAI, DeepSeek, Qwen, Zhipu ChatGLM, Baichuan, StepFun, and other compatible providers. For OpenRouter or a self-hosted gateway, set `base_url` to the provider's OpenAI-compatible endpoint. See [Model Provider Configuration](model_providers.md) for OpenRouter, vLLM, llama.cpp, and Ollama examples.
 
 Example OpenRouter configuration:
 
@@ -53,7 +53,7 @@ agent = LightAgent(
 
 ### Does LightAgent support local models?
 
-Yes, when the local runtime exposes an OpenAI-compatible endpoint. For example, with a local gateway, Ollama-compatible proxy, or vLLM server, pass the endpoint through `base_url` and use the matching model name.
+Yes, when the local runtime exposes an OpenAI-compatible endpoint. For example, with vLLM use `base_url="http://localhost:8000/v1"`, with llama.cpp server mode use `base_url="http://localhost:8080/v1"`, and with Ollama's OpenAI-compatible API use `base_url="http://localhost:11434/v1"`. The `api_key` can be any non-empty value when the local server does not require authentication.
 
 ### How do I add a custom tool?
 
@@ -90,7 +90,15 @@ print(agent.run("Please check the weather in Shanghai."))
 
 ### Can tools be passed at runtime?
 
-The public API accepts `run(..., tools=[...])`, but runtime tool dispatch needs to be validated against the installed LightAgent version. If a runtime tool is advertised to the model but not registered with the dispatcher, the model may call a tool that cannot be executed. Prefer constructor-level `tools=[...]` until your version includes the runtime dispatch fix.
+Yes. `run(..., tools=[...])` registers runtime tools into the active tool registry and dispatcher before the model request, so tools advertised for that run can also be executed when the model calls them.
+
+### How do I troubleshoot model or tool errors?
+
+LightAgent returns stable error codes such as `LA-401` for authentication errors, `LA-413` for oversized requests, `LA-429` for rate limits, `LA-JSON` for malformed tool arguments, and `LA-TOOL` for tool execution failures. See [Error Handling](error_handling.md) for the full taxonomy and troubleshooting guidance.
+
+### How do I use browser-use with LightAgent?
+
+Use `example/08.browser_use.py` as the reference implementation. For `browser-use` 0.11 and newer, LightAgent's example adds a compatibility `provider` attribute to `langchain_openai.ChatOpenAI` when needed. See [browser-use Integration](browser_use.md).
 
 ### What is the memory system?
 

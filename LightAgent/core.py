@@ -27,6 +27,7 @@ from .version import __version__
 from .protocol import MemoryProtocol
 from .logger import LoggerManager
 from .tools import ToolRegistry, ToolLoader, AsyncToolDispatcher
+from .errors import format_error_code, format_lightagent_error
 from .mcp_client_manager import MCPClientManager
 from .skills import SkillManager
 from .skill_tools import create_skill_tools
@@ -440,7 +441,14 @@ class LightAgent:
 
         # 调用模型
         self.log("DEBUG", "first_request_params", {"params": self.chat_params})
-        response = self.client.chat.completions.create(**self.chat_params)
+        try:
+            response = self.client.chat.completions.create(**self.chat_params)
+        except Exception as e:
+            error_msg = format_lightagent_error(e, "create chat completion")
+            self.log("ERROR", "model_request_failed", {"error": error_msg})
+            if stream:
+                return self._error_stream(error_msg)
+            return error_msg
         return self._core_run_logic(response, stream, max_retry)
 
     def _process_runtime_tools(self, tools: List[Union[str, Callable]]) -> List[Dict]:
@@ -610,7 +618,9 @@ class LightAgent:
             try:
                 response = self.client.chat.completions.create(**self.chat_params)
             except Exception as e:
-                print(f"An error occurred: {e}")
+                error_msg = format_lightagent_error(e, "continue chat completion")
+                self.log("ERROR", "model_request_failed", {"error": error_msg})
+                return error_msg
 
         # 重试次数用尽
         self.log("ERROR", "max_retry_reached", {"message": "Failed to generate a valid response."})
@@ -808,14 +818,14 @@ class LightAgent:
                                             self.log("INFO", "finish_tool_called", {"response": combined_response})
 
                                     except json.JSONDecodeError as e:
-                                        error_msg = f"JSON解析错误: {str(e)}\n参数: {arguments}"
+                                        error_msg = format_error_code("LA-JSON", f"{str(e)}; arguments: {arguments}")
                                         self.log("ERROR", "json_decode_error",
                                                  {"tool": tool_name, "title": tool_title, "error": error_msg})
                                         tool_responses.append(error_msg)
                                         yield {"name": tool_name, "title": tool_title, "error": error_msg}
 
                                     except Exception as e:
-                                        error_msg = f"工具调用错误: {str(e)}\n{traceback.format_exc()}"
+                                        error_msg = f"{format_lightagent_error(e, 'execute stream tool', default_code='LA-TOOL')}\n{traceback.format_exc()}"
                                         self.log("ERROR", "tool_execution_error", {
                                             "tool": tool_name,
                                             "title": tool_title,
@@ -864,7 +874,13 @@ class LightAgent:
 
                             # 创建新的响应流
                             self.log("DEBUG", "stream next_request_params", {"params": self.chat_params})
-                            response = self.client.chat.completions.create(**self.chat_params)
+                            try:
+                                response = self.client.chat.completions.create(**self.chat_params)
+                            except Exception as e:
+                                error_msg = format_lightagent_error(e, "continue streaming chat completion")
+                                self.log("ERROR", "model_request_failed", {"error": error_msg})
+                                yield error_msg
+                                return
                             break
             except Exception as e:
                 self.log("WARNING", "retry", {"error": str(e)})
@@ -875,6 +891,10 @@ class LightAgent:
             self.log("ERROR", "max_retry_reached", {"message": f"Max retry({max_retry}) reached."})
             yield "Failed to stream a valid response."
             return  # 或者直接退出
+
+    @staticmethod
+    def _error_stream(message: str) -> Generator[str, None, None]:
+        yield message
 
     def _handle_task_transfer(
             self,

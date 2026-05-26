@@ -65,7 +65,7 @@ LightAgent is an ultra‑lightweight, open‑source framework that now natively 
 - **Complex Goals** 🌳: Built-in Tree of Thought (`ToT`) module with reflection, supporting complex task decomposition and multi-step reasoning, enhancing task processing capabilities.  
 - **Multi-Agent Collaboration** 🤖: Simpler to implement multi-agent collaboration than Swarm, with built-in LightSwarm for intent recognition and task delegation, enabling smarter handling of user input and delegating tasks to other agents as needed. 
 - **Independent Execution** 🤖: Tasks and tool calls are completed autonomously without human intervention.  
-- **Multi-Model Support** 🔄: Compatible with OpenAI, Zhipu ChatGLM, Baichuan Large Model, StepFun, DeepSeek, Qwen series large models.  
+- **Multi-Model Support** 🔄: Compatible with OpenAI-style providers such as OpenAI, OpenRouter, Zhipu ChatGLM, Baichuan, StepFun, DeepSeek, Qwen, vLLM, llama.cpp, and other OpenAI-compatible endpoints.  
 - **Streaming API** 🌊: Supports OpenAI streaming format API service output, seamlessly integrates with mainstream chat frameworks, enhancing user experience.  
 - **Tool Generator** 🚀: Just provide your API documentation to the [Tool Generator], which will automatically create exclusive tools for you, allowing you to quickly build hundreds of personalized custom tools in just 1 hour to improve efficiency and unleash your creative potential.
 - **Agent Self-Learning** 🧠️: Each agent has its own scene memory capabilities and the ability to self-learn from user conversations.
@@ -82,6 +82,12 @@ This page is docs-only and does not change any framework code.
 For common installation, model provider, tool, memory, MCP, Skills, streaming, and LightSwarm questions, see [FAQ](docs/FAQ.md).
 
 For shared long-term memory or graph memory deployments, review the [Memory Security Guidance](docs/memory_security.md).
+
+For OpenRouter, local LLM, and OpenAI-compatible provider setup, see [Model Provider Configuration](docs/model_providers.md).
+
+For structured error codes and troubleshooting hints, see [Error Handling](docs/error_handling.md).
+
+For browser-use integration with recent `browser-use` versions, see [browser-use Integration](docs/browser_use.md).
 
 ---
 
@@ -624,7 +630,7 @@ The LLM call logs tracked by Langfuse are shown in the figure below:
 Built-in agent assessment tool for conveniently evaluating and optimizing agent performance.
 
 ## Mainstream Agent Model Support
-Compatible with various large models, including OpenAI, Zhipu ChatGLM, DeepSeek, Qwen series large models.
+Compatible with OpenAI-compatible chat completion endpoints, including OpenAI, OpenRouter, Zhipu ChatGLM, DeepSeek, Qwen, vLLM, llama.cpp, Ollama OpenAI-compatible endpoints, and self-hosted gateways.
 
 #### Currently tested compatible large models
 OpenAI Series

@@ -1,13 +1,25 @@
 import os
 import time
 
-from LightAgent import LightAgent
 from browser_use import Agent
+from LightAgent import LightAgent
 from langchain_openai import ChatOpenAI
 
 
 os.environ["OPENAI_API_KEY"] = "<your_api_key>"
-os.environ["OPENAI_BASE_URL"] = "http://<your_base_url>/v1"
+os.environ["OPENAI_BASE_URL"] = "https://api.openai.com/v1"
+os.environ["BROWSER_USE_MODEL"] = "gpt-4.1-mini"
+
+
+def ensure_browser_use_provider(llm, provider: str = "openai"):
+    """browser-use 0.11+ expects llm.provider; older ChatOpenAI objects may not expose it."""
+    if hasattr(llm, "provider"):
+        return llm
+    try:
+        setattr(llm, "provider", provider)
+    except Exception:
+        object.__setattr__(llm, "provider", provider)
+    return llm
 
 
 async def fetch_data_with_browser(task_description: str) -> str:
@@ -15,17 +27,17 @@ async def fetch_data_with_browser(task_description: str) -> str:
     Fetch data using a browser for tasks that cannot be directly accessed by other tools.
     """
     time_start = time.time()
-    llm = ChatOpenAI(
-        base_url='http://api.openai.com/v1',
-        model='gpt-4.1-mini',
-        api_key="sk-**********************************"
-    )
-    agent = Agent(
+    llm = ensure_browser_use_provider(ChatOpenAI(
+        base_url=os.getenv("OPENAI_BASE_URL"),
+        model=os.getenv("BROWSER_USE_MODEL", "gpt-4.1-mini"),
+        api_key=os.getenv("OPENAI_API_KEY"),
+    ))
+    browser_agent = Agent(
         task=task_description,
         llm=llm,
-        use_vision=False
+        use_vision=False,
     )
-    result = await agent.run()
+    result = await browser_agent.run()
     time_end = time.time()
     print("\n======== Task Execution Time ========")
     print("Time taken:", int(time_end - time_start), "seconds")
@@ -48,7 +60,7 @@ tools = [fetch_data_with_browser]
 
 # Initialize Agent
 agent = LightAgent(model="gpt-4.1-mini", api_key="<your_api_key>",
-                   base_url="http://<your_base_url>/v1",
+                   base_url="https://api.openai.com/v1",
                    tools=tools,
                    debug=True,
                    log_level="debug",

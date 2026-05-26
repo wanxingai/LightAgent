@@ -10,6 +10,7 @@ from .version import __version__
 from .core import LightAgent, LightSwarm
 from .protocol import MemoryProtocol
 from .tools import ToolRegistry, ToolLoader, AsyncToolDispatcher
+from .errors import LightAgentErrorInfo, ERROR_TAXONOMY, classify_exception, format_error_code, format_lightagent_error
 from .logger import LoggerManager
 from .mcp_client_manager import MCPClientManager
 from .skills import SkillManager, Skill
@@ -29,6 +30,11 @@ __all__ = [
     "ToolRegistry",
     "ToolLoader",
     "AsyncToolDispatcher",
+    "LightAgentErrorInfo",
+    "ERROR_TAXONOMY",
+    "classify_exception",
+    "format_error_code",
+    "format_lightagent_error",
     "LoggerManager",
     "MCPClientManager",
     "SkillManager",

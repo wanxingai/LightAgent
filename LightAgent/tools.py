@@ -15,6 +15,8 @@ import traceback
 from copy import deepcopy
 from typing import List, Dict, Any, Callable, Union, Generator, AsyncGenerator
 
+from .errors import format_lightagent_error
+
 
 class ToolRegistry:
     """集中管理工具注册表，避免全局变量"""
@@ -181,7 +183,7 @@ class AsyncToolDispatcher:
             # 将结果转换为字符串（OpenAI 要求 tool content 必须是字符串）
             return self._serialize_result(result)
         except Exception as e:
-            return f"Tool call error: {str(e)}\n{traceback.format_exc()}"
+            return f"{format_lightagent_error(e, 'execute tool', default_code='LA-TOOL')}\n{traceback.format_exc()}"
 
     def _serialize_result(self, result: Any) -> str:
         """将任意类型的结果序列化为字符串"""
