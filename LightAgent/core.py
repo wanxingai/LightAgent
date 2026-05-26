@@ -179,47 +179,44 @@ class LightAgent:
         self.skills_directories = skills_directories or ["skills"]
         self.skill_manager = SkillManager(self.skills_directories, self.logger if debug else None)
 
-        if tools is None:
-            self.tools = []
-        if tools is not None:
-            # 初始化工具列表
-            self.tools = tools
-            self.load_tools(tools)
-            # 自动注册内置工具
-            builtin_tools = [
-                execute_python_code,
-                execute_python_file,
-                execute_python_code_stream,
-                upload_file_to_oss
-            ]
+        self.tools = tools or []
+        if self.tools:
+            self.load_tools(self.tools)
 
-            for tool_func in builtin_tools:
+        # 自动注册内置工具
+        builtin_tools = [
+            execute_python_code,
+            execute_python_file,
+            execute_python_code_stream,
+            upload_file_to_oss
+        ]
+
+        for tool_func in builtin_tools:
+            self.tool_registry.register_tool(tool_func)
+            self.loaded_tools[tool_func.tool_info["tool_name"]] = tool_func
+
+        if debug:
+            self.log("INFO", "builtin_tools_loaded",
+                     {"count": len(builtin_tools), "tools": [f.tool_info["tool_name"] for f in builtin_tools]})
+
+        # 自动发现skill技能
+        if auto_discover_skills:
+            discovered = self.skill_manager.discover_skills()
+            if debug and discovered:
+                self.log("INFO", "skills_discovered",
+                         {"count": len(discovered), "skills": [s.name for s in discovered]})
+        # 自动加载自带的skill相关的系统级工具
+        if auto_discover_skills and self.skill_manager.skills:
+            skill_tools = create_skill_tools(self.skill_manager)
+            for tool_func in skill_tools:
                 self.tool_registry.register_tool(tool_func)
                 self.loaded_tools[tool_func.tool_info["tool_name"]] = tool_func
-
             if debug:
-                self.log("INFO", "builtin_tools_loaded",
-                         {"count": len(builtin_tools), "tools": [f.tool_info["tool_name"] for f in builtin_tools]})
+                self.log("INFO", "skill_tools_loaded",
+                         {"count": len(skill_tools), "tools": [f.tool_info["tool_name"] for f in skill_tools]})
 
-            # 自动发现skill技能
-            if auto_discover_skills:
-                discovered = self.skill_manager.discover_skills()
-                if debug and discovered:
-                    self.log("INFO", "skills_discovered",
-                             {"count": len(discovered), "skills": [s.name for s in discovered]})
-            # 自动加载自带的skill相关的系统级工具
-            if auto_discover_skills and self.skill_manager.skills:
-                skill_tools = create_skill_tools(self.skill_manager)
-                for tool_func in skill_tools:
-                    self.tool_registry.register_tool(tool_func)
-                    self.loaded_tools[tool_func.tool_info["tool_name"]] = tool_func
-                if debug:
-                    self.log("INFO", "skill_tools_loaded",
-                             {"count": len(skill_tools), "tools": [f.tool_info["tool_name"] for f in skill_tools]})
-
-            print("self.tool_registry.function_mappings", self.tool_registry.function_mappings)
-            self.tool_dispatcher = AsyncToolDispatcher(self.tool_registry.function_mappings)
-            # register_tool_manually(tools)
+        self.tool_dispatcher = AsyncToolDispatcher(self.tool_registry.function_mappings)
+        # register_tool_manually(tools)
 
         if api_key is None:
             raise ValueError(
@@ -453,20 +450,24 @@ class LightAgent:
         :param tools: 运行时传入的工具列表
         :return: OpenAI格式的工具描述列表
         """
-        runtime_tools = []
         temp_registry = ToolRegistry()
 
         for tool in tools:
             if isinstance(tool, str):
                 try:
                     tool_func = self.tool_loader.load_tool(tool)
-                    temp_registry.register_tool(tool_func)
+                    if temp_registry.register_tool(tool_func):
+                        self.tool_registry.register_tool(tool_func)
+                        self.loaded_tools[tool_func.tool_info["tool_name"]] = tool_func
                 except Exception as e:
                     self.log("ERROR", "load_runtime_tool", {"tool": tool, "error": str(e)})
             elif callable(tool) and hasattr(tool, "tool_info"):
-                temp_registry.register_tool(tool)
+                if temp_registry.register_tool(tool):
+                    self.tool_registry.register_tool(tool)
+                    self.loaded_tools[tool.tool_info["tool_name"]] = tool
 
         runtime_tools = temp_registry.get_tools()
+        self.tool_dispatcher = AsyncToolDispatcher(self.tool_registry.function_mappings)
         self.log("DEBUG", "runtime_tools_processed", {"count": len(runtime_tools)})
         return runtime_tools
 

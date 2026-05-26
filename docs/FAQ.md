@@ -96,6 +96,8 @@ The public API accepts `run(..., tools=[...])`, but runtime tool dispatch needs 
 
 LightAgent accepts a custom memory object through the `memory` parameter. The object should provide `store(data, user_id)` and `retrieve(query, user_id)` methods. The README includes a Mem0-based example, and other memory backends can be integrated by implementing the same small interface.
 
+For shared or graph-backed memory deployments, review the [Memory Security Guidance](memory_security.md) before enabling cross-user persistence.
+
 ### What is Tree of Thought?
 
 Tree of Thought is an optional planning and reflection mode enabled with `tree_of_thought=True`. It uses a reasoning model to create a tool-use plan and can filter tools before the final model call.

@@ -81,6 +81,8 @@ This page is docs-only and does not change any framework code.
 
 For common installation, model provider, tool, memory, MCP, Skills, streaming, and LightSwarm questions, see [FAQ](docs/FAQ.md).
 
+For shared long-term memory or graph memory deployments, review the [Memory Security Guidance](docs/memory_security.md).
+
 ---
 
 ## 🚧 Coming Soon

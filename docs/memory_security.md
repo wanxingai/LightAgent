@@ -1,0 +1,65 @@
+## Memory Security Guidance
+
+LightAgent accepts external memory backends through a small `store()` and
+`retrieve()` interface. This keeps the framework flexible, but it also means
+deployments must treat long-term memory as a trust boundary.
+
+### Threat Model
+
+Shared memory backends can persist user supplied content and later return it as
+agent context. If untrusted content is written into the same memory namespace as
+trusted content, a later request can retrieve poisoned facts and pass them to the
+model as apparently reliable context.
+
+This is especially important for high-impact domains such as healthcare,
+finance, legal, enterprise automation, and policy support.
+
+### Recommended Defaults
+
+- Use separate memory namespaces per user, tenant, agent, and environment.
+- Do not share graph memory across users unless there is an explicit product
+  requirement and a reviewable access policy.
+- Treat retrieved memories as untrusted context unless the memory backend can
+  provide provenance and trust metadata.
+- Disable memory writes for high-impact workflows until source trust,
+  consistency checks, and rollback behavior are defined.
+- Log memory writes at the metadata level: user id, agent id, source, timestamp,
+  and trust level. Avoid logging sensitive raw content unless required by your
+  compliance process.
+
+### Admission Checks Before Writing Memory
+
+Memory adapters should validate candidate memories before persistence:
+
+- Record provenance: source user, agent, tool, channel, and timestamp.
+- Keep trust levels separate, for example system, admin, verified source,
+  authenticated user, and unauthenticated user.
+- Reject or quarantine memories that contradict higher-trust facts.
+- Avoid merging entities only by similar names; include entity type, context,
+  tenant, and relation neighborhood in entity resolution.
+- Preserve conflicting facts with provenance instead of silently deleting older
+  trusted facts.
+
+### Retrieval Checks Before Using Memory
+
+Before injecting retrieved memory into the model context:
+
+- Filter by tenant, user, agent, and allowed source trust level.
+- Prefer verified or same-user memories over cross-user memories.
+- Include provenance in internal context where possible.
+- For high-impact answers, require a trusted external source or tool result
+  before producing recommendations.
+
+### Mem0 Graph Memory Notes
+
+When using Mem0 graph memory or another shared graph backend, configure it so
+one user's conversational claims cannot overwrite or remove trusted facts for
+another user. If the backend cannot enforce that policy, use isolated memory
+instances or per-user namespaces.
+
+### LightAgent Adapter Guidance
+
+Custom memory implementations passed to `LightAgent(memory=...)` should enforce
+the security policy inside their `store()` and `retrieve()` methods. LightAgent
+will call those methods, but the backend adapter is responsible for persistence,
+isolation, provenance, and conflict handling.

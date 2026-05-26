@@ -58,6 +58,10 @@ class ToolRegistry:
             }
         }
 
+        self.openai_function_schemas = [
+            schema for schema in self.openai_function_schemas
+            if schema.get("function", {}).get("name") != tool_name
+        ]
         self.openai_function_schemas.append(tool_def_openai)
         return True
 
