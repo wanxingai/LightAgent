@@ -18,6 +18,30 @@ class LightAgentErrorInfo:
     guidance: str
 
 
+class LightAgentError(Exception):
+    """Catchable structured LightAgent exception."""
+
+    def __init__(
+            self,
+            code: str,
+            message: str | None = None,
+            guidance: str | None = None,
+            details: Any = None,
+    ):
+        info = ERROR_TAXONOMY.get(code, ERROR_TAXONOMY["LA-UNKNOWN"])
+        self.code = info.code
+        self.message = message or info.message
+        self.guidance = guidance or info.guidance
+        self.details = details
+        super().__init__(self.__str__())
+
+    def __str__(self) -> str:
+        text = f"[{self.code}] {self.message} Guidance: {self.guidance}"
+        if self.details is not None:
+            text = f"{text} Details: {self.details}"
+        return text
+
+
 ERROR_TAXONOMY = {
     "LA-400": LightAgentErrorInfo(
         "LA-400",
