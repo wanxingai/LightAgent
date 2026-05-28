@@ -37,7 +37,8 @@ LightAgent is an ultra‑lightweight, open‑source framework that now natively 
 
 ---
 ## News
-- <img src="https://img.alicdn.com/imgextra/i3/O1CN01SFL0Gu26nrQBFKXFR_!!6000000007707-2-tps-500-500.png" alt="new" width="30" height="30"/>**[2026-05-27]** LightAgent v0.6.4 Released: Improves runtime tool dispatch reliability, adds structured error codes and troubleshooting guidance, expands OpenAI-compatible provider documentation for OpenRouter and local models, and updates browser-use integration examples.
+- <img src="https://img.alicdn.com/imgextra/i3/O1CN01SFL0Gu26nrQBFKXFR_!!6000000007707-2-tps-500-500.png" alt="new" width="30" height="30"/>**[2026-05-29]** LightAgent v0.7.0 Development: Adds opt-in trace observability with structured run/model/tool/error events, `agent.export_trace()`, and prompt-safe model request summaries for production debugging.
+- **[2026-05-27]** LightAgent v0.6.4 Released: Improves runtime tool dispatch reliability, adds structured error codes and troubleshooting guidance, expands OpenAI-compatible provider documentation for OpenRouter and local models, and updates browser-use integration examples.
 - **[2026-04-26]** LightAgent v0.6.0 Released: Completely refactors the core system architecture and introduces native skill support, enabling more modular, extensible, and task-oriented agent capabilities.
 - **[2026-02-21]** LightAgent v0.5.0 Released: Adds session-level toolset constraints for granular control, fixes tool call history in multi-turn conversations, and improves LightSwarm stability.
 - **[2026-01-20]** LightAgent v0.4.8 Released: Introduces runtime toolset constraints for session-level control and enhanced debug settings.
@@ -68,6 +69,7 @@ LightAgent is an ultra‑lightweight, open‑source framework that now natively 
 - **Independent Execution** 🤖: Tasks and tool calls are completed autonomously without human intervention.  
 - **Multi-Model Support** 🔄: Compatible with OpenAI-style providers such as OpenAI, OpenRouter, Zhipu ChatGLM, Baichuan, StepFun, DeepSeek, Qwen, vLLM, llama.cpp, and other OpenAI-compatible endpoints.  
 - **Streaming API** 🌊: Supports OpenAI streaming format API service output, seamlessly integrates with mainstream chat frameworks, enhancing user experience.  
+- **Trace Observability** 🔎: Opt-in `trace=True` run traces record structured run lifecycle, model request summaries, tool calls, tool results, and errors without changing the default string return value.  
 - **Tool Generator** 🚀: Just provide your API documentation to the [Tool Generator], which will automatically create exclusive tools for you, allowing you to quickly build hundreds of personalized custom tools in just 1 hour to improve efficiency and unleash your creative potential.
 - **Agent Self-Learning** 🧠️: Each agent has its own scene memory capabilities and the ability to self-learn from user conversations.
 - **Adaptive Tool Mechanism** 🛠️: Supports adding an unlimited number of tools, allowing the large model to first select a candidate tool set from thousands of tools, filtering irrelevant tools before submitting context to the large model, significantly reducing token consumption.
@@ -87,6 +89,8 @@ For shared long-term memory or graph memory deployments, review the [Memory Secu
 For OpenRouter, local LLM, and OpenAI-compatible provider setup, see [Model Provider Configuration](docs/model_providers.md).
 
 For structured error codes and troubleshooting hints, see [Error Handling](docs/error_handling.md).
+
+For v0.7.0 trace observability, see [Trace Observability](docs/tracing.md).
 
 For browser-use integration with recent `browser-use` versions, see [browser-use Integration](docs/browser_use.md).
 
@@ -135,6 +139,24 @@ agent = LightAgent(model="gpt-4.1", api_key="your_api_key", base_url="your_base_
 # Run Agent
 response = agent.run("Hello, who are you?")
 print(response)
+```
+
+### Inspect a Run Trace (v0.7.0)
+
+Tracing is opt-in and keeps the default `agent.run()` behavior backward compatible.
+
+```python
+from LightAgent import LightAgent
+
+agent = LightAgent(model="gpt-4.1", api_key="your_api_key", base_url="your_base_url")
+
+result = agent.run("Hello, who are you?", result_format="object", trace=True)
+print(result.content)
+print(result.trace_id)
+print(result.trace)
+
+for event in agent.export_trace():
+    print(event["type"], event["data"])
 ```
 
 ### Set Model Self-Perception via System Prompt
