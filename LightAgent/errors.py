@@ -98,6 +98,11 @@ ERROR_TAXONOMY = {
         "Tool execution failed.",
         "Check the tool implementation, required arguments, dependencies, and external service credentials.",
     ),
+    "LA-GUARDRAIL": LightAgentErrorInfo(
+        "LA-GUARDRAIL",
+        "A configured guardrail blocked this operation.",
+        "Review the configured input, tool, or output guardrail policy and adjust the request if appropriate.",
+    ),
     "LA-UNKNOWN": LightAgentErrorInfo(
         "LA-UNKNOWN",
         "An unexpected LightAgent error occurred.",

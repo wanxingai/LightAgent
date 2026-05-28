@@ -30,6 +30,7 @@ from .tools import ToolRegistry, ToolLoader, AsyncToolDispatcher
 from .errors import format_error_code, format_lightagent_error
 from .result import RunResult, StreamEvent
 from .tracing import TraceRecorder
+from .guardrails import GuardrailManager
 from .mcp_client_manager import MCPClientManager
 from .skills import SkillManager
 from .skill_tools import create_skill_tools
@@ -104,6 +105,9 @@ class LightAgent:
             tools: List[Union[str, Callable]] = None,  # 支持工具混合输入
             skills_directories: List[str] = None,  # 支持技能混合输入
             auto_discover_skills: bool = True,  # 是否自动发现技能
+            input_guardrails: List[Callable[..., Any]] | None = None,  # 输入安全策略
+            tool_guardrails: List[Callable[..., Any]] | None = None,  # 工具调用安全策略
+            output_guardrails: List[Callable[..., Any]] | None = None,  # 输出安全策略
             debug: bool = False,  # 是否启用调试模式
             log_level: str = "INFO",  # 日志级别（INFO, DEBUG, ERROR）
             log_file: Optional[str] = None,  # 日志文件路径
@@ -128,6 +132,9 @@ class LightAgent:
         :param tot_base_url: API 的基础 URL。
         :param filter_tools: 是否启用工具过滤。
         :param tools: 工具列表，支持函数名称（字符串）或函数对象。
+        :param input_guardrails: 输入安全策略列表，返回 False、原因字符串、dict 或 GuardrailDecision 可阻止运行。
+        :param tool_guardrails: 工具调用安全策略列表，返回 False、原因字符串、dict 或 GuardrailDecision 可阻止工具执行。
+        :param output_guardrails: 输出安全策略列表，返回 False、原因字符串、dict 或 GuardrailDecision 可阻止非流式输出。
         :param debug: 是否启用调试模式。
         :param log_level: 日志级别（INFO, DEBUG, ERROR）。
         :param log_file: 日志文件路径。
@@ -158,6 +165,11 @@ class LightAgent:
         self.model = model
         self.memory = memory
         self.memory_policy = memory_policy or MemoryPolicy(namespace=memory_namespace)
+        self.guardrails = GuardrailManager(
+            input_guardrails=input_guardrails,
+            tool_guardrails=tool_guardrails,
+            output_guardrails=output_guardrails,
+        )
         self.tree_of_thought = tree_of_thought
         self.self_learning = self_learning
         self.filter_tools = filter_tools
@@ -389,6 +401,24 @@ class LightAgent:
             "result_format": result_format,
         })
 
+        input_decision = self.guardrails.check_input(query, {
+            "agent_name": self.name,
+            "user_id": user_id,
+            "trace_id": traceid,
+        })
+        if not input_decision.allowed:
+            error_msg = self._format_guardrail_error("input", input_decision.reason)
+            self._record_trace("guardrail_block", {"stage": "input", "reason": input_decision.reason})
+            self._record_trace("run_end", {"success": False, "error": error_msg})
+            if stream:
+                stream_result = self._error_stream(error_msg)
+                if result_format == "event":
+                    return self._stream_as_events(stream_result, traceid)
+                return stream_result
+            return self._format_run_result(error_msg, result_format, traceid, error_msg)
+        if input_decision.value is not None:
+            query = input_decision.value
+
         # 初始化历史记录
         history = history or []
 
@@ -518,6 +548,41 @@ class LightAgent:
             "message_count": len(params.get("messages", [])),
             "tools": tools,
         }
+
+    @staticmethod
+    def _format_guardrail_error(stage: str, reason: str | None = None) -> str:
+        details = {"stage": stage}
+        if reason:
+            details["reason"] = reason
+        return format_error_code("LA-GUARDRAIL", details)
+
+    def _check_tool_guardrails(self, tool_name: str, arguments: Dict[str, Any]) -> str | None:
+        decision = self.guardrails.check_tool(tool_name, arguments, {
+            "agent_name": self.name,
+            "trace_id": self.traceid,
+        })
+        if decision.allowed:
+            return None
+        error_msg = self._format_guardrail_error("tool", decision.reason)
+        self._record_trace("guardrail_block", {
+            "stage": "tool",
+            "tool": tool_name,
+            "reason": decision.reason,
+        })
+        return error_msg
+
+    def _apply_output_guardrails(self, output: str) -> str:
+        decision = self.guardrails.check_output(output, {
+            "agent_name": self.name,
+            "trace_id": self.traceid,
+        })
+        if not decision.allowed:
+            error_msg = self._format_guardrail_error("output", decision.reason)
+            self._record_trace("guardrail_block", {"stage": "output", "reason": decision.reason})
+            return error_msg
+        if decision.value is not None:
+            return str(decision.value)
+        return output
 
     def _process_runtime_tools(self, tools: List[Union[str, Callable]]) -> List[Dict]:
         """
@@ -700,6 +765,21 @@ class LightAgent:
                         tool_responses.append(single_tool_response)
                         continue
 
+                    guardrail_error = self._check_tool_guardrails(function_call.name, function_args)
+                    if guardrail_error:
+                        self._record_trace("error", {
+                            "stage": "tool_guardrail",
+                            "tool": function_call.name,
+                            "error": guardrail_error,
+                        })
+                        self.chat_params["messages"].append({
+                            "role": "tool",
+                            "tool_call_id": tool_call.id,
+                            "content": guardrail_error
+                        })
+                        tool_responses.append(guardrail_error)
+                        continue
+
                     # 调用工具并获取响应
                     # tool_response = asyncio.run(self.tool_dispatcher.dispatch(function_call.name, function_args))
                     # tool_response = await self.tool_dispatcher.dispatch(function_call.name, function_args)
@@ -774,8 +854,13 @@ class LightAgent:
             else:
                 # 返回最终回复
                 reply = response.choices[0].message.content
+                reply = self._apply_output_guardrails(reply)
                 self.log("INFO", "non_stream final_reply", {"reply": reply})
                 self._record_trace("model_response", {"content": reply})
+                if isinstance(reply, str) and reply.startswith("[LA-GUARDRAIL]"):
+                    self._record_trace("error", {"stage": "output_guardrail", "error": reply})
+                    self._record_trace("run_end", {"success": False, "error": reply})
+                    return reply
                 self._record_trace("run_end", {"success": True})
                 return reply
 
@@ -936,6 +1021,16 @@ class LightAgent:
                                         # self.log("DEBUG", "stream fixed_args", {"fixed_args": fixed_args})
                                         # function_args = json.loads(fixed_args)
                                         function_args = self._parse_tool_arguments(arguments)
+                                        guardrail_error = self._check_tool_guardrails(tool_name, function_args)
+                                        if guardrail_error:
+                                            self._record_trace("error", {
+                                                "stage": "tool_guardrail",
+                                                "tool": tool_name,
+                                                "error": guardrail_error,
+                                            })
+                                            tool_responses.append(guardrail_error)
+                                            yield {"name": tool_name, "title": tool_title, "error": guardrail_error}
+                                            continue
 
                                         # 调用工具
                                         # tool_response = asyncio.run(self.tool_dispatcher.dispatch(tool_name, function_args))

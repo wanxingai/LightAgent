@@ -20,6 +20,7 @@ from .errors import (
 )
 from .result import RunResult, StreamEvent
 from .tracing import TraceEvent, TraceRecorder
+from .guardrails import GuardrailDecision, GuardrailManager
 from .logger import LoggerManager
 from .mcp_client_manager import MCPClientManager
 from .skills import SkillManager, Skill
@@ -50,6 +51,8 @@ __all__ = [
     "StreamEvent",
     "TraceEvent",
     "TraceRecorder",
+    "GuardrailDecision",
+    "GuardrailManager",
     "LoggerManager",
     "MCPClientManager",
     "SkillManager",

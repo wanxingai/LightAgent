@@ -127,6 +127,23 @@ for event in agent.export_trace():
 Tracing is disabled by default, and model request trace events summarize counts
 and tool names instead of storing full prompts or message history.
 
+### How do I add guardrails?
+
+LightAgent v0.7.5 adds opt-in input, tool-call, and non-streaming output
+guardrails. Guardrails can block a run or rewrite allowed values before the
+agent continues. See [Guardrails](guardrails.md).
+
+```python
+from LightAgent import GuardrailDecision
+
+def block_secrets(query, context):
+    if "api_key" in query.lower():
+        return GuardrailDecision(False, reason="Do not send secrets to the model.")
+    return True
+
+agent = LightAgent(..., input_guardrails=[block_secrets])
+```
+
 ### How do I use browser-use with LightAgent?
 
 Use `example/08.browser_use.py` as the reference implementation. For `browser-use` 0.11 and newer, LightAgent's example adds a compatibility `provider` attribute to `langchain_openai.ChatOpenAI` when needed. See [browser-use Integration](browser_use.md).
