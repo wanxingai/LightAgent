@@ -96,6 +96,20 @@ Yes. `run(..., tools=[...])` registers runtime tools into the active tool regist
 
 LightAgent returns stable error codes such as `LA-401` for authentication errors, `LA-413` for oversized requests, `LA-429` for rate limits, `LA-JSON` for malformed tool arguments, and `LA-TOOL` for tool execution failures. See [Error Handling](error_handling.md) for the full taxonomy and troubleshooting guidance.
 
+### Does `agent.run()` still return a string?
+
+Yes. `agent.run("hello")` still returns a string by default, and `agent.run(query, stream=True, user_id=user_id)` still returns the legacy stream generator. Structured results are opt-in:
+
+```python
+result = agent.run("hello", result_format="object")
+print(result.content)
+print(result.tool_calls)
+print(result.trace_id)
+print(result.error)
+```
+
+For structured streaming events, use `result_format="event"` with `stream=True`.
+
 ### How do I use browser-use with LightAgent?
 
 Use `example/08.browser_use.py` as the reference implementation. For `browser-use` 0.11 and newer, LightAgent's example adds a compatibility `provider` attribute to `langchain_openai.ChatOpenAI` when needed. See [browser-use Integration](browser_use.md).
