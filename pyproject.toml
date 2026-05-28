@@ -40,7 +40,7 @@ packages = [
 python = ">=3.10,<4.0"
 loguru = "0.7.3"
 requests = "2.32.3"
-openai = ">=1.60.0"
+openai = ">=1.60.0,<2.0.0"
 colorama = "0.4.6"
 httpx = "0.28.1"
 httpx-sse = "0.4.0"
