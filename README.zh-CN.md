@@ -55,7 +55,8 @@
 
 ---
 ## 新闻
-- <img src="https://img.alicdn.com/imgextra/i3/O1CN01SFL0Gu26nrQBFKXFR_!!6000000007707-2-tps-500-500.png" alt="new" width="30" height="30"/>**[2026-04-27]** 新增支持deepseek v4。
+- <img src="https://img.alicdn.com/imgextra/i3/O1CN01SFL0Gu26nrQBFKXFR_!!6000000007707-2-tps-500-500.png" alt="new" width="30" height="30"/>**[2026-05-29]** LightAgent v0.7.0 开发版：新增可选的结构化 Trace 可观测能力，支持记录运行生命周期、模型请求摘要、工具调用、工具结果和错误事件，并提供 `agent.export_trace()` 便于生产调试。
+- **[2026-04-27]** 新增支持deepseek v4。
 - **[2026-04-26]** 我们很高兴发布 LightAgent v0.6.0 — 这是向可组合、技能驱动的智能体开发迈出的重要一步。本次更新彻底重构了核心系统架构，引入了原生 Skill 支持，并内置了脚本执行的安全沙箱，从而实现了更加模块化、可扩展且任务导向的智能体能力。LightAgent 不再只是“聊天”，而是真正地“完成任务”。
 - **[2026-02-21]** LightAgent v0.5.0 正式发布：新增会话级工具集约束以实现精细控制，修复多轮对话中的工具调用历史记录问题，并提升 LightSwarm 稳定性。
 - **[2026-01-20]** LightAgent v0.4.8 正式发布：引入运行时工具集约束以支持会话级控制，并增强调试配置。
@@ -85,9 +86,17 @@
 - **独立执行** 🤖：无人为干预自主完成任务工具调用。  
 - **多模型支持** 🔄：兼容 OpenAI、智谱 ChatGLM、百川大模型、阶跃星辰、DeepSeek、Qwen 系列大模型。  
 - **流式 API输出** 🌊：支持 OpenAI 流格式 API 服务输出，无缝接入主流 Chat 框架，提升用户体验。  
+- **Trace 可观测性** 🔎：通过 `trace=True` 可选开启结构化运行轨迹，记录运行开始/结束、模型请求摘要、工具调用、工具结果和错误，同时保持默认字符串返回行为不变。  
 - **Tools工具生成器** 🚀：只需将您的API文档交给[[Tools工具生成器]](#3-tools工具生成器)，它将自动化地为您打造专属的tools，助您在短短1小时内快速构建数百个个性化的自定义工具，提升效率，释放您的创新潜能。
 - **agent自我学习** 🧠️：每个agent拥有自己的场景记忆能力，拥有从用户的对话中进行自我学习能力。
 - **自适应tools机制** 🛠️：支持添加无限量tools，在上万个工具中让大模型过滤无关工具后再发送给大模型，可大幅度降低Token消耗。
+
+## 📋 文档
+
+- 常见安装、模型、工具、记忆、MCP、Skill、流式输出和 LightSwarm 问题，请查看 [FAQ](docs/FAQ.md)。
+- v0.7.0 Trace 可观测能力，请查看 [Trace Observability](docs/tracing.md)。
+- 稳定错误码和排查建议，请查看 [Error Handling](docs/error_handling.md)。
+- 共享长期记忆或图记忆部署，请先查看 [Memory Security Guidance](docs/memory_security.md)。
 
 ---
 
@@ -135,6 +144,26 @@ agent = LightAgent(model="gpt-4.1", api_key="your_api_key", base_url= "your_base
 # 运行 Agent
 response = agent.run("你好，你是谁？")
 print(response)
+```
+
+### 查看运行 Trace（v0.7.0）
+
+Trace 默认关闭，需要显式传入 `trace=True`，不会改变原有 `agent.run()` 默认返回字符串的兼容行为。
+
+```python
+from LightAgent import LightAgent
+
+# 初始化 Agent
+agent = LightAgent(model="gpt-4.1", api_key="your_api_key", base_url= "your_base_url")
+
+# 以结构化对象形式查看运行轨迹
+result = agent.run("你好，你是谁？", result_format="object", trace=True)
+print(result.content)
+print(result.trace_id)
+print(result.trace)
+
+for event in agent.export_trace():
+    print(event["type"], event["data"])
 ```
 
 ### 通过system提示词设定模型自我认知
