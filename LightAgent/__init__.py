@@ -19,6 +19,7 @@ from .errors import (
     format_lightagent_error,
 )
 from .result import RunResult, StreamEvent
+from .tracing import TraceEvent, TraceRecorder
 from .logger import LoggerManager
 from .mcp_client_manager import MCPClientManager
 from .skills import SkillManager, Skill
@@ -46,6 +47,8 @@ __all__ = [
     "format_lightagent_error",
     "RunResult",
     "StreamEvent",
+    "TraceEvent",
+    "TraceRecorder",
     "LoggerManager",
     "MCPClientManager",
     "SkillManager",
