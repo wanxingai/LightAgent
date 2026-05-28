@@ -11,6 +11,7 @@ import importlib
 import importlib.util
 import inspect
 import os
+import re
 import traceback
 from copy import deepcopy
 from typing import List, Dict, Any, Callable, Union, Generator, AsyncGenerator
@@ -112,10 +113,16 @@ class ToolLoader:
 
     def load_tool(self, tool_name: str) -> Callable:
         """加载单个工具"""
+        if not self._is_safe_tool_name(tool_name):
+            raise ValueError(f"Invalid tool name: {tool_name}")
+
         if tool_name in self.loaded_tools:
             return self.loaded_tools[tool_name]
 
-        tool_path = os.path.join(self.tools_directory, f"{tool_name}.py")
+        tools_directory = os.path.abspath(self.tools_directory)
+        tool_path = os.path.abspath(os.path.join(tools_directory, f"{tool_name}.py"))
+        if not tool_path.startswith(tools_directory + os.sep):
+            raise ValueError(f"Tool path escapes tools directory: {tool_name}")
         if not os.path.exists(tool_path):
             raise FileNotFoundError(f"Tool '{tool_name}' not found in {tool_path}")
 
@@ -132,6 +139,10 @@ class ToolLoader:
                 return tool_func
 
         raise AttributeError(f"Tool '{tool_name}' is not properly defined in {tool_path}")
+
+    @staticmethod
+    def _is_safe_tool_name(tool_name: str) -> bool:
+        return bool(re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", str(tool_name)))
 
     def load_tools(self, tool_names: List[str]) -> Dict[str, Callable]:
         """批量加载工具"""
@@ -152,7 +163,7 @@ class AsyncToolDispatcher:
         str, Generator[str, None, None], AsyncGenerator[str, None]]:
         """调用工具执行，支持同步/异步工具及流式输出"""
         if tool_name not in self.function_mappings:
-            return f"Tool `{tool_name}` not found."
+            return format_error_code("LA-TOOL", f"Tool `{tool_name}` not found.")
 
         tool_call = self.function_mappings[tool_name]
         validation_error = self._validate_tool_params(tool_name, tool_params)
