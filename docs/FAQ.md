@@ -110,6 +110,23 @@ print(result.error)
 
 For structured streaming events, use `result_format="event"` with `stream=True`.
 
+### How do I inspect an agent run trace?
+
+LightAgent v0.7.0 adds opt-in structured traces. Pass `trace=True` to collect
+prompt-safe events for the latest run, including run start/end, model request
+summaries, tool calls, tool results, and errors.
+
+```python
+result = agent.run("hello", result_format="object", trace=True)
+print(result.trace)
+
+for event in agent.export_trace():
+    print(event["type"], event["data"])
+```
+
+Tracing is disabled by default, and model request trace events summarize counts
+and tool names instead of storing full prompts or message history.
+
 ### How do I use browser-use with LightAgent?
 
 Use `example/08.browser_use.py` as the reference implementation. For `browser-use` 0.11 and newer, LightAgent's example adds a compatibility `provider` attribute to `langchain_openai.ChatOpenAI` when needed. See [browser-use Integration](browser_use.md).
