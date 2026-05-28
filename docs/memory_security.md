@@ -17,6 +17,8 @@ finance, legal, enterprise automation, and policy support.
 ### Recommended Defaults
 
 - Use separate memory namespaces per user, tenant, agent, and environment.
+- Set `memory_namespace` or a custom `MemoryPolicy` when a single backend is
+  shared by multiple tenants or environments.
 - Do not share graph memory across users unless there is an explicit product
   requirement and a reviewable access policy.
 - Treat retrieved memories as untrusted context unless the memory backend can
@@ -61,5 +63,28 @@ instances or per-user namespaces.
 
 Custom memory implementations passed to `LightAgent(memory=...)` should enforce
 the security policy inside their `store()` and `retrieve()` methods. LightAgent
-will call those methods, but the backend adapter is responsible for persistence,
-isolation, provenance, and conflict handling.
+will call those methods, but the backend adapter remains responsible for
+persistence, isolation, provenance, and conflict handling.
+
+LightAgent also provides a lightweight core policy hook for shared deployments:
+
+```python
+from LightAgent import LightAgent, MemoryPolicy
+
+agent = LightAgent(
+    model="gpt-4.1",
+    api_key="your_api_key",
+    base_url="your_base_url",
+    memory=memory_backend,
+    memory_policy=MemoryPolicy(
+        namespace="prod-tenant-a",
+        allow_unattributed_results=False,
+    ),
+)
+```
+
+`namespace` prefixes the `user_id` sent to the memory backend. If retrieved
+memory items include `user_id` or `metadata.user_id`, LightAgent filters out
+items that do not match the current scoped user. Set
+`allow_unattributed_results=False` when the backend can provide provenance for
+all memory records.
