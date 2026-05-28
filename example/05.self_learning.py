@@ -10,7 +10,7 @@ class CustomMemory:
     def __init__(self):
         self.memories = []
         os.environ["OPENAI_API_KEY"] = "your_api_key"
-        os.environ["OPENAI_API_BASE"] = "http://your_base_url/v1"
+        os.environ["OPENAI_BASE_URL"] = "http://your_base_url/v1"
         # Initialize Mem0
         config = {
             "version": "v1.1"
