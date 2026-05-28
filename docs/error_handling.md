@@ -24,10 +24,12 @@ and include a short troubleshooting hint.
 ### Programmatic Classification
 
 ```python
-from LightAgent import classify_exception, format_lightagent_error
+from LightAgent import LightAgentError, classify_exception, format_lightagent_error
 
 try:
     response = agent.run("Hello")
+except LightAgentError as exc:
+    print(exc.code, exc.message, exc.guidance)
 except Exception as exc:
     info = classify_exception(exc)
     print(info.code, info.message)
@@ -37,6 +39,40 @@ except Exception as exc:
 Most `agent.run()` model-provider failures are returned as user-facing strings
 instead of raw provider exceptions. Tool failures are returned to the model with
 `LA-TOOL` so the agent can explain or retry with corrected arguments.
+
+### Structured Run Results
+
+The default `agent.run()` behavior remains backward compatible:
+
+```python
+response = agent.run("Hello")
+print(response)  # str
+```
+
+For structured diagnostics, request an object explicitly:
+
+```python
+result = agent.run("Hello", result_format="object")
+
+print(result.content)
+print(result.tool_calls)
+print(result.trace_id)
+print(result.error)
+```
+
+For streaming, the default remains a legacy generator:
+
+```python
+for chunk in agent.run("Hello", stream=True):
+    print(chunk)
+```
+
+Structured streaming events are opt-in:
+
+```python
+for event in agent.run("Hello", stream=True, result_format="event"):
+    print(event.type, event.data)
+```
 
 ### Debugging Long Operations
 
