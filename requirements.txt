@@ -6,3 +6,4 @@ Requests==2.32.3
 mcp==1.10.1
 langfuse==3.0.0
 mem0ai==0.1.70
+PyYAML>=6.0.1
