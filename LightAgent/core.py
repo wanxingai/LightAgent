@@ -28,6 +28,7 @@ from .protocol import MemoryProtocol
 from .logger import LoggerManager
 from .tools import ToolRegistry, ToolLoader, AsyncToolDispatcher
 from .errors import format_error_code, format_lightagent_error
+from .result import RunResult, StreamEvent
 from .mcp_client_manager import MCPClientManager
 from .skills import SkillManager
 from .skill_tools import create_skill_tools
@@ -216,7 +217,7 @@ class LightAgent:
                 self.log("INFO", "skill_tools_loaded",
                          {"count": len(skill_tools), "tools": [f.tool_info["tool_name"] for f in skill_tools]})
 
-        self.tool_dispatcher = AsyncToolDispatcher(self.tool_registry.function_mappings)
+        self.tool_dispatcher = AsyncToolDispatcher(self.tool_registry.function_mappings, self.tool_registry.function_info)
         # register_tool_manually(tools)
 
         if api_key is None:
@@ -337,8 +338,9 @@ class LightAgent:
             user_id: str = "default_user",
             history: list = None,
             metadata: Optional[Dict] = None,
-            use_skills: bool = True  # 是否使用技能
-    ) -> Union[Generator[str, None, None], str]:
+            use_skills: bool = True,  # 是否使用技能
+            result_format: str = "str"
+    ) -> Union[Generator[str, None, None], str, RunResult]:
         """
         运行代理，处理用户输入。
 
@@ -351,10 +353,22 @@ class LightAgent:
         :param history: 历史对话 。
         :param metadata: 元数据。
         :param use_skills: 是否使用技能。
+        :param result_format: 返回格式。默认 "str" 保持兼容；非流式可用 "object" 返回 RunResult；流式可用 "event" 返回 StreamEvent。
         :return: 代理的回复。
         """
+        if result_format not in ("str", "object", "dict", "event"):
+            raise ValueError("result_format must be one of: str, object, dict, event")
+        if not stream and result_format == "event":
+            raise ValueError("result_format='event' requires stream=True")
+        if stream and result_format in ("object", "dict"):
+            raise ValueError("stream=True supports result_format='str' or result_format='event'")
+
         # 设置跟踪ID
         traceid = uuid4().hex
+        self.traceid = traceid
+        self._current_tool_calls = []
+        self._current_usage = None
+        self._current_reasoning_content = ""
         if self.debug and hasattr(self, 'logger'):  # 仅在 debug=True 且 logger 存在时记录日志
             self.logger.set_traceid(traceid)
         self.log("INFO", "run_start", {"query": query, "user_id": user_id, "stream": stream})
@@ -447,9 +461,18 @@ class LightAgent:
             error_msg = format_lightagent_error(e, "create chat completion")
             self.log("ERROR", "model_request_failed", {"error": error_msg})
             if stream:
-                return self._error_stream(error_msg)
-            return error_msg
-        return self._core_run_logic(response, stream, max_retry)
+                stream_result = self._error_stream(error_msg)
+                if result_format == "event":
+                    return self._stream_as_events(stream_result, traceid)
+                return stream_result
+            return self._format_run_result(error_msg, result_format, traceid, error_msg)
+
+        result = self._core_run_logic(response, stream, max_retry)
+        if stream:
+            if result_format == "event":
+                return self._stream_as_events(result, traceid)
+            return result
+        return self._format_run_result(result, result_format, traceid)
 
     def _process_runtime_tools(self, tools: List[Union[str, Callable]]) -> List[Dict]:
         """
@@ -475,9 +498,61 @@ class LightAgent:
                     self.loaded_tools[tool.tool_info["tool_name"]] = tool
 
         runtime_tools = temp_registry.get_tools()
-        self.tool_dispatcher = AsyncToolDispatcher(self.tool_registry.function_mappings)
+        self.tool_dispatcher = AsyncToolDispatcher(self.tool_registry.function_mappings, self.tool_registry.function_info)
         self.log("DEBUG", "runtime_tools_processed", {"count": len(runtime_tools)})
         return runtime_tools
+
+    def _format_run_result(
+            self,
+            content: Any,
+            result_format: str,
+            trace_id: str,
+            error: str | None = None,
+    ) -> Union[str, RunResult, Dict[str, Any]]:
+        """Format the final non-streaming response while preserving legacy defaults."""
+        text = "" if content is None else str(content)
+        detected_error = error
+        if detected_error is None and text.startswith("[LA-"):
+            detected_error = text
+
+        if result_format == "str":
+            return text
+
+        result = RunResult(
+            content=text,
+            reasoning_content=getattr(self, "_current_reasoning_content", "") or None,
+            tool_calls=deepcopy(getattr(self, "_current_tool_calls", [])),
+            usage=deepcopy(getattr(self, "_current_usage", None)),
+            trace_id=trace_id,
+            error=detected_error,
+        )
+        if result_format == "dict":
+            return {
+                "content": result.content,
+                "reasoning_content": result.reasoning_content,
+                "tool_calls": result.tool_calls,
+                "usage": result.usage,
+                "trace_id": result.trace_id,
+                "error": result.error,
+            }
+        return result
+
+    def _stream_as_events(self, stream_result: Generator[Any, None, None], trace_id: str) -> Generator[StreamEvent, None, None]:
+        """Wrap legacy stream chunks as structured events when explicitly requested."""
+        for chunk in stream_result:
+            if isinstance(chunk, dict):
+                if "error" in chunk:
+                    yield StreamEvent(type="error", data=chunk, trace_id=trace_id)
+                elif "output" in chunk:
+                    yield StreamEvent(type="tool_result", data=chunk, trace_id=trace_id)
+                elif "name" in chunk and "arguments" in chunk:
+                    yield StreamEvent(type="tool_call", data=chunk, trace_id=trace_id)
+                else:
+                    yield StreamEvent(type="event", data=chunk, trace_id=trace_id)
+            elif isinstance(chunk, str) and chunk.startswith("[LA-"):
+                yield StreamEvent(type="error", data=chunk, trace_id=trace_id)
+            else:
+                yield StreamEvent(type="content", data=chunk, trace_id=trace_id)
 
     def _add_memory_context(self, query: str, user_id: str) -> str:
         """添加记忆上下文"""
@@ -528,13 +603,31 @@ class LightAgent:
                 # 遍历所有工具调用
                 for tool_call in tool_calls:
                     function_call = tool_call.function
+                    self._current_tool_calls.append({
+                        "id": getattr(tool_call, "id", None),
+                        "name": function_call.name,
+                        "arguments": function_call.arguments,
+                    })
 
                     # 尝试自动修复常见转义问题
                     # fixed_args = function_call.arguments.replace('\\"', '"').replace('\\\\', '\\')
                     self.log("DEBUG", "non_stream function_call", {"function_call": function_call.arguments})
 
                     # 解析函数参数
-                    function_args = json.loads(function_call.arguments)
+                    try:
+                        function_args = json.loads(function_call.arguments)
+                    except json.JSONDecodeError as e:
+                        single_tool_response = format_error_code(
+                            "LA-JSON",
+                            f"{str(e)}; arguments: {function_call.arguments}",
+                        )
+                        self.chat_params["messages"].append({
+                            "role": "tool",
+                            "tool_call_id": tool_call.id,
+                            "content": single_tool_response
+                        })
+                        tool_responses.append(single_tool_response)
+                        continue
 
                     # 调用工具并获取响应
                     # tool_response = asyncio.run(self.tool_dispatcher.dispatch(function_call.name, function_args))
@@ -713,6 +806,7 @@ class LightAgent:
                                 not chunk.choices and hasattr(chunk, 'usage') and chunk.usage is not None):
                             # 可以在这里记录 token 使用情况（如果有）
                             if hasattr(chunk, 'usage') and chunk.usage:
+                                self._current_usage = chunk.usage
                                 self.log("INFO", "token_usage", {"usage": chunk.usage})
 
                             # 如果没有任何工具调用，说明整个响应结束，可以直接退出生成器
@@ -743,6 +837,7 @@ class LightAgent:
                                         "title": tool_title,
                                         "arguments": arguments,
                                     }
+                                    self._current_tool_calls.append(deepcopy(tool_call_info))
                                     self.log("INFO", "stream function_call", {"tool_call_start": tool_call_info})
                                     # 将工具的调用信息推送给开发者
                                     yield tool_call_info
