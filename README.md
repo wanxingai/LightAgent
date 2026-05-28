@@ -3,11 +3,11 @@
 <div align="center">
   <p>
     <a href="https://opensource.org/licenses/Apache-2.0"><img src="https://img.shields.io/badge/License-Apache%202.0-blue.svg" alt="License"></a>
-    <a href="https://github.com/wxai-space/LightAgent/releases"><img src="https://img.shields.io/github/release/wxai-space/LightAgent.svg" alt="GitHub release"></a>
-    <a href="https://github.com/wxai-space/LightAgent/issues"><img src="https://img.shields.io/github/issues/wxai-space/LightAgent.svg" alt="GitHub issues"></a>
-    <a href="https://github.com/wxai-space/LightAgent/stargazers"><img src="https://img.shields.io/github/stars/wxai-space/LightAgent.svg" alt="GitHub stars"></a>
-    <a href="https://github.com/wxai-space/LightAgent/network"><img src="https://img.shields.io/github/forks/wxai-space/LightAgent.svg" alt="GitHub forks"></a>
-    <a href="https://github.com/wxai-space/LightAgent/graphs/contributors"><img src="https://img.shields.io/github/contributors/wxai-space/LightAgent.svg" alt="GitHub contributors"></a>
+    <a href="https://github.com/wanxingai/LightAgent/releases"><img src="https://img.shields.io/github/release/wanxingai/LightAgent.svg" alt="GitHub release"></a>
+    <a href="https://github.com/wanxingai/LightAgent/issues"><img src="https://img.shields.io/github/issues/wanxingai/LightAgent.svg" alt="GitHub issues"></a>
+    <a href="https://github.com/wanxingai/LightAgent/stargazers"><img src="https://img.shields.io/github/stars/wanxingai/LightAgent.svg" alt="GitHub stars"></a>
+    <a href="https://github.com/wanxingai/LightAgent/network"><img src="https://img.shields.io/github/forks/wanxingai/LightAgent.svg" alt="GitHub forks"></a>
+    <a href="https://github.com/wanxingai/LightAgent/graphs/contributors"><img src="https://img.shields.io/github/contributors/wanxingai/LightAgent.svg" alt="GitHub contributors"></a>
     <a href="https://sufe-aiflm-lab.github.io/LightAgent/"><img src="https://img.shields.io/badge/docs-latest-brightgreen.svg" alt="Docs"></a>
     <a href="https://pypi.org/project/lightagent/"><img src="https://img.shields.io/pypi/v/lightagent.svg" alt="PyPI"></a>
     <a href="https://pypi.org/project/lightagent/"><img src="https://img.shields.io/pypi/dm/lightagent.svg" alt="Downloads"></a>
@@ -38,6 +38,7 @@ LightAgent is an ultra‑lightweight, open‑source framework that now natively 
 ---
 ## News
 - <img src="https://img.alicdn.com/imgextra/i3/O1CN01SFL0Gu26nrQBFKXFR_!!6000000007707-2-tps-500-500.png" alt="new" width="30" height="30"/>**[2026-05-29]** LightAgent v0.7.0 Development: Adds opt-in trace observability with structured run/model/tool/error events, `agent.export_trace()`, and prompt-safe model request summaries for production debugging.
+- **[2026-05-28]** LightAgent v0.6.5 Released: Adds opt-in structured run results, structured streaming events, catchable LightAgent errors, and tool argument validation while keeping legacy `agent.run()` and `stream=True` behavior compatible.
 - **[2026-05-27]** LightAgent v0.6.4 Released: Improves runtime tool dispatch reliability, adds structured error codes and troubleshooting guidance, expands OpenAI-compatible provider documentation for OpenRouter and local models, and updates browser-use integration examples.
 - **[2026-04-26]** LightAgent v0.6.0 Released: Completely refactors the core system architecture and introduces native skill support, enabling more modular, extensible, and task-oriented agent capabilities.
 - **[2026-02-21]** LightAgent v0.5.0 Released: Adds session-level toolset constraints for granular control, fixes tool call history in multi-turn conversations, and improves LightSwarm stability.
@@ -60,7 +61,7 @@ LightAgent is an ultra‑lightweight, open‑source framework that now natively 
 
 ## ✨ Features
 
-- **Lightweight and Efficient** 🚀: Minimalist design, quick deployment, suitable for various application scenarios. (No LangChain, No LlamaIndex) 100% Python implementation, no additional dependencies, core code is only 1000 lines, fully open source. 
+- **Lightweight and Efficient** 🚀: Minimalist design, quick deployment, suitable for various application scenarios. (No LangChain, No LlamaIndex) The core framework stays small, modular, and fully open source while using focused dependencies for provider, MCP, memory, and tracing integrations. 
 - **Memory Support** 🧠: Supports custom long-term memory for each user, natively supporting the `mem0` memory module, automatically managing user personalized memory during conversations, making agents smarter.
 - **Autonomous Learning** 📚️: Each agent possesses autonomous learning capabilities, and admins with permissions can manage each agent.
 - **Tool Integration** 🛠️: Support for custom tools (`Tools`) and MCP tool integration, flexible expansion to meet diverse needs.  
@@ -229,7 +230,7 @@ class CustomMemory:
     def __init__(self):
         self.memories = []
         os.environ["OPENAI_API_KEY"] = "your_api_key"
-        os.environ["OPENAI_API_BASE"] = "your_base_url"
+        os.environ["OPENAI_BASE_URL"] = "your_base_url"
         # Initialize Mem0
         config = {
             "version": "v1.1"
@@ -800,7 +801,7 @@ If you have any questions or suggestions, please feel free to contact Wanxing AI
 
 - **Wanxing AI Email**: service@wanxingai.com 
 - **Professor Zhang Liwen Email**: zhang.liwen@shufe.edu.cn
-- **GitHub Issues**: [https://github.com/wxai-space/lightagent/issues](https://github.com/wxai-space/lightagent/issues)  
+- **GitHub Issues**: [https://github.com/wanxingai/LightAgent/issues](https://github.com/wanxingai/LightAgent/issues)  
 
 We look forward to your feedback and work together to make LightAgent even stronger! 🚀
 
@@ -822,7 +823,7 @@ We look forward to your feedback and work together to make LightAgent even stron
 
 ## Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=wxai-space/LightAgent&type=Date)](https://star-history.com/#wxai-space/LightAgent&Date)
+[![Star History Chart](https://api.star-history.com/svg?repos=wanxingai/LightAgent&type=Date)](https://star-history.com/#wanxingai/LightAgent&Date)
 
 ## Paper
 
@@ -841,4 +842,4 @@ Note = {Submitted on 11 Sep 2025}
 ```
 
 ## Features
-[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/wxai-space-lightagent-badge.png)](https://mseep.ai/app/wxai-space-lightagent)
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/wanxingai-lightagent-badge.png)](https://mseep.ai/app/wanxingai-lightagent)
