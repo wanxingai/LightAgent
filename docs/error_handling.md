@@ -57,8 +57,12 @@ result = agent.run("Hello", result_format="object")
 print(result.content)
 print(result.tool_calls)
 print(result.trace_id)
+print(result.trace)
 print(result.error)
 ```
+
+Set `trace=True` to include structured run events in `result.trace` or retrieve
+them after the call with `agent.export_trace()`.
 
 For streaming, the default remains a legacy generator:
 
