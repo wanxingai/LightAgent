@@ -3,7 +3,7 @@ name = "LightAgent"
 version = "0.7.0"
 description = "LightAgent: Lightweight AI agent framework with memory, tools & tree-of-thought. Supports multi-agent collaboration, self-learning, and major LLMs (OpenAI/DeepSeek/Qwen). Open-source with MCP/SSE protocol integration."
 authors = ["caiweige <caiweige@qq.com>"]
-license = "Apache 2.0"
+license = "Apache-2.0"
 readme = [
     "README.md",        # English
     "README.zh-CN.md",  # 简体中文
@@ -15,7 +15,21 @@ readme = [
     "README.pt.md",     # Português
     "README.ru.md",     # Русский
 ]
-repository = "https://github.com/wxai-space/LightAgent"
+repository = "https://github.com/wanxingai/LightAgent"
+homepage = "https://github.com/wanxingai/LightAgent"
+documentation = "https://sufe-aiflm-lab.github.io/LightAgent/"
+keywords = ["ai-agent", "llm", "mcp", "multi-agent", "tool-calling"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
 packages = [
     { include = "LightAgent"},
 ]
