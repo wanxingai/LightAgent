@@ -15,7 +15,7 @@ import traceback
 from copy import deepcopy
 from typing import List, Dict, Any, Callable, Union, Generator, AsyncGenerator
 
-from .errors import format_lightagent_error
+from .errors import format_error_code, format_lightagent_error
 
 
 class ToolRegistry:
@@ -144,8 +144,9 @@ class ToolLoader:
 class AsyncToolDispatcher:
     """异步工具调度器"""
 
-    def __init__(self, function_mappings: Dict[str, Callable] = None):
+    def __init__(self, function_mappings: Dict[str, Callable] = None, function_info: Dict[str, Dict[str, Any]] = None):
         self.function_mappings = function_mappings or {}
+        self.function_info = function_info or {}
 
     async def dispatch(self, tool_name: str, tool_params: Dict[str, Any]) -> Union[
         str, Generator[str, None, None], AsyncGenerator[str, None]]:
@@ -154,6 +155,9 @@ class AsyncToolDispatcher:
             return f"Tool `{tool_name}` not found."
 
         tool_call = self.function_mappings[tool_name]
+        validation_error = self._validate_tool_params(tool_name, tool_params)
+        if validation_error:
+            return validation_error
         try:
             # 处理不同类型的工具
             if inspect.iscoroutinefunction(tool_call):
@@ -193,6 +197,55 @@ class AsyncToolDispatcher:
             return json.dumps(result, ensure_ascii=False)
         else:
             return str(result)
+
+    def _validate_tool_params(self, tool_name: str, tool_params: Dict[str, Any]) -> str | None:
+        """Validate required tool parameters and basic JSON-schema-like types."""
+        tool_info = self.function_info.get(tool_name) or {}
+        params = tool_info.get("tool_params") or []
+        if not params:
+            return None
+
+        if not isinstance(tool_params, dict):
+            return format_error_code("LA-TOOL", f"Tool `{tool_name}` arguments must be an object.")
+
+        for param in params:
+            name = param.get("name")
+            if not name:
+                continue
+            required = bool(param.get("required", False))
+            if required and name not in tool_params:
+                return format_error_code("LA-TOOL", f"Tool `{tool_name}` missing required parameter `{name}`.")
+            if name in tool_params and not self._matches_declared_type(tool_params[name], param.get("type")):
+                expected = param.get("type")
+                actual = type(tool_params[name]).__name__
+                return format_error_code(
+                    "LA-TOOL",
+                    f"Tool `{tool_name}` parameter `{name}` expected `{expected}`, got `{actual}`.",
+                )
+        return None
+
+    @staticmethod
+    def _matches_declared_type(value: Any, declared_type: Any) -> bool:
+        if declared_type is None:
+            return True
+        if isinstance(declared_type, str):
+            normalized = declared_type.lower()
+        else:
+            normalized = str(declared_type).lower()
+
+        if normalized in ("string", "str"):
+            return isinstance(value, str)
+        if normalized in ("integer", "int"):
+            return isinstance(value, int) and not isinstance(value, bool)
+        if normalized in ("number", "float"):
+            return isinstance(value, (int, float)) and not isinstance(value, bool)
+        if normalized in ("boolean", "bool"):
+            return isinstance(value, bool)
+        if normalized in ("array", "list"):
+            return isinstance(value, list)
+        if normalized in ("object", "dict"):
+            return isinstance(value, dict)
+        return True
 
     async def async_stream_generator(self, async_gen: AsyncGenerator) -> AsyncGenerator[str, None]:
         async for chunk in async_gen:
