@@ -24,7 +24,7 @@ from openai.types.chat import ChatCompletionChunk
 
 # 从各子模块导入
 from .version import __version__
-from .protocol import MemoryProtocol
+from .protocol import MemoryPolicy, MemoryProtocol
 from .logger import LoggerManager
 from .tools import ToolRegistry, ToolLoader, AsyncToolDispatcher
 from .errors import format_error_code, format_lightagent_error
@@ -93,6 +93,8 @@ class LightAgent:
             base_url: str | httpx.URL | None = None,  # 模型 base url
             websocket_base_url: str | httpx.URL | None = None,  # 模型 websocket base url
             memory: Optional[MemoryProtocol] = None,  # 支持外部传入记忆模块
+            memory_policy: Optional[MemoryPolicy] = None,  # 记忆安全策略
+            memory_namespace: Optional[str] = None,  # 记忆命名空间快捷配置
             tree_of_thought: bool = False,  # 是否启用链式思考
             tot_model: str | None = None,  # 链式思考模型
             tot_api_key: str | None = None,  # 链式思考模型API密钥
@@ -118,6 +120,8 @@ class LightAgent:
         :param base_url: API 的基础 URL。
         :param websocket_base_url: WebSocket 的基础 URL。
         :param memory: 外部传入的记忆模块，需实现 `retrieve` 和 `store` 方法。
+        :param memory_policy: 可选记忆安全策略，用于共享记忆后端的命名空间与检索过滤。
+        :param memory_namespace: 记忆命名空间快捷配置，会生成默认 MemoryPolicy。
         :param tree_of_thought: 是否启用思维链功能。
         :param tot_model: 使用的模型名称。
         :param tot_api_key: API 密钥。
@@ -153,6 +157,7 @@ class LightAgent:
         self.role = role
         self.model = model
         self.memory = memory
+        self.memory_policy = memory_policy or MemoryPolicy(namespace=memory_namespace)
         self.tree_of_thought = tree_of_thought
         self.self_learning = self_learning
         self.filter_tools = filter_tools
@@ -602,22 +607,39 @@ class LightAgent:
             return query
 
         context = ""
-        related_memories = self.memory.retrieve(query=query, user_id=user_id)
+        memory_user_id = self.memory_policy.scoped_user_id(user_id)
+        related_memories = self.memory.retrieve(query=query, user_id=memory_user_id)
+        related_memories = self._filter_memory_results(related_memories, memory_user_id, user_id)
         if related_memories and related_memories.get("results"):
             context += "\n##用户偏好\n用户之前提到了:\n" + "\n".join(
                 [m["memory"] for m in related_memories["results"]]
             )
-        self.memory.store(data=query, user_id=user_id)
+        self.memory.store(data=query, user_id=memory_user_id)
 
         if self.self_learning:
-            agent_memories = self.memory.retrieve(query=query, user_id=self.name)
+            agent_user_id = self.memory_policy.scoped_user_id(self.name)
+            agent_memories = self.memory.retrieve(query=query, user_id=agent_user_id)
+            agent_memories = self._filter_memory_results(agent_memories, agent_user_id, self.name)
             if agent_memories and agent_memories.get("results"):
                 context += "\n##问题相关补充信息:\n" + "\n".join(
                     [m["memory"] for m in agent_memories["results"]]
                 )
-            self.memory.store(data=query, user_id=self.name)
+            self.memory.store(data=query, user_id=agent_user_id)
 
         return f"{context}\n##用户提问：\n{query}" if context else query
+
+    def _filter_memory_results(self, memories: Any, scoped_user_id: str, original_user_id: str) -> Any:
+        """Filter retrieved memories using the configured memory policy."""
+        if not memories or not isinstance(memories, dict) or "results" not in memories:
+            return memories
+        results = memories.get("results") or []
+        filtered_results = [
+            item for item in results
+            if self.memory_policy.allows_result(item, scoped_user_id, original_user_id)
+        ]
+        filtered = dict(memories)
+        filtered["results"] = filtered_results
+        return filtered
 
     def _core_run_logic(self, response, stream, max_retry) -> Union[Generator[str, None, None], str]:
         """核心运行逻辑"""
@@ -913,7 +935,6 @@ class LightAgent:
                                         # fixed_args = json_obj.replace('\\"', '"').replace('\\\\', '\\')
                                         # self.log("DEBUG", "stream fixed_args", {"fixed_args": fixed_args})
                                         # function_args = json.loads(fixed_args)
-                                        print("arguments:", arguments)
                                         function_args = self._parse_tool_arguments(arguments)
 
                                         # 调用工具
@@ -1457,9 +1478,17 @@ get_weather.tool_info = {
                 if not tool_name or not tool_code:
                     self.log("ERROR", "invalid_tool_data", {"tool_data": tool_data})
                     continue
+                if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", str(tool_name)):
+                    self.log("ERROR", "invalid_tool_name", {"tool_name": tool_name})
+                    continue
 
                 # 保存生成的代码到 tools 目录
-                tool_path = os.path.join(tools_directory, f"{tool_name}.py")
+                tools_dir = os.path.abspath(tools_directory)
+                os.makedirs(tools_dir, exist_ok=True)
+                tool_path = os.path.abspath(os.path.join(tools_dir, f"{tool_name}.py"))
+                if not tool_path.startswith(tools_dir + os.sep):
+                    self.log("ERROR", "invalid_tool_path", {"tool_name": tool_name, "tool_path": tool_path})
+                    continue
                 with open(tool_path, "w", encoding="utf-8") as f:
                     f.write(tool_code)
                 self.log("INFO", "tool_created", {"tool_name": tool_name, "tool_path": tool_path})
