@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Documentation
+    url: https://sufe-aiflm-lab.github.io/LightAgent/
+    about: Read the LightAgent documentation.
+  - name: Security report
+    url: https://github.com/wanxingai/LightAgent/security/advisories/new
+    about: Please report security issues privately.
