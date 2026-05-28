@@ -137,6 +137,20 @@ LightAgent accepts a custom memory object through the `memory` parameter. The ob
 
 For shared or graph-backed memory deployments, review the [Memory Security Guidance](memory_security.md) before enabling cross-user persistence.
 
+For shared memory backends, configure a namespace or explicit policy:
+
+```python
+from LightAgent import LightAgent, MemoryPolicy
+
+agent = LightAgent(
+    model="gpt-4.1",
+    api_key="your_api_key",
+    base_url="your_base_url",
+    memory=memory_backend,
+    memory_policy=MemoryPolicy(namespace="tenant-a", allow_unattributed_results=False),
+)
+```
+
 ### What is Tree of Thought?
 
 Tree of Thought is an optional planning and reflection mode enabled with `tree_of_thought=True`. It uses a reasoning model to create a tool-use plan and can filter tools before the final model call.
