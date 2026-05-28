@@ -20,6 +20,7 @@ class RunResult:
     tool_calls: list[dict[str, Any]] = field(default_factory=list)
     usage: dict[str, Any] | None = None
     trace_id: str | None = None
+    trace: list[dict[str, Any]] = field(default_factory=list)
     error: str | None = None
 
     def __str__(self) -> str:
