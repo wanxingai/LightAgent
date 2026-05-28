@@ -29,6 +29,7 @@ from .logger import LoggerManager
 from .tools import ToolRegistry, ToolLoader, AsyncToolDispatcher
 from .errors import format_error_code, format_lightagent_error
 from .result import RunResult, StreamEvent
+from .tracing import TraceRecorder
 from .mcp_client_manager import MCPClientManager
 from .skills import SkillManager
 from .skill_tools import create_skill_tools
@@ -240,6 +241,7 @@ class LightAgent:
         # 初始化客户端
         self._initialize_clients(tracetools, tot_api_key, tot_base_url, tot_model)
         self.chat_params = {}  # history 存储器
+        self._trace_recorder = TraceRecorder(enabled=False)
 
     def _initialize_clients(self, tracetools, tot_api_key, tot_base_url, tot_model):
         """初始化 OpenAI 客户端"""
@@ -339,7 +341,8 @@ class LightAgent:
             history: list = None,
             metadata: Optional[Dict] = None,
             use_skills: bool = True,  # 是否使用技能
-            result_format: str = "str"
+            result_format: str = "str",
+            trace: bool = False,
     ) -> Union[Generator[str, None, None], str, RunResult]:
         """
         运行代理，处理用户输入。
@@ -354,6 +357,7 @@ class LightAgent:
         :param metadata: 元数据。
         :param use_skills: 是否使用技能。
         :param result_format: 返回格式。默认 "str" 保持兼容；非流式可用 "object" 返回 RunResult；流式可用 "event" 返回 StreamEvent。
+        :param trace: 是否收集结构化运行轨迹。默认 False 保持轻量；配合 result_format="object" 或 export_trace() 使用。
         :return: 代理的回复。
         """
         if result_format not in ("str", "object", "dict", "event"):
@@ -366,12 +370,19 @@ class LightAgent:
         # 设置跟踪ID
         traceid = uuid4().hex
         self.traceid = traceid
+        self._trace_recorder = TraceRecorder(enabled=trace, trace_id=traceid)
         self._current_tool_calls = []
         self._current_usage = None
         self._current_reasoning_content = ""
         if self.debug and hasattr(self, 'logger'):  # 仅在 debug=True 且 logger 存在时记录日志
             self.logger.set_traceid(traceid)
         self.log("INFO", "run_start", {"query": query, "user_id": user_id, "stream": stream})
+        self._record_trace("run_start", {
+            "query": query,
+            "user_id": user_id,
+            "stream": stream,
+            "result_format": result_format,
+        })
 
         # 初始化历史记录
         history = history or []
@@ -455,11 +466,14 @@ class LightAgent:
 
         # 调用模型
         self.log("DEBUG", "first_request_params", {"params": self.chat_params})
+        self._record_trace("model_request", self._build_model_request_trace(self.chat_params))
         try:
             response = self.client.chat.completions.create(**self.chat_params)
         except Exception as e:
             error_msg = format_lightagent_error(e, "create chat completion")
             self.log("ERROR", "model_request_failed", {"error": error_msg})
+            self._record_trace("error", {"stage": "model_request", "error": error_msg})
+            self._record_trace("run_end", {"success": False, "error": error_msg})
             if stream:
                 stream_result = self._error_stream(error_msg)
                 if result_format == "event":
@@ -473,6 +487,32 @@ class LightAgent:
                 return self._stream_as_events(result, traceid)
             return result
         return self._format_run_result(result, result_format, traceid)
+
+    def _record_trace(self, event_type: str, data: Dict[str, Any] | None = None):
+        """Record a trace event when tracing is enabled."""
+        recorder = getattr(self, "_trace_recorder", None)
+        if recorder:
+            return recorder.record(event_type, data)
+        return None
+
+    def export_trace(self) -> List[Dict[str, Any]]:
+        """Return structured trace events from the most recent run."""
+        recorder = getattr(self, "_trace_recorder", None)
+        if not recorder:
+            return []
+        return recorder.to_list()
+
+    def _build_model_request_trace(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Build a prompt-safe summary of a model request for trace events."""
+        tools = []
+        for tool in params.get("tools", []) or []:
+            tools.append(tool.get("function", {}).get("name", str(tool)))
+        return {
+            "model": params.get("model"),
+            "stream": bool(params.get("stream")),
+            "message_count": len(params.get("messages", [])),
+            "tools": tools,
+        }
 
     def _process_runtime_tools(self, tools: List[Union[str, Callable]]) -> List[Dict]:
         """
@@ -524,6 +564,7 @@ class LightAgent:
             tool_calls=deepcopy(getattr(self, "_current_tool_calls", [])),
             usage=deepcopy(getattr(self, "_current_usage", None)),
             trace_id=trace_id,
+            trace=self.export_trace(),
             error=detected_error,
         )
         if result_format == "dict":
@@ -533,6 +574,7 @@ class LightAgent:
                 "tool_calls": result.tool_calls,
                 "usage": result.usage,
                 "trace_id": result.trace_id,
+                "trace": result.trace,
                 "error": result.error,
             }
         return result
@@ -603,11 +645,13 @@ class LightAgent:
                 # 遍历所有工具调用
                 for tool_call in tool_calls:
                     function_call = tool_call.function
-                    self._current_tool_calls.append({
+                    trace_tool_call = {
                         "id": getattr(tool_call, "id", None),
                         "name": function_call.name,
                         "arguments": function_call.arguments,
-                    })
+                    }
+                    self._current_tool_calls.append(trace_tool_call)
+                    self._record_trace("tool_call", deepcopy(trace_tool_call))
 
                     # 尝试自动修复常见转义问题
                     # fixed_args = function_call.arguments.replace('\\"', '"').replace('\\\\', '\\')
@@ -621,6 +665,11 @@ class LightAgent:
                             "LA-JSON",
                             f"{str(e)}; arguments: {function_call.arguments}",
                         )
+                        self._record_trace("error", {
+                            "stage": "tool_arguments",
+                            "tool": function_call.name,
+                            "error": single_tool_response,
+                        })
                         self.chat_params["messages"].append({
                             "role": "tool",
                             "tool_call_id": tool_call.id,
@@ -684,6 +733,10 @@ class LightAgent:
 
                     self.log("INFO", "non_stream single_tool_response",
                              {"single_tool_response": single_tool_response})
+                    self._record_trace("tool_result", {
+                        "name": function_call.name,
+                        "output": single_tool_response,
+                    })
 
                     self.chat_params["messages"].append({
                         "role": "tool",
@@ -700,23 +753,31 @@ class LightAgent:
                 # 返回最终回复
                 reply = response.choices[0].message.content
                 self.log("INFO", "non_stream final_reply", {"reply": reply})
+                self._record_trace("model_response", {"content": reply})
+                self._record_trace("run_end", {"success": True})
                 return reply
 
             # 更新响应
             if function_call_name == 'finish':
+                self._record_trace("run_end", {"success": True, "finish_tool": True})
                 return  # 如果最后调用了finish工具，则结束生成器
             # print("params:",self.chat_params)
             self.log("DEBUG", "non_stream chat-completions params", {"params": self.chat_params})
+            self._record_trace("model_request", self._build_model_request_trace(self.chat_params))
 
             try:
                 response = self.client.chat.completions.create(**self.chat_params)
             except Exception as e:
                 error_msg = format_lightagent_error(e, "continue chat completion")
                 self.log("ERROR", "model_request_failed", {"error": error_msg})
+                self._record_trace("error", {"stage": "model_request", "error": error_msg})
+                self._record_trace("run_end", {"success": False, "error": error_msg})
                 return error_msg
 
         # 重试次数用尽
         self.log("ERROR", "max_retry_reached", {"message": "Failed to generate a valid response."})
+        self._record_trace("error", {"stage": "max_retry", "error": "Failed to generate a valid response."})
+        self._record_trace("run_end", {"success": False, "error": "max_retry_reached"})
         return "Failed to generate a valid response."
 
     def _run_stream_logic(self, response, max_retry) -> Generator[str, None, None]:
@@ -812,6 +873,8 @@ class LightAgent:
                             # 如果没有任何工具调用，说明整个响应结束，可以直接退出生成器
                             if not any(tc["name"] for tc in tool_calls):  # tool_calls 是之前收集的工具调用列表
                                 self.log("INFO", "stream_response", {"output": output})
+                                self._record_trace("model_response", {"content": output})
+                                self._record_trace("run_end", {"success": True})
                                 return  # 结束生成器
                             # 否则（有工具调用），不提前退出，让循环自然结束，后续会由循环外的工具处理逻辑接管
 
@@ -838,6 +901,7 @@ class LightAgent:
                                         "arguments": arguments,
                                     }
                                     self._current_tool_calls.append(deepcopy(tool_call_info))
+                                    self._record_trace("tool_call", deepcopy(tool_call_info))
                                     self.log("INFO", "stream function_call", {"tool_call_start": tool_call_info})
                                     # 将工具的调用信息推送给开发者
                                     yield tool_call_info
@@ -881,6 +945,7 @@ class LightAgent:
                                                     }
                                                     self.log("DEBUG", "stream tool_output",
                                                              {"tool_output": tool_output})
+                                                    self._record_trace("tool_result", deepcopy(tool_output))
                                                     yield tool_output
                                                 # 将工具的调用信息推送给开发者
                                                 if tool_name == 'finish':
@@ -898,6 +963,7 @@ class LightAgent:
                                                 "title": tool_title,
                                                 "output": combined_response
                                             }
+                                            self._record_trace("tool_result", deepcopy(tool_output))
                                             yield tool_output
 
                                         # 记录工具响应
@@ -911,11 +977,17 @@ class LightAgent:
                                         if tool_name == 'finish':
                                             finish_called = True
                                             self.log("INFO", "finish_tool_called", {"response": combined_response})
+                                            self._record_trace("run_end", {"success": True, "finish_tool": True})
 
                                     except json.JSONDecodeError as e:
                                         error_msg = format_error_code("LA-JSON", f"{str(e)}; arguments: {arguments}")
                                         self.log("ERROR", "json_decode_error",
                                                  {"tool": tool_name, "title": tool_title, "error": error_msg})
+                                        self._record_trace("error", {
+                                            "stage": "tool_arguments",
+                                            "tool": tool_name,
+                                            "error": error_msg,
+                                        })
                                         tool_responses.append(error_msg)
                                         yield {"name": tool_name, "title": tool_title, "error": error_msg}
 
@@ -925,6 +997,11 @@ class LightAgent:
                                             "tool": tool_name,
                                             "title": tool_title,
                                             "error": error_msg
+                                        })
+                                        self._record_trace("error", {
+                                            "stage": "tool_execution",
+                                            "tool": tool_name,
+                                            "error": error_msg,
                                         })
                                         tool_responses.append(error_msg)
                                         yield {"name": tool_name, "title": tool_title, "error": error_msg}
@@ -969,21 +1046,27 @@ class LightAgent:
 
                             # 创建新的响应流
                             self.log("DEBUG", "stream next_request_params", {"params": self.chat_params})
+                            self._record_trace("model_request", self._build_model_request_trace(self.chat_params))
                             try:
                                 response = self.client.chat.completions.create(**self.chat_params)
                             except Exception as e:
                                 error_msg = format_lightagent_error(e, "continue streaming chat completion")
                                 self.log("ERROR", "model_request_failed", {"error": error_msg})
+                                self._record_trace("error", {"stage": "model_request", "error": error_msg})
+                                self._record_trace("run_end", {"success": False, "error": error_msg})
                                 yield error_msg
                                 return
                             break
             except Exception as e:
                 self.log("WARNING", "retry", {"error": str(e)})
+                self._record_trace("error", {"stage": "stream_retry", "error": str(e)})
                 continue
 
         else:
             # 重试次数用尽
             self.log("ERROR", "max_retry_reached", {"message": f"Max retry({max_retry}) reached."})
+            self._record_trace("error", {"stage": "max_retry", "error": "Failed to stream a valid response."})
+            self._record_trace("run_end", {"success": False, "error": "max_retry_reached"})
             yield "Failed to stream a valid response."
             return  # 或者直接退出
 
