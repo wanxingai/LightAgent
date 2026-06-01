@@ -8,3 +8,4 @@ langfuse==3.0.0
 mem0ai==0.1.70
 PyYAML>=6.0.1
 boto3>=1.34.0
+litellm>=1.80.0,<1.87.0
