@@ -85,6 +85,8 @@ This page is docs-only and does not change any framework code.
 
 For common installation, model provider, tool, memory, MCP, Skills, streaming, and LightSwarm questions, see [FAQ](docs/FAQ.md).
 
+For custom tool creation, runtime tools, ToolRegistry, ToolLoader, AsyncToolDispatcher, and MCP tool integration, see [Tools Guide](docs/tools.md).
+
 For shared long-term memory or graph memory deployments, review the [Memory Security Guidance](docs/memory_security.md).
 
 For OpenRouter, local LLM, and OpenAI-compatible provider setup, see [Model Provider Configuration](docs/model_providers.md).
