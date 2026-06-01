@@ -92,6 +92,7 @@ class LightAgent:
             model: str,  # agent模型名称
             api_key: str | None = None,  # 模型 api key
             base_url: str | httpx.URL | None = None,  # 模型 base url
+            provider: str | None = None,  # LLM provider ("litellm" to route via LiteLLM SDK)
             websocket_base_url: str | httpx.URL | None = None,  # 模型 websocket base url
             memory: Optional[MemoryProtocol] = None,  # 支持外部传入记忆模块
             memory_policy: Optional[MemoryPolicy] = None,  # 记忆安全策略
@@ -244,6 +245,7 @@ class LightAgent:
             )
         self.api_key = api_key
         self.websocket_base_url = websocket_base_url
+        self.provider = provider
         self.base_url = base_url or os.environ.get("OPENAI_BASE_URL") or "https://api.openai.com/v1"
 
         if self.tree_of_thought:
@@ -262,7 +264,18 @@ class LightAgent:
 
     def _initialize_clients(self, tracetools, tot_api_key, tot_base_url, tot_model):
         """初始化 OpenAI 客户端"""
-        if tracetools:
+        if self.provider == "litellm":
+            from .litellm_client import LiteLLMClient
+            self.client = LiteLLMClient(
+                api_key=self.api_key,
+                base_url=self.base_url if self.base_url != "https://api.openai.com/v1" else None,
+            )
+            if self.tree_of_thought:
+                self.tot_client = LiteLLMClient(
+                    api_key=tot_api_key or self.api_key,
+                    base_url=tot_base_url if tot_base_url and tot_base_url != "https://api.openai.com/v1" else None,
+                )
+        elif tracetools:
             from langfuse.openai import openai as la_openai
             la_openai.langfuse_public_key = tracetools['TraceToolConfig']['langfuse_public_key']
             la_openai.langfuse_secret_key = tracetools['TraceToolConfig']['langfuse_secret_key']
