@@ -150,6 +150,27 @@ agent = LightAgent(..., input_guardrails=[block_secrets])
 
 Use `example/08.browser_use.py` as the reference implementation. For `browser-use` 0.11 and newer, LightAgent's example adds a compatibility `provider` attribute to `langchain_openai.ChatOpenAI` when needed. See [browser-use Integration](browser_use.md).
 
+### How do I chain agents into a workflow?
+
+Use `LightFlow` when you want deterministic multi-step execution with explicit
+dependencies between agents.
+
+```python
+from LightAgent import LightFlow
+
+flow = (
+    LightFlow()
+    .step("research", agent=research_agent)
+    .step("write", agent=writer_agent, depends_on=["research"])
+)
+
+result = flow.run("Analyze this company", trace=True)
+print(result.content)
+```
+
+See [LightFlow](lightflow.md) for step input/output passing, retries, and trace
+events.
+
 ### What is the memory system?
 
 LightAgent accepts a custom memory object through the `memory` parameter. The object should provide `store(data, user_id)` and `retrieve(query, user_id)` methods. The README includes a Mem0-based example, and other memory backends can be integrated by implementing the same small interface.

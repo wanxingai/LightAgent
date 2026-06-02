@@ -55,7 +55,8 @@
 
 ---
 ## 新闻
-- <img src="https://img.alicdn.com/imgextra/i3/O1CN01SFL0Gu26nrQBFKXFR_!!6000000007707-2-tps-500-500.png" alt="new" width="30" height="30"/>**[2026-05-29]** LightAgent v0.7.0 开发版：新增可选的结构化 Trace 可观测能力，支持记录运行生命周期、模型请求摘要、工具调用、工具结果和错误事件，并提供 `agent.export_trace()` 便于生产调试。
+- <img src="https://img.alicdn.com/imgextra/i3/O1CN01SFL0Gu26nrQBFKXFR_!!6000000007707-2-tps-500-500.png" alt="new" width="30" height="30"/>**[2026-06-02]** LightAgent v0.8.0 开发版：新增 LightFlow 工作流编排能力，支持确定性多步骤 Agent 执行、DAG 依赖、步骤输出传递、重试和 flow trace 事件。
+- **[2026-05-29]** LightAgent v0.7.0 开发版：新增可选的结构化 Trace 可观测能力，支持记录运行生命周期、模型请求摘要、工具调用、工具结果和错误事件，并提供 `agent.export_trace()` 便于生产调试。
 - **[2026-05-28]** LightAgent v0.6.5 正式发布：新增可选结构化运行结果、结构化流式事件、可捕获的 LightAgent 错误和工具参数校验，同时保持默认 `agent.run()` 与 `stream=True` 行为兼容。
 - **[2026-04-27]** 新增支持deepseek v4。
 - **[2026-04-26]** 我们很高兴发布 LightAgent v0.6.0 — 这是向可组合、技能驱动的智能体开发迈出的重要一步。本次更新彻底重构了核心系统架构，引入了原生 Skill 支持，并内置了脚本执行的安全沙箱，从而实现了更加模块化、可扩展且任务导向的智能体能力。LightAgent 不再只是“聊天”，而是真正地“完成任务”。
@@ -84,6 +85,7 @@
 - **工具集成** 🛠️：支持自定义工具（`Tools`）和MCP工具集成，灵活扩展，满足多样化需求。  
 - **复杂目标** 🌳：内置带反思的思维树（ToT）模块，支持复杂任务分解和多步推理，提升任务处理能力。  
 - **多智能体协同** 🤖：比Swarm更简单的多智能体协同，内置的LightSwarm实现意图判断和任务转移功能，能够更智能地处理用户输入，并根据需要将任务转移给其他代理。 
+- **工作流编排** 🔁：LightFlow 支持将多个 Agent 编排为确定性多步骤工作流，提供显式依赖、步骤输出传递、重试和可追踪执行。
 - **独立执行** 🤖：无人为干预自主完成任务工具调用。  
 - **多模型支持** 🔄：兼容 OpenAI、智谱 ChatGLM、百川大模型、阶跃星辰、DeepSeek、Qwen 系列大模型。  
 - **流式 API输出** 🌊：支持 OpenAI 流格式 API 服务输出，无缝接入主流 Chat 框架，提升用户体验。  
@@ -95,6 +97,7 @@
 ## 📋 文档
 
 - 常见安装、模型、工具、记忆、MCP、Skill、流式输出和 LightSwarm 问题，请查看 [FAQ](docs/FAQ.md)。
+- 确定性多步骤工作流和显式依赖编排，请查看 [LightFlow](docs/lightflow.md)。
 - 自定义工具、运行时工具、ToolRegistry、ToolLoader、AsyncToolDispatcher 和 MCP 工具集成，请查看 [Tools Guide](docs/tools.md)。
 - v0.7.0 Trace 可观测能力，请查看 [Trace Observability](docs/tracing.md)。
 - 稳定错误码和排查建议，请查看 [Error Handling](docs/error_handling.md)。
