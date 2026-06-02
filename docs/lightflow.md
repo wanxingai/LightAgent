@@ -7,6 +7,8 @@ runner for chaining multiple `LightAgent` instances into explicit steps.
 input/output passing, step retries, structured results, and flow-level trace
 events without adding a heavy orchestration dependency.
 
+See `example/10.lightflow.py` for a complete runnable example.
+
 ### Basic Usage
 
 ```python
