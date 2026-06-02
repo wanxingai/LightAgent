@@ -123,6 +123,7 @@ class LightAgent:
         :param model: 使用的模型名称。
         :param api_key: API 密钥。
         :param base_url: API 的基础 URL。
+        :param provider: 可选模型供应商路由。传入 "litellm" 时通过 LiteLLM SDK 调用模型。
         :param websocket_base_url: WebSocket 的基础 URL。
         :param memory: 外部传入的记忆模块，需实现 `retrieve` 和 `store` 方法。
         :param memory_policy: 可选记忆安全策略，用于共享记忆后端的命名空间与检索过滤。
@@ -148,6 +149,8 @@ class LightAgent:
 
         self.mcp_setting = None
         self.mcp_client = None
+        if provider not in (None, "litellm"):
+            raise ValueError("provider must be None or 'litellm'")
         if not model:
             model = "gpt-4o-mini"  # 默认模型
         if not api_key:
