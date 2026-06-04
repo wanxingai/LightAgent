@@ -37,7 +37,7 @@ print(response)
 
 ### Which model providers are supported?
 
-LightAgent can use OpenAI-compatible chat completion endpoints. The README examples cover OpenAI, DeepSeek, Qwen, Zhipu ChatGLM, Baichuan, StepFun, and other compatible providers. For OpenRouter or a self-hosted gateway, set `base_url` to the provider's OpenAI-compatible endpoint. See [Model Provider Configuration](model_providers.md) for OpenRouter, vLLM, llama.cpp, and Ollama examples.
+LightAgent can use OpenAI-compatible chat completion endpoints. The README examples cover OpenAI, DeepSeek, Qwen, Zhipu ChatGLM, Baichuan, StepFun, and other compatible providers. For OpenRouter or a self-hosted gateway, set `base_url` to the provider's OpenAI-compatible endpoint. For multi-provider routing through a single SDK, use `provider="litellm"` with the optional `LightAgent[litellm]` dependency. See [Model Provider Configuration](model_providers.md) for OpenRouter, vLLM, llama.cpp, Ollama, and LiteLLM examples.
 
 Example OpenRouter configuration:
 

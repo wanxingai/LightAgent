@@ -76,6 +76,51 @@ agent = LightAgent(
 )
 ```
 
+### LiteLLM (multi-provider routing)
+
+LiteLLM provides a unified interface to 100+ LLM providers through a single SDK.
+LightAgent supports LiteLLM as an optional provider backend via the `provider`
+parameter. When you pass `provider="litellm"`, all chat completion calls are
+routed through the LiteLLM SDK instead of the default OpenAI client.
+
+**Installation**
+
+```bash
+pip install "LightAgent[litellm]"
+```
+
+**Usage**
+
+```python
+from LightAgent import LightAgent
+
+agent = LightAgent(
+    model="gpt-4.1",
+    provider="litellm",
+    api_key="your_api_key",
+)
+```
+
+When `provider` is set to `"litellm"`, LightAgent creates a `LiteLLMClient`
+wrapper that exposes the same `client.chat.completions.create(**params)`
+interface. You can use any model name that LiteLLM supports, including models
+from Anthropic, Google, Azure, AWS Bedrock, Together AI, and more, without
+changing your code.
+
+**Model routing**
+
+- `model` can be any LiteLLM-supported model string (e.g. `"claude-sonnet-4-20250514"`,
+  `"gemini/gemini-2.5-flash"`, `"together_ai/meta-llama/Llama-4-70B"`).
+- `api_key` and `base_url` are forwarded to the LiteLLM completion call as
+  `api_key` and `api_base` respectively. If `base_url` is the default
+  `https://api.openai.com/v1`, it is omitted so LiteLLM can use its built-in
+  provider routing.
+- The `drop_params` flag is enabled to allow provider-specific parameters to be
+  safely ignored when they do not apply to the target provider.
+
+For a full list of supported models and providers, see the
+[LiteLLM documentation](https://docs.litellm.ai/docs/providers).
+
 ### Troubleshooting
 
 - If you see `[LA-401]`, check the API key or provider account.
