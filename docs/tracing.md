@@ -59,6 +59,18 @@ response = agent.run("hello", trace=True)
 trace_events = agent.export_trace()
 ```
 
+### Nested Runs And Delegation
+
+Each `agent.run(..., trace=True)` call creates its own root `trace_id`. A
+reflection run, LightSwarm delegated run, or LightFlow step should be treated as
+a sibling trace unless your application records a `parent_trace_id` externally
+or in memory metadata.
+
+LightAgent does not currently fold delegated LightSwarm traces into the parent
+trace automatically. See
+[Memory, Trace, And Swarm Boundaries](memory_trace_swarm_boundaries.md) for the
+recommended metadata convention.
+
 ### Privacy Notes
 
 Trace model request events intentionally store only request summaries, including

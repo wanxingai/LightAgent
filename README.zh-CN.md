@@ -55,7 +55,8 @@
 
 ---
 ## 新闻
-- <img src="https://img.alicdn.com/imgextra/i3/O1CN01SFL0Gu26nrQBFKXFR_!!6000000007707-2-tps-500-500.png" alt="new" width="30" height="30"/>**[2026-06-02]** LightAgent v0.8.0 开发版：新增 LightFlow 工作流编排能力，支持确定性多步骤 Agent 执行、DAG 依赖、步骤输出传递、重试和 flow trace 事件。
+- <img src="https://img.alicdn.com/imgextra/i3/O1CN01SFL0Gu26nrQBFKXFR_!!6000000007707-2-tps-500-500.png" alt="new" width="30" height="30"/>**[2026-06-14]** LightAgent v0.8.1 开发版：新增 MemoryScope 元数据约定、MemoryPolicy 来源/范围/可信度过滤，并补充 Trace、用户记忆、自我反思记忆和 LightSwarm 委托状态的边界说明。
+- **[2026-06-02]** LightAgent v0.8.0 开发版：新增 LightFlow 工作流编排能力，支持确定性多步骤 Agent 执行、DAG 依赖、步骤输出传递、重试和 flow trace 事件。
 - **[2026-05-29]** LightAgent v0.7.0 开发版：新增可选的结构化 Trace 可观测能力，支持记录运行生命周期、模型请求摘要、工具调用、工具结果和错误事件，并提供 `agent.export_trace()` 便于生产调试。
 - **[2026-05-28]** LightAgent v0.6.5 正式发布：新增可选结构化运行结果、结构化流式事件、可捕获的 LightAgent 错误和工具参数校验，同时保持默认 `agent.run()` 与 `stream=True` 行为兼容。
 - **[2026-04-27]** 新增支持deepseek v4。
@@ -102,6 +103,7 @@
 - v0.7.0 Trace 可观测能力，请查看 [Trace Observability](docs/tracing.md)。
 - 稳定错误码和排查建议，请查看 [Error Handling](docs/error_handling.md)。
 - 共享长期记忆或图记忆部署，请先查看 [Memory Security Guidance](docs/memory_security.md)。
+- Trace、用户记忆、自我反思记忆和 LightSwarm 委托状态的边界说明，请查看 [Memory, Trace, And Swarm Boundaries](docs/memory_trace_swarm_boundaries.md)。
 
 ---
 
