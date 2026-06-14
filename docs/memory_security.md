@@ -95,3 +95,6 @@ For long-lived agents, self-learning agents, or LightSwarm deployments, also
 tag memory records by source and scope. See
 [Memory, Trace, And Swarm Boundaries](memory_trace_swarm_boundaries.md) for the
 recommended `MemoryScope` metadata convention and trace hierarchy guidance.
+
+For a minimal vector-database adapter pattern, see
+[Vector Memory Adapter Example](vector_memory_adapter.md).
