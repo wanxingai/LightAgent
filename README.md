@@ -37,7 +37,8 @@ LightAgent is an ultra‑lightweight, open‑source framework that now natively 
 
 ---
 ## News
-- <img src="https://img.alicdn.com/imgextra/i3/O1CN01SFL0Gu26nrQBFKXFR_!!6000000007707-2-tps-500-500.png" alt="new" width="30" height="30"/>**[2026-06-02]** LightAgent v0.8.0 Development: Adds initial LightFlow workflow orchestration for deterministic multi-step agent execution with DAG dependencies, step output passing, retries, and flow trace events.
+- <img src="https://img.alicdn.com/imgextra/i3/O1CN01SFL0Gu26nrQBFKXFR_!!6000000007707-2-tps-500-500.png" alt="new" width="30" height="30"/>**[2026-06-14]** LightAgent v0.8.1 Development: Adds MemoryScope metadata conventions, stricter MemoryPolicy provenance filters, and guidance for separating trace, user memory, self-reflection memory, and LightSwarm delegation state.
+- **[2026-06-02]** LightAgent v0.8.0 Development: Adds initial LightFlow workflow orchestration for deterministic multi-step agent execution with DAG dependencies, step output passing, retries, and flow trace events.
 - **[2026-05-29]** LightAgent v0.7.0 Development: Adds opt-in trace observability with structured run/model/tool/error events, `agent.export_trace()`, and prompt-safe model request summaries for production debugging.
 - **[2026-05-28]** LightAgent v0.6.5 Released: Adds opt-in structured run results, structured streaming events, catchable LightAgent errors, and tool argument validation while keeping legacy `agent.run()` and `stream=True` behavior compatible.
 - **[2026-05-27]** LightAgent v0.6.4 Released: Improves runtime tool dispatch reliability, adds structured error codes and troubleshooting guidance, expands OpenAI-compatible provider documentation for OpenRouter and local models, and updates browser-use integration examples.
@@ -92,6 +93,8 @@ For deterministic multi-step workflows with explicit dependencies, see [LightFlo
 For custom tool creation, runtime tools, ToolRegistry, ToolLoader, AsyncToolDispatcher, and MCP tool integration, see [Tools Guide](docs/tools.md).
 
 For shared long-term memory or graph memory deployments, review the [Memory Security Guidance](docs/memory_security.md).
+
+For separating trace, user memory, self-reflection memory, and LightSwarm delegation state, see [Memory, Trace, And Swarm Boundaries](docs/memory_trace_swarm_boundaries.md).
 
 For OpenRouter, local LLM, and OpenAI-compatible provider setup, see [Model Provider Configuration](docs/model_providers.md).
 

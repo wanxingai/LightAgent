@@ -187,9 +187,18 @@ agent = LightAgent(
     api_key="your_api_key",
     base_url="your_base_url",
     memory=memory_backend,
-    memory_policy=MemoryPolicy(namespace="tenant-a", allow_unattributed_results=False),
+    memory_policy=MemoryPolicy(
+        namespace="tenant-a",
+        allow_unattributed_results=False,
+        allowed_sources=("user",),
+        allowed_scopes=("user",),
+    ),
 )
 ```
+
+For long-lived self-learning agents or LightSwarm deployments, separate user
+memory from reflection, trace-derived, and delegated-agent memory. See
+[Memory, Trace, And Swarm Boundaries](memory_trace_swarm_boundaries.md).
 
 ### What is Tree of Thought?
 

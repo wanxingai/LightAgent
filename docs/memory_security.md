@@ -79,6 +79,8 @@ agent = LightAgent(
     memory_policy=MemoryPolicy(
         namespace="prod-tenant-a",
         allow_unattributed_results=False,
+        allowed_sources=("user",),
+        allowed_scopes=("user",),
     ),
 )
 ```
@@ -88,3 +90,8 @@ memory items include `user_id` or `metadata.user_id`, LightAgent filters out
 items that do not match the current scoped user. Set
 `allow_unattributed_results=False` when the backend can provide provenance for
 all memory records.
+
+For long-lived agents, self-learning agents, or LightSwarm deployments, also
+tag memory records by source and scope. See
+[Memory, Trace, And Swarm Boundaries](memory_trace_swarm_boundaries.md) for the
+recommended `MemoryScope` metadata convention and trace hierarchy guidance.
