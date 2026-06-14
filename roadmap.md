@@ -32,6 +32,9 @@ ecosystem.**
   `MemoryPolicy` source/scope/agent/trust/confidence filtering, and docs for
   separating trace events, user memory, self-reflection memory, and LightSwarm
   delegation state.
+- **v0.8.2**: Added optional memory write admission hooks, per-run write
+  limits, duplicate write blocking, and trace events for allowed or blocked
+  memory writes.
 
 ### Completed Milestone Details
 
@@ -170,12 +173,14 @@ should provide a clear convention that future memory adapters can follow.
 
 Goal: make memory writes safer before adding deeper shared-memory features.
 
-### Planned Work
+### Completed Work
 
-- Add optional memory write admission hooks.
-- Support simple rate limits for memory mutations per user/session/agent.
-- Add semantic duplicate and recent-write checks as optional extension points.
-- Add provenance/trust requirements for high-impact or shared memory backends.
+- Add optional memory write admission hooks through `MemoryPolicy`.
+- Support simple per-run write limits for memory mutations.
+- Add lightweight duplicate write blocking using scope-aware fingerprints.
+- Emit `memory_write` and `memory_write_block` trace events without raw memory
+  text.
+- Document write-time controls for high-impact or shared memory backends.
 - Keep default behavior unchanged for simple single-agent usage.
 
 ### Expected Outcome
@@ -305,9 +310,9 @@ building lightweight production agents.
 
 ### Next P1
 
-- v0.8.2 memory admission and mutation controls for #57, #39, and #1.
-- Memory write admission hooks and mutation rate-limit examples.
-- Duplicate/recent-write checks to reduce reflection cascades.
+- v0.9.0 SharedMemoryPool prototype for #1 and #39.
+- Multi-agent read/write isolation tests.
+- Append-first conflict handling and namespace/provenance policy integration.
 
 ### P2
 
@@ -323,20 +328,18 @@ building lightweight production agents.
 
 ## Next Development Recommendation
 
-The next development target should be **v0.8.2: Memory Admission And Mutation
-Controls**.
+The next development target should be **v0.9.0: SharedMemoryPool Prototype**.
 
 Reasoning:
 
-- v0.8.1 created the metadata and retrieval-filter foundation.
-- #57 and #39 still need write-time controls to reduce memory poisoning, write
-  amplification, and reflection cascades.
-- Admission hooks can stay optional and lightweight while giving production
-  deployments a stronger safety boundary.
+- v0.8.1 and v0.8.2 created the retrieval and write-time safety foundation.
+- #1 and #39 both point toward safer multi-agent shared memory.
+- A small in-memory or SQLite prototype can validate the API before adding any
+  external storage dependencies.
 
 Suggested first implementation slice:
 
-1. Add optional memory write admission hooks.
-2. Add simple per-user/session/agent memory mutation rate-limit examples.
-3. Add duplicate/recent-write extension points.
-4. Keep default single-agent memory behavior unchanged.
+1. Add a `SharedMemoryPool` interface or design doc.
+2. Start with an in-memory implementation and focused tests.
+3. Keep per-agent private memory separate from shared pool memory.
+4. Integrate namespace/provenance filtering from `MemoryPolicy`.

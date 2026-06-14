@@ -408,6 +408,8 @@ class LightAgent:
         self._current_tool_calls = []
         self._current_usage = None
         self._current_reasoning_content = ""
+        self._memory_write_count = 0
+        self._memory_write_fingerprints = set()
         if self.debug and hasattr(self, 'logger'):  # 仅在 debug=True 且 logger 存在时记录日志
             self.logger.set_traceid(traceid)
         self.log("INFO", "run_start", {"query": query, "user_id": user_id, "stream": stream})
@@ -696,7 +698,13 @@ class LightAgent:
             context += "\n##用户偏好\n用户之前提到了:\n" + "\n".join(
                 [m["memory"] for m in related_memories["results"]]
             )
-        self.memory.store(data=query, user_id=memory_user_id)
+        self._store_memory_with_policy(
+            data=query,
+            memory_user_id=memory_user_id,
+            original_user_id=user_id,
+            source="user",
+            scope="user",
+        )
 
         if self.self_learning:
             agent_user_id = self.memory_policy.scoped_user_id(self.name)
@@ -706,9 +714,63 @@ class LightAgent:
                 context += "\n##问题相关补充信息:\n" + "\n".join(
                     [m["memory"] for m in agent_memories["results"]]
                 )
-            self.memory.store(data=query, user_id=agent_user_id)
+            self._store_memory_with_policy(
+                data=query,
+                memory_user_id=agent_user_id,
+                original_user_id=self.name,
+                source="reflection",
+                scope="agent",
+            )
 
         return f"{context}\n##用户提问：\n{query}" if context else query
+
+    def _store_memory_with_policy(
+            self,
+            *,
+            data: str,
+            memory_user_id: str,
+            original_user_id: str,
+            source: str,
+            scope: str,
+    ) -> bool:
+        """Persist memory only when the configured memory policy allows it."""
+        if not self.memory:
+            return False
+        context = {
+            "agent_name": self.name,
+            "trace_id": self.traceid,
+            "user_id": str(original_user_id),
+            "memory_user_id": str(memory_user_id),
+            "source": source,
+            "scope": scope,
+        }
+        decision = self.memory_policy.allows_write(
+            data,
+            context,
+            write_count=getattr(self, "_memory_write_count", 0),
+            recent_fingerprints=getattr(self, "_memory_write_fingerprints", set()),
+        )
+        if not decision.allowed:
+            self._record_trace("memory_write_block", {
+                "reason": decision.reason,
+                "source": source,
+                "scope": scope,
+                "user_id": str(original_user_id),
+            })
+            return False
+
+        stored_data = decision.value if decision.value is not None else data
+        self.memory.store(data=stored_data, user_id=memory_user_id)
+        self._memory_write_count = getattr(self, "_memory_write_count", 0) + 1
+        fingerprints = getattr(self, "_memory_write_fingerprints", set())
+        fingerprints.add(self.memory_policy.write_fingerprint(stored_data, context))
+        self._memory_write_fingerprints = fingerprints
+        self._record_trace("memory_write", {
+            "source": source,
+            "scope": scope,
+            "user_id": str(original_user_id),
+        })
+        return True
 
     def _filter_memory_results(self, memories: Any, scoped_user_id: str, original_user_id: str) -> Any:
         """Filter retrieved memories using the configured memory policy."""

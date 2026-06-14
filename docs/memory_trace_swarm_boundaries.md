@@ -105,3 +105,6 @@ For LightSwarm or self-learning deployments:
   records.
 - Do not let trace-derived summaries write directly into user memory without an
   admission check.
+
+Use [Memory Admission And Mutation Controls](memory_admission.md) to add
+write-time admission hooks, per-run write limits, and duplicate write blocking.
