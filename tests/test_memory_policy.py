@@ -2,7 +2,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from LightAgent import LightAgent, MemoryPolicy, MemoryScope, ToolLoader
+from LightAgent import LightAgent, MemoryAdmissionDecision, MemoryPolicy, MemoryScope, ToolLoader
 
 
 class StaticCompletions:
@@ -174,6 +174,74 @@ def test_memory_scope_exports_recommended_metadata_shape():
         "trace_id": "reflection-trace",
         "parent_trace_id": "parent-trace",
     }
+
+
+def test_memory_write_admission_can_block_reflection_memory_writes():
+    def block_reflection(data, context):
+        if context["source"] == "reflection":
+            return "reflection memory writes require review"
+        return True
+
+    memory = RecordingMemory([])
+    policy = MemoryPolicy(memory_write_admission=block_reflection)
+    agent, _ = make_agent(memory, memory_policy=policy)
+    agent.self_learning = True
+
+    result = agent.run("hello", user_id="alice", result_format="object", trace=True)
+
+    assert result.content == "done"
+    assert len(memory.store_calls) == 1
+    assert memory.store_calls[0]["user_id"] == "alice"
+    block_events = [event for event in result.trace if event["type"] == "memory_write_block"]
+    assert block_events[0]["data"]["source"] == "reflection"
+    assert "require review" in block_events[0]["data"]["reason"]
+
+
+def test_memory_policy_limits_writes_per_run():
+    memory = RecordingMemory([])
+    policy = MemoryPolicy(max_writes_per_run=1)
+    agent, _ = make_agent(memory, memory_policy=policy)
+    agent.self_learning = True
+
+    result = agent.run("hello", user_id="alice", result_format="object", trace=True)
+
+    assert result.content == "done"
+    assert len(memory.store_calls) == 1
+    assert memory.store_calls[0]["user_id"] == "alice"
+    assert "Memory write limit exceeded" in [
+        event["data"]["reason"] for event in result.trace if event["type"] == "memory_write_block"
+    ][0]
+
+
+def test_memory_write_admission_can_rewrite_memory_before_store():
+    def normalize(data, context):
+        return MemoryAdmissionDecision(allowed=True, value=f"{context['source']}::{data.upper()}")
+
+    memory = RecordingMemory([])
+    policy = MemoryPolicy(memory_write_admission=normalize)
+    agent, _ = make_agent(memory, memory_policy=policy)
+
+    agent.run("hello", user_id="alice")
+
+    assert memory.store_calls[0]["data"] == "user::HELLO"
+
+
+def test_memory_policy_duplicate_fingerprints_are_scope_aware():
+    policy = MemoryPolicy(reject_duplicate_writes=True)
+    first_context = {"memory_user_id": "alice", "source": "user", "scope": "user", "agent_name": "agent"}
+    second_context = {"memory_user_id": "alice", "source": "user", "scope": "user", "agent_name": "agent"}
+    reflection_context = {"memory_user_id": "agent", "source": "reflection", "scope": "agent", "agent_name": "agent"}
+    fingerprints = set()
+
+    first = policy.allows_write("Remember   This", first_context, recent_fingerprints=fingerprints)
+    assert first.allowed is True
+    fingerprints.add(policy.write_fingerprint(first.value, first_context))
+
+    duplicate = policy.allows_write("remember this", second_context, recent_fingerprints=fingerprints)
+    reflection = policy.allows_write("remember this", reflection_context, recent_fingerprints=fingerprints)
+
+    assert duplicate.allowed is False
+    assert reflection.allowed is True
 
 
 def test_tool_loader_rejects_unsafe_tool_names():
