@@ -200,6 +200,11 @@ For long-lived self-learning agents or LightSwarm deployments, separate user
 memory from reflection, trace-derived, and delegated-agent memory. See
 [Memory, Trace, And Swarm Boundaries](memory_trace_swarm_boundaries.md).
 
+To control memory writes before persistence, configure `MemoryPolicy` with
+`memory_write_admission`, `max_writes_per_run`, or
+`reject_duplicate_writes=True`. See
+[Memory Admission And Mutation Controls](memory_admission.md).
+
 ### What is Tree of Thought?
 
 Tree of Thought is an optional planning and reflection mode enabled with `tree_of_thought=True`. It uses a reasoning model to create a tool-use plan and can filter tools before the final model call.

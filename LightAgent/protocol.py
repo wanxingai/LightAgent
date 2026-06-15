@@ -7,7 +7,7 @@
 """
 
 from dataclasses import dataclass, field
-from typing import Any, Iterable, Protocol
+from typing import Any, Callable, Iterable, Protocol
 
 
 class MemoryProtocol(Protocol):
@@ -73,6 +73,15 @@ class MemoryScope:
 
 
 @dataclass(frozen=True)
+class MemoryAdmissionDecision:
+    """Decision returned before a memory write is persisted."""
+
+    allowed: bool
+    reason: str | None = None
+    value: str | None = None
+
+
+@dataclass(frozen=True)
 class MemoryPolicy:
     """Optional safety policy for shared memory backends."""
 
@@ -83,12 +92,17 @@ class MemoryPolicy:
     allowed_agent_names: Iterable[str] | None = None
     allowed_trust_levels: Iterable[str] | None = None
     min_confidence: float | None = None
+    memory_write_admission: Callable[[str, dict[str, Any]], Any] | None = None
+    max_writes_per_run: int | None = None
+    reject_duplicate_writes: bool = False
 
     def __post_init__(self):
         for field_name in ("allowed_sources", "allowed_scopes", "allowed_agent_names", "allowed_trust_levels"):
             value = getattr(self, field_name)
             if value is not None and not isinstance(value, tuple):
                 object.__setattr__(self, field_name, tuple(str(item) for item in value))
+        if self.max_writes_per_run is not None and self.max_writes_per_run < 0:
+            raise ValueError("max_writes_per_run must be greater than or equal to 0")
 
     def scoped_user_id(self, user_id: str) -> str:
         user = str(user_id)
@@ -158,3 +172,60 @@ class MemoryPolicy:
             return float(value) >= float(self.min_confidence)
         except (TypeError, ValueError):
             return False
+
+    def allows_write(
+            self,
+            data: str,
+            context: dict[str, Any] | None = None,
+            *,
+            write_count: int = 0,
+            recent_fingerprints: set[str] | None = None,
+    ) -> MemoryAdmissionDecision:
+        """Return whether a candidate memory write should be persisted."""
+        context = context or {}
+        candidate = str(data)
+
+        if self.max_writes_per_run is not None and write_count >= self.max_writes_per_run:
+            return MemoryAdmissionDecision(
+                allowed=False,
+                reason=f"Memory write limit exceeded: max_writes_per_run={self.max_writes_per_run}",
+            )
+
+        fingerprint = self.write_fingerprint(candidate, context)
+        if self.reject_duplicate_writes and recent_fingerprints is not None and fingerprint in recent_fingerprints:
+            return MemoryAdmissionDecision(allowed=False, reason="Duplicate memory write blocked.")
+
+        if self.memory_write_admission is None:
+            return MemoryAdmissionDecision(allowed=True, value=candidate)
+
+        raw_decision = self.memory_write_admission(candidate, context)
+        return self._coerce_write_decision(raw_decision, candidate)
+
+    @staticmethod
+    def write_fingerprint(data: str, context: dict[str, Any] | None = None) -> str:
+        """Build a lightweight duplicate key for a candidate memory write."""
+        context = context or {}
+        normalized = " ".join(str(data).lower().split())
+        scope_key = "|".join(
+            str(context.get(key, ""))
+            for key in ("memory_user_id", "source", "scope", "agent_name")
+        )
+        return f"{scope_key}|{normalized}"
+
+    @staticmethod
+    def _coerce_write_decision(raw_decision: Any, current_value: str) -> MemoryAdmissionDecision:
+        if isinstance(raw_decision, MemoryAdmissionDecision):
+            return raw_decision
+        if raw_decision is None or raw_decision is True:
+            return MemoryAdmissionDecision(allowed=True, value=current_value)
+        if raw_decision is False:
+            return MemoryAdmissionDecision(allowed=False, reason="Memory write admission blocked this write.")
+        if isinstance(raw_decision, str):
+            return MemoryAdmissionDecision(allowed=False, reason=raw_decision)
+        if isinstance(raw_decision, dict):
+            return MemoryAdmissionDecision(
+                allowed=bool(raw_decision.get("allowed", True)),
+                reason=raw_decision.get("reason"),
+                value=raw_decision.get("value", current_value),
+            )
+        return MemoryAdmissionDecision(allowed=True, value=str(raw_decision))

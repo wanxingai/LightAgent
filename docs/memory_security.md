@@ -96,5 +96,9 @@ tag memory records by source and scope. See
 [Memory, Trace, And Swarm Boundaries](memory_trace_swarm_boundaries.md) for the
 recommended `MemoryScope` metadata convention and trace hierarchy guidance.
 
+For write-time controls such as admission hooks, per-run write limits, and
+duplicate write blocking, see
+[Memory Admission And Mutation Controls](memory_admission.md).
+
 For a minimal vector-database adapter pattern, see
 [Vector Memory Adapter Example](vector_memory_adapter.md).
