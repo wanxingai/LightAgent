@@ -211,17 +211,17 @@ class SkillManager:
         if not self.logger:
             return
 
-        # 检查是否是LightAgent的LoggerManager
-        if hasattr(self.logger, 'log') and callable(getattr(self.logger, 'log')):
-            # 使用LoggerManager的log方法
+        from .logger import LoggerManager
+
+        if isinstance(self.logger, LoggerManager):
             self.logger.log(level, action, data)
         elif hasattr(self.logger, 'debug') and hasattr(self.logger, 'info') and hasattr(self.logger, 'error'):
-            # 使用标准logging.Logger
             log_msg = f"[SkillManager] {action}: {data}"
-            if level == "DEBUG":
-                self.logger.debug(log_msg)
-            elif level == "INFO":
-                self.logger.info(log_msg)
-            elif level == "ERROR":
-                self.logger.error(log_msg)
+            level_map = {
+                "DEBUG": logging.DEBUG,
+                "INFO": logging.INFO,
+                "WARNING": logging.WARNING,
+                "ERROR": logging.ERROR,
+            }
+            self.logger.log(level_map.get(level, logging.INFO), log_msg)
         # 如果没有合适的logger，忽略日志
