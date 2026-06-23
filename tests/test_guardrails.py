@@ -1,7 +1,14 @@
 import json
 from types import SimpleNamespace
 
-from LightAgent import GuardrailDecision, LightAgent
+from LightAgent import (
+    GuardrailDecision,
+    LightAgent,
+    high_risk_parameter_guardrail,
+    output_redaction_guardrail,
+    privacy_input_guardrail,
+    sensitive_tool_confirmation_guardrail,
+)
 
 
 def make_agent(**kwargs):
@@ -134,3 +141,43 @@ def test_output_guardrail_can_block_non_streaming_response():
     assert result.error.startswith("[LA-GUARDRAIL]")
     assert "final answer contains a secret" in result.error
     assert result.trace[-1]["data"]["success"] is False
+
+
+def test_default_privacy_input_guardrail_blocks_private_data():
+    agent = make_agent(input_guardrails=[privacy_input_guardrail()])
+    completions = attach_client(agent, StaticCompletions())
+
+    result = agent.run("my email is user@example.com", result_format="object")
+
+    assert result.error.startswith("[LA-GUARDRAIL]")
+    assert completions.calls == []
+
+
+def test_sensitive_tool_confirmation_guardrail_blocks_selected_tools():
+    agent = make_agent(tool_guardrails=[sensitive_tool_confirmation_guardrail(["dangerous_tool"])])
+    completions = attach_client(agent, ToolCallCompletions())
+
+    result = agent.run("read a file", tools=[dangerous_tool], result_format="object")
+
+    assert result.content == "tool was blocked"
+    assert "requires approval" in completions.calls[1]["messages"][-1]["content"]
+
+
+def test_high_risk_parameter_guardrail_validates_arguments():
+    guardrail = high_risk_parameter_guardrail({"path": lambda value: str(value).startswith("/safe/")})
+    agent = make_agent(tool_guardrails=[guardrail])
+    completions = attach_client(agent, ToolCallCompletions())
+
+    result = agent.run("read a file", tools=[dangerous_tool], result_format="object")
+
+    assert result.content == "tool was blocked"
+    assert "path" in completions.calls[1]["messages"][-1]["content"]
+
+
+def test_output_redaction_guardrail_redacts_private_data():
+    agent = make_agent(output_guardrails=[output_redaction_guardrail()])
+    attach_client(agent, StaticCompletions("contact user@example.com"))
+
+    result = agent.run("hello")
+
+    assert result == "contact [redacted]"

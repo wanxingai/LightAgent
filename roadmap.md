@@ -35,9 +35,10 @@ ecosystem.**
 - **v0.8.2**: Added optional memory write admission hooks, per-run write
   limits, duplicate write blocking, and trace events for allowed or blocked
   memory writes.
-- **v0.9.0**: Added the first lightweight `SharedMemoryPool` prototype with
-  append-first in-memory records, provenance metadata, scoped retrieval, and
-  compatibility with `MemoryPolicy`.
+- **v0.9.0**: Added enhanced LightFlow execution controls, JSON checkpointed
+  workflow runs, resume/rerun support, approval nodes, reusable guardrail
+  templates, stronger memory admission controls, and the first lightweight
+  `SharedMemoryPool` prototype.
 
 ### Completed Milestone Details
 
@@ -124,58 +125,70 @@ and user feedback evolve, but the intended product direction is:
 **safer memory + stronger LightFlow + better observability + stable APIs +
 enterprise-friendly integration.**
 
-### v0.8.3: LightFlow Execution Controls
+### v0.8.3 Goals: LightFlow Execution Controls
 
 Goal: make LightFlow easier to operate and debug in real multi-step workflows.
+These goals are completed as part of the v0.9.0 development line.
 
-Planned work:
+Completed in v0.9.0:
 
-- Add clearer step status tracking, such as `pending`, `running`, `success`,
-  `failed`, and `skipped`.
-- Improve DAG validation so unknown dependencies, circular dependencies, and
-  isolated or unreachable steps are easier to detect before execution.
-- Add step-level controls such as timeout, cancellation, and fallback agent
-  behavior where they can be implemented without heavy orchestration
-  dependencies.
-- Enrich flow trace output with step inputs, outputs, retry counts, error
-  reasons, and timing metadata.
-- Improve examples for research-write-review pipelines, approval-like chains,
-  and deterministic data-processing flows.
+- Clear step status tracking: `pending`, `running`, `success`, `failed`,
+  `skipped`, and `waiting_approval`.
+- DAG validation for unknown dependencies, circular dependencies, and isolated
+  step warnings.
+- Step-level timeout, cancellation, fallback-agent, and approval controls.
+- Flow trace output with step input summaries, output summaries, retry counts,
+  error reasons, timing metadata, and fallback usage.
+- Focused tests for enhanced workflow controls.
 
 Expected outcome:
 
 Developers should be able to build and troubleshoot predictable LightFlow
 pipelines without relying on prompt-only control or external workflow engines.
 
-### v0.8.4: Memory And Guardrail Hardening
+### v0.8.4 Goals: Memory And Guardrail Hardening
 
 Goal: strengthen memory admission, memory retrieval safety, and guardrail
-templates for production usage.
+templates for production usage. These goals are completed as part of the v0.9.0
+development line.
 
-Planned work:
+Completed in v0.9.0:
 
-- Extend `MemoryScope` and `MemoryPolicy` guidance for source, scope,
-  confidence, trust level, agent provenance, and expiration behavior.
-- Improve memory write admission so low-quality, unrelated, duplicate, or
-  unsafe memories are less likely to enter long-term storage.
-- Add reusable guardrail examples for privacy filtering, high-risk tool
+- Extend `MemoryPolicy` with expiration-aware retrieval through
+  `enforce_expires_at`.
+- Improve memory write admission with `min_write_length` and
+  `reject_write_patterns`.
+- Keep source, scope, agent, trust-level, and confidence filtering from the
+  earlier memory-safety line.
+- Add reusable guardrail templates for privacy filtering, high-risk tool
   confirmation, sensitive parameter validation, and output redaction.
 - Clarify recommended boundaries between trace events, user memory,
   self-reflection memory, and LightSwarm delegation state.
-- Add more tests around memory provenance filtering and blocked memory writes.
+- Add more tests around memory provenance filtering, expiration filtering,
+  blocked memory writes, and guardrail templates.
 
 Expected outcome:
 
 LightAgent should become safer for shared memory, customer service, internal
 knowledge assistant, financial analysis, and other high-impact agent use cases.
 
-### v0.9.0: SharedMemoryPool Prototype
+### v0.9.0: Persistent LightFlow, Safety, And Shared Memory
 
-Goal: introduce safer multi-agent shared memory while keeping dependencies
-optional and the core easy to inspect.
+Goal: extend LightFlow from an in-memory workflow runner into a lightweight
+checkpointed workflow system, while also shipping the memory and safety
+hardening required for long-running multi-agent workflows.
 
 Completed work:
 
+- Add LightFlow step status tracking with `pending`, `running`, `success`,
+  `failed`, `skipped`, and `waiting_approval`.
+- Add workflow validation for unknown dependencies, circular dependencies, and
+  isolated step warnings.
+- Add step-level timeout, cancellation, fallback-agent, and approval controls.
+- Add JSON checkpoint storage through `JsonLightFlowStore`.
+- Add `resume(run_id)`, `rerun_step(run_id, step_name)`, `get_run(run_id)`,
+  and `list_runs()` workflow record APIs.
+- Persist intermediate step results and status for front-end execution views.
 - Add an in-memory `SharedMemoryPool` that satisfies `MemoryProtocol`.
 - Use append-first records with `memory_id`, `created_at`, `user_id`, and
   provenance metadata.
@@ -186,14 +199,18 @@ Completed work:
 - Pass `MemoryScope`-compatible metadata to memory backends that support a
   `metadata` keyword while preserving compatibility with two-argument legacy
   backends.
-- Add tests for scoped retrieval, append-first behavior, provenance filtering,
-  and LightAgent integration.
+- Add memory expiration filtering and basic low-quality write blocking through
+  `MemoryPolicy`.
+- Add reusable guardrail templates for privacy filtering, sensitive tool
+  confirmation, high-risk parameter validation, and output redaction.
+- Add tests for workflow controls, checkpoint/resume/rerun, scoped retrieval,
+  append-first behavior, provenance filtering, guardrail templates, and
+  LightAgent integration.
 
 Deferred work:
 
-- SQLite or other durable storage adapters.
-- Checkpoint-style LightFlow state.
-- `flow.resume(run_id)` or a compatible resume design.
+- SQLite or other database-backed run stores.
+- Distributed workers, locks, and stronger idempotency guarantees.
 - Advanced conflict-resolution policies beyond append-first storage.
 
 Expected outcome:
@@ -377,13 +394,19 @@ poisoning, write amplification, and reflection cascades.
 
 ## Detailed Backlog For Planned Releases
 
-### v0.9.0 Workstream: SharedMemoryPool Prototype
+### v0.9.0 Workstream: Persistent LightFlow, Safety, And Shared Memory
 
-Goal: provide a lightweight shared memory design for multi-agent systems without
-adding heavy storage dependencies.
+Goal: provide checkpointed workflow execution, reusable safety controls, and a
+lightweight shared-memory design without adding heavy storage dependencies.
 
 ### Completed Work
 
+- Add explicit LightFlow step status, richer step traces, timeout,
+  cancellation, fallback-agent, approval, checkpoint, resume, rerun, and run
+  record APIs.
+- Add JSON-file workflow persistence through `JsonLightFlowStore`.
+- Persist intermediate step results so long-running workflows can resume after
+  failure instead of restarting from the first step.
 - Add an in-memory `SharedMemoryPool` implementation.
 - Keep records append-first instead of overwrite-by-default.
 - Store `memory_id`, `created_at`, `user_id`, `memory`, and provenance
@@ -393,8 +416,13 @@ adding heavy storage dependencies.
   `user_id` and `metadata`.
 - Update `LightAgent` to pass memory metadata to backends that support it while
   preserving the existing two-argument `MemoryProtocol`.
+- Add memory expiration filtering, minimum write length checks, and reject
+  patterns for low-quality memory writes.
+- Add default guardrail templates for privacy filtering, sensitive tool
+  confirmation, high-risk parameter validation, and output redaction.
 - Add tests for multi-agent read/write isolation and reflection-memory
-  separation.
+  separation, persistent workflow records, resume, rerun, approval, fallback,
+  memory admission, and guardrail templates.
 
 ### Expected Outcome
 
@@ -504,9 +532,10 @@ building lightweight production agents.
 
 ### Next P1
 
-- Durable shared-memory adapters or SQLite-backed persistence.
-- LightFlow execution controls and checkpoint/resume design.
-- Human approval primitives for high-risk tools and flow steps.
+- Database-backed workflow and shared-memory adapters.
+- Stronger idempotency and distributed execution controls for persistent
+  workflows.
+- Evaluation harness and richer production observability.
 
 ### P2
 
@@ -523,22 +552,22 @@ building lightweight production agents.
 ## Next Development Recommendation
 
 After v0.9.0, the next development target should be **v0.9.5:
-Observability, Evaluation, And Human Review** or a smaller **v0.9.1 durable
-shared-memory adapter** if user feedback asks for persistence first.
+Observability And Evaluation** or a smaller **v0.9.1 database-backed run store**
+if user feedback asks for stronger persistence first.
 
 Reasoning:
 
-- v0.9.0 validates the shared-memory API shape without adding durable storage
-  dependencies.
-- The next pressure points are production control and operations: approval,
-  evaluation, richer traces, and optional persistence.
-- Shared-memory durability should stay optional so the core package remains
+- v0.9.0 now covers checkpointed LightFlow runs, resume/rerun, approval nodes,
+  memory-safety controls, guardrail templates, and the shared-memory prototype.
+- The next pressure points are production measurement and stronger persistence:
+  evaluations, richer traces, database-backed run stores, and idempotency.
+- Database-backed durability should stay optional so the core package remains
   lightweight.
 
 Suggested first implementation slice:
 
-1. Add a human approval primitive for selected tools or LightFlow steps.
+1. Add an evaluation harness for task completion and tool-call success.
 2. Add richer trace fields for latency, retry count, and error categories.
-3. Add a small evaluation harness for task completion and tool-call success.
-4. Prototype SQLite-backed shared memory as an optional adapter if persistence
-   becomes the next user priority.
+3. Add database-backed run-store adapters if persistence becomes the next user
+   priority.
+4. Add idempotency markers for external side-effect tools.
