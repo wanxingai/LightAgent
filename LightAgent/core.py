@@ -8,6 +8,7 @@
 
 import asyncio
 import concurrent.futures
+import inspect
 import threading
 import json
 import os
@@ -24,7 +25,7 @@ from openai.types.chat import ChatCompletionChunk
 
 # 从各子模块导入
 from .version import __version__
-from .protocol import MemoryPolicy, MemoryProtocol
+from .protocol import MemoryPolicy, MemoryProtocol, MemoryScope
 from .logger import LoggerManager
 from .tools import ToolRegistry, ToolLoader, AsyncToolDispatcher
 from .errors import format_error_code, format_lightagent_error
@@ -687,7 +688,7 @@ class LightAgent:
 
     def _add_memory_context(self, query: str, user_id: str) -> str:
         """添加记忆上下文"""
-        if not self.memory:
+        if self.memory is None:
             return query
 
         context = ""
@@ -734,7 +735,7 @@ class LightAgent:
             scope: str,
     ) -> bool:
         """Persist memory only when the configured memory policy allows it."""
-        if not self.memory:
+        if self.memory is None:
             return False
         context = {
             "agent_name": self.name,
@@ -760,7 +761,17 @@ class LightAgent:
             return False
 
         stored_data = decision.value if decision.value is not None else data
-        self.memory.store(data=stored_data, user_id=memory_user_id)
+        metadata = MemoryScope(
+            source=source,
+            scope=scope,
+            agent_name=self.name,
+            trace_id=self.traceid,
+            metadata={
+                "user_id": str(memory_user_id),
+                "original_user_id": str(original_user_id),
+            },
+        ).to_metadata()
+        self._store_memory_record(stored_data, memory_user_id, metadata)
         self._memory_write_count = getattr(self, "_memory_write_count", 0) + 1
         fingerprints = getattr(self, "_memory_write_fingerprints", set())
         fingerprints.add(self.memory_policy.write_fingerprint(stored_data, context))
@@ -771,6 +782,22 @@ class LightAgent:
             "user_id": str(original_user_id),
         })
         return True
+
+    def _store_memory_record(self, data: str, memory_user_id: str, metadata: dict[str, Any]) -> Any:
+        """Store memory metadata when the backend supports it."""
+        store = getattr(self.memory, "store")
+        try:
+            signature = inspect.signature(store)
+            supports_metadata = (
+                "metadata" in signature.parameters
+                or any(param.kind == inspect.Parameter.VAR_KEYWORD for param in signature.parameters.values())
+            )
+        except (TypeError, ValueError):
+            supports_metadata = False
+
+        if supports_metadata:
+            return store(data=data, user_id=memory_user_id, metadata=metadata)
+        return store(data=data, user_id=memory_user_id)
 
     def _filter_memory_results(self, memories: Any, scoped_user_id: str, original_user_id: str) -> Any:
         """Filter retrieved memories using the configured memory policy."""

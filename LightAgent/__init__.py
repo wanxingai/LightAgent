@@ -22,6 +22,7 @@ from .result import RunResult, StreamEvent
 from .tracing import TraceEvent, TraceRecorder
 from .guardrails import GuardrailDecision, GuardrailManager
 from .flow import LightFlow, LightFlowResult, LightFlowStep, LightFlowStepResult
+from .shared_memory import SharedMemoryPool, SharedMemoryRecord
 from .logger import LoggerManager
 from .mcp_client_manager import MCPClientManager
 from .skills import SkillManager, Skill
@@ -60,6 +61,8 @@ __all__ = [
     "LightFlowResult",
     "LightFlowStep",
     "LightFlowStepResult",
+    "SharedMemoryPool",
+    "SharedMemoryRecord",
     "LoggerManager",
     "MCPClientManager",
     "SkillManager",

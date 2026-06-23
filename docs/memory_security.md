@@ -100,5 +100,8 @@ For write-time controls such as admission hooks, per-run write limits, and
 duplicate write blocking, see
 [Memory Admission And Mutation Controls](memory_admission.md).
 
+For a lightweight shared-memory prototype that follows these provenance rules,
+see [SharedMemoryPool](shared_memory_pool.md).
+
 For a minimal vector-database adapter pattern, see
 [Vector Memory Adapter Example](vector_memory_adapter.md).
