@@ -7,6 +7,8 @@
 """
 
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
+import re
 from typing import Any, Callable, Iterable, Protocol
 
 
@@ -92,9 +94,12 @@ class MemoryPolicy:
     allowed_agent_names: Iterable[str] | None = None
     allowed_trust_levels: Iterable[str] | None = None
     min_confidence: float | None = None
+    enforce_expires_at: bool = False
     memory_write_admission: Callable[[str, dict[str, Any]], Any] | None = None
     max_writes_per_run: int | None = None
     reject_duplicate_writes: bool = False
+    min_write_length: int | None = None
+    reject_write_patterns: Iterable[str] | None = None
 
     def __post_init__(self):
         for field_name in ("allowed_sources", "allowed_scopes", "allowed_agent_names", "allowed_trust_levels"):
@@ -103,6 +108,10 @@ class MemoryPolicy:
                 object.__setattr__(self, field_name, tuple(str(item) for item in value))
         if self.max_writes_per_run is not None and self.max_writes_per_run < 0:
             raise ValueError("max_writes_per_run must be greater than or equal to 0")
+        if self.min_write_length is not None and self.min_write_length < 0:
+            raise ValueError("min_write_length must be greater than or equal to 0")
+        if self.reject_write_patterns is not None and not isinstance(self.reject_write_patterns, tuple):
+            object.__setattr__(self, "reject_write_patterns", tuple(str(item) for item in self.reject_write_patterns))
 
     def scoped_user_id(self, user_id: str) -> str:
         user = str(user_id)
@@ -135,6 +144,7 @@ class MemoryPolicy:
             and self._allows_value(item, metadata, ("agent_name", "agent"), self.allowed_agent_names)
             and self._allows_value(item, metadata, ("trust_level", "trust"), self.allowed_trust_levels)
             and self._allows_confidence(item, metadata)
+            and self._allows_not_expired(item, metadata)
         )
 
     @staticmethod
@@ -173,6 +183,21 @@ class MemoryPolicy:
         except (TypeError, ValueError):
             return False
 
+    def _allows_not_expired(self, item: dict[str, Any], metadata: dict[str, Any]) -> bool:
+        expires_at = self._get_value(item, metadata, ("expires_at", "expiresAt"))
+        if expires_at is None:
+            return not self.enforce_expires_at
+        try:
+            if isinstance(expires_at, (int, float)):
+                expires = datetime.fromtimestamp(float(expires_at), tz=timezone.utc)
+            else:
+                expires = datetime.fromisoformat(str(expires_at).replace("Z", "+00:00"))
+                if expires.tzinfo is None:
+                    expires = expires.replace(tzinfo=timezone.utc)
+        except (TypeError, ValueError):
+            return False
+        return expires > datetime.now(timezone.utc)
+
     def allows_write(
             self,
             data: str,
@@ -190,6 +215,16 @@ class MemoryPolicy:
                 allowed=False,
                 reason=f"Memory write limit exceeded: max_writes_per_run={self.max_writes_per_run}",
             )
+
+        if self.min_write_length is not None and len(candidate.strip()) < self.min_write_length:
+            return MemoryAdmissionDecision(
+                allowed=False,
+                reason=f"Memory write is shorter than min_write_length={self.min_write_length}",
+            )
+
+        for pattern in self.reject_write_patterns or ():
+            if re.search(pattern, candidate, flags=re.IGNORECASE):
+                return MemoryAdmissionDecision(allowed=False, reason=f"Memory write rejected by pattern: {pattern}")
 
         fingerprint = self.write_fingerprint(candidate, context)
         if self.reject_duplicate_writes and recent_fingerprints is not None and fingerprint in recent_fingerprints:

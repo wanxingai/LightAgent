@@ -1,6 +1,6 @@
 # LightAgent Roadmap
 
-Last updated: 2026-06-14
+Last updated: 2026-06-24
 
 LightAgent should continue to evolve as a lightweight, low-dependency agent
 framework rather than a broad replacement for LangChain, LangGraph, CrewAI, or
@@ -35,22 +35,45 @@ ecosystem.**
 - **v0.8.2**: Added optional memory write admission hooks, per-run write
   limits, duplicate write blocking, and trace events for allowed or blocked
   memory writes.
+- **v0.9.0**: Added enhanced LightFlow execution controls, JSON checkpointed
+  workflow runs, resume/rerun support, approval nodes, reusable guardrail
+  templates, stronger memory admission controls, and the first lightweight
+  `SharedMemoryPool` prototype.
 
 ### Completed Milestone Details
 
-These items came from the earlier roadmap and are now treated as shipped
-capabilities or established direction:
+These items came from the earlier `roadmap 2.md` draft and are now treated as
+shipped capabilities or established direction:
 
 - **Stability and developer experience**: preserve string-return compatibility
   while making structured `RunResult` available for callers that need trace IDs,
-  errors, and structured run metadata.
+  errors, and structured run metadata. The legacy roadmap also called out
+  `content`, `reasoning_content`, `tool_calls`, `usage`, `trace_id`, and
+  `error` as the key result fields, plus catchable `LightAgentError` behavior,
+  tool argument validation, example cleanup, stale import fixes, and focused
+  unit tests for tool registry, runtime tools, stream/non-stream execution,
+  error handling, and memory adapter behavior.
 - **Trace and observability**: keep human-readable debug logs separate from
   machine-readable trace events so production debugging can rely on structured
-  data.
+  data. The legacy roadmap also listed `run_start`, `model_request`,
+  `model_response`, `tool_call`, `tool_result`, `handoff`, `memory_read`,
+  `memory_write`, and `run_end` as the desired event vocabulary, with JSON
+  export and Langfuse integration built on top of trace events.
 - **Guardrails and safe tool execution**: constrain input, tool calls, and final
   output through explicit policy while keeping default behavior lightweight.
+  The legacy roadmap specifically called for prompt-injection checks,
+  permission checks, high-risk tool-call policies, approval requirements for
+  file/network/database/payment/external-action tools, output schema/PII
+  checks, and memory guardrails for namespace, provenance, trust, and retrieval
+  filtering.
 - **LightFlow workflow orchestration**: support deterministic workflow steps
-  without turning LightAgent into a heavy orchestration framework.
+  without turning LightAgent into a heavy orchestration framework. The merged
+  legacy plan included explicit step input/output passing, per-step tools,
+  model, memory, retry behavior, flow trace export, and later manual approval
+  nodes.
+- **Human-in-the-loop and recoverability**: keep human approval, durable
+  execution, run stores, idempotency markers, and resume semantics as planned
+  follow-on work rather than core requirements for early 0.8.x releases.
 
 The shipped LightFlow API should remain simple:
 
@@ -92,6 +115,187 @@ P2 issues:
   secrets, no required core dependencies.
 - **#4 Existing vector database integration**: add focused docs/examples or
   optional adapters instead of core dependencies.
+
+## Near-Term Version Plan
+
+This section records the planned direction for the next several LightAgent
+versions after `v0.8.2`. Exact scope can still change as issues, pull requests,
+and user feedback evolve, but the intended product direction is:
+
+**safer memory + stronger LightFlow + better observability + stable APIs +
+enterprise-friendly integration.**
+
+### v0.8.3 Goals: LightFlow Execution Controls
+
+Goal: make LightFlow easier to operate and debug in real multi-step workflows.
+These goals are completed as part of the v0.9.0 development line.
+
+Completed in v0.9.0:
+
+- Clear step status tracking: `pending`, `running`, `success`, `failed`,
+  `skipped`, and `waiting_approval`.
+- DAG validation for unknown dependencies, circular dependencies, and isolated
+  step warnings.
+- Step-level timeout, cancellation, fallback-agent, and approval controls.
+- Flow trace output with step input summaries, output summaries, retry counts,
+  error reasons, timing metadata, and fallback usage.
+- Focused tests for enhanced workflow controls.
+
+Expected outcome:
+
+Developers should be able to build and troubleshoot predictable LightFlow
+pipelines without relying on prompt-only control or external workflow engines.
+
+### v0.8.4 Goals: Memory And Guardrail Hardening
+
+Goal: strengthen memory admission, memory retrieval safety, and guardrail
+templates for production usage. These goals are completed as part of the v0.9.0
+development line.
+
+Completed in v0.9.0:
+
+- Extend `MemoryPolicy` with expiration-aware retrieval through
+  `enforce_expires_at`.
+- Improve memory write admission with `min_write_length` and
+  `reject_write_patterns`.
+- Keep source, scope, agent, trust-level, and confidence filtering from the
+  earlier memory-safety line.
+- Add reusable guardrail templates for privacy filtering, high-risk tool
+  confirmation, sensitive parameter validation, and output redaction.
+- Clarify recommended boundaries between trace events, user memory,
+  self-reflection memory, and LightSwarm delegation state.
+- Add more tests around memory provenance filtering, expiration filtering,
+  blocked memory writes, and guardrail templates.
+
+Expected outcome:
+
+LightAgent should become safer for shared memory, customer service, internal
+knowledge assistant, financial analysis, and other high-impact agent use cases.
+
+### v0.9.0: Persistent LightFlow, Safety, And Shared Memory
+
+Goal: extend LightFlow from an in-memory workflow runner into a lightweight
+checkpointed workflow system, while also shipping the memory and safety
+hardening required for long-running multi-agent workflows.
+
+Completed work:
+
+- Add LightFlow step status tracking with `pending`, `running`, `success`,
+  `failed`, `skipped`, and `waiting_approval`.
+- Add workflow validation for unknown dependencies, circular dependencies, and
+  isolated step warnings.
+- Add step-level timeout, cancellation, fallback-agent, and approval controls.
+- Add JSON checkpoint storage through `JsonLightFlowStore`.
+- Add `resume(run_id)`, `rerun_step(run_id, step_name)`, `get_run(run_id)`,
+  and `list_runs()` workflow record APIs.
+- Persist intermediate step results and status for front-end execution views.
+- Add an in-memory `SharedMemoryPool` that satisfies `MemoryProtocol`.
+- Use append-first records with `memory_id`, `created_at`, `user_id`, and
+  provenance metadata.
+- Keep user memory and agent reflection memory in separate scoped ids when used
+  with `LightAgent`.
+- Allow direct inspection through `list_records()` and test cleanup through
+  `clear()`.
+- Pass `MemoryScope`-compatible metadata to memory backends that support a
+  `metadata` keyword while preserving compatibility with two-argument legacy
+  backends.
+- Add memory expiration filtering and basic low-quality write blocking through
+  `MemoryPolicy`.
+- Add reusable guardrail templates for privacy filtering, sensitive tool
+  confirmation, high-risk parameter validation, and output redaction.
+- Add tests for workflow controls, checkpoint/resume/rerun, scoped retrieval,
+  append-first behavior, provenance filtering, guardrail templates, and
+  LightAgent integration.
+
+Deferred work:
+
+- SQLite or other database-backed run stores.
+- Distributed workers, locks, and stronger idempotency guarantees.
+- Advanced conflict-resolution policies beyond append-first storage.
+
+Expected outcome:
+
+Users can experiment with safer shared memory in LightAgent, LightSwarm, or
+LightFlow prototypes while preserving explicit provenance boundaries and a
+lightweight core.
+
+### v0.9.5: Observability, Evaluation, And Human Review
+
+Goal: improve production debugging, measurement, and human control over
+high-risk actions.
+
+Planned work:
+
+- Add richer trace metadata for model latency, tool latency, token usage,
+  retry counts, error categories, and flow-step timing.
+- Provide a lightweight evaluation harness for tool-call success rate,
+  task-completion rate, latency, cost, and recovery behavior.
+- Improve Langfuse and external observability integration on top of structured
+  trace events.
+- Add a `HumanApprovalTool` or equivalent approval primitive.
+- Allow selected tools or LightFlow steps to require human approval before
+  continuing.
+- Support approval, rejection, argument editing, timeout, and rejection handling.
+
+Expected outcome:
+
+LightAgent should support production environments where teams need to measure
+agent quality, inspect failures, and keep humans in control of high-impact
+external side effects.
+
+### v1.0.0: Stable API And Production Documentation
+
+Goal: freeze the public API surface and make LightAgent dependable for
+production users and contributors.
+
+Planned work:
+
+- Stabilize public APIs:
+  - `LightAgent`
+  - `LightSwarm`
+  - `LightFlow`
+  - `Skill`
+  - `ToolRegistry`
+  - `MemoryProtocol`
+  - `MemoryPolicy`
+  - `GuardrailDecision`
+  - `RunResult`
+  - `StreamEvent`
+- Reduce breaking changes after the 1.0 line.
+- Complete bilingual documentation for installation, tools, skills, memory,
+  MCP, Guardrails, Trace, LightSwarm, LightFlow, and production deployment.
+- Add a complete example matrix covering basic agents, constructor tools,
+  runtime tools, memory, Skills, MCP, browser-use, OpenRouter, LiteLLM, local
+  LLMs, LightFlow, human approval, and error handling.
+- Add stronger CI coverage for core runtime behavior.
+- Automate PyPI release publishing and release notes.
+
+Expected outcome:
+
+LightAgent 1.0 should provide a stable, documented, tested foundation for
+building lightweight production agents.
+
+### v1.1.0: Enterprise Integration
+
+Goal: make LightAgent easier to embed into internal systems and private
+deployments.
+
+Planned work:
+
+- Add stronger multi-tenant memory isolation examples and policy templates.
+- Provide tool-level permission and audit patterns for production systems.
+- Add deployment templates for Docker and service-style API wrappers.
+- Improve model routing guidance for OpenAI-compatible endpoints, LiteLLM,
+  local inference servers, and private model gateways.
+- Provide audit log export examples for trace, tool calls, guardrail blocks,
+  memory writes, and workflow steps.
+- Add enterprise-oriented examples for customer service, data analysis,
+  internal knowledge assistants, and automated office workflows.
+
+Expected outcome:
+
+LightAgent should be easier to adopt inside enterprise systems without turning
+the core framework into a large platform.
 
 ## Reference Directions From Other Agent Frameworks
 
@@ -188,26 +392,44 @@ Goal: make memory writes safer before adding deeper shared-memory features.
 LightAgent should have a minimal but practical first layer against memory
 poisoning, write amplification, and reflection cascades.
 
-## v0.9.0: SharedMemoryPool Prototype
+## Detailed Backlog For Planned Releases
 
-Goal: provide a lightweight shared memory design for multi-agent systems without
-adding heavy storage dependencies.
+### v0.9.0 Workstream: Persistent LightFlow, Safety, And Shared Memory
 
-### Planned Work
+Goal: provide checkpointed workflow execution, reusable safety controls, and a
+lightweight shared-memory design without adding heavy storage dependencies.
 
-- Add a `SharedMemoryPool` interface or design doc.
-- Start with an in-memory or SQLite prototype.
-- Keep per-agent private memory separate from shared pool memory.
-- Use append-first conflict handling instead of overwrite-by-default behavior.
-- Support namespace and provenance policies from `MemoryPolicy`.
-- Add tests for multi-agent read/write isolation.
+### Completed Work
+
+- Add explicit LightFlow step status, richer step traces, timeout,
+  cancellation, fallback-agent, approval, checkpoint, resume, rerun, and run
+  record APIs.
+- Add JSON-file workflow persistence through `JsonLightFlowStore`.
+- Persist intermediate step results so long-running workflows can resume after
+  failure instead of restarting from the first step.
+- Add an in-memory `SharedMemoryPool` implementation.
+- Keep records append-first instead of overwrite-by-default.
+- Store `memory_id`, `created_at`, `user_id`, `memory`, and provenance
+  metadata on each record.
+- Support scoped retrieval by `user_id`, `agent_name`, `source`, and `scope`.
+- Preserve compatibility with `MemoryPolicy` by returning retrieval records with
+  `user_id` and `metadata`.
+- Update `LightAgent` to pass memory metadata to backends that support it while
+  preserving the existing two-argument `MemoryProtocol`.
+- Add memory expiration filtering, minimum write length checks, and reject
+  patterns for low-quality memory writes.
+- Add default guardrail templates for privacy filtering, sensitive tool
+  confirmation, high-risk parameter validation, and output redaction.
+- Add tests for multi-agent read/write isolation and reflection-memory
+  separation, persistent workflow records, resume, rerun, approval, fallback,
+  memory admission, and guardrail templates.
 
 ### Expected Outcome
 
 LightAgent users should be able to experiment with shared memory in LightSwarm
 or LightFlow while preserving explicit boundaries and inspectable behavior.
 
-## v0.9.5: Human-In-The-Loop
+### v0.9.5 Workstream: Human-In-The-Loop
 
 Goal: support high-risk tasks that need explicit human review before continuing.
 
@@ -224,7 +446,7 @@ Goal: support high-risk tasks that need explicit human review before continuing.
 LightAgent should support workflows where a model can plan and prepare actions,
 but humans retain control over important external side effects.
 
-## v1.0.0: Stable API And Ecosystem
+### v1.0.0 Workstream: Stable API And Ecosystem
 
 Goal: stabilize the public API and make LightAgent reliable for production users
 and contributors.
@@ -306,13 +528,14 @@ building lightweight production agents.
 
 ### Immediate P0
 
-- No active P0 item as of 2026-06-05.
+- No active P0 item as of 2026-06-24.
 
 ### Next P1
 
-- v0.9.0 SharedMemoryPool prototype for #1 and #39.
-- Multi-agent read/write isolation tests.
-- Append-first conflict handling and namespace/provenance policy integration.
+- Database-backed workflow and shared-memory adapters.
+- Stronger idempotency and distributed execution controls for persistent
+  workflows.
+- Evaluation harness and richer production observability.
 
 ### P2
 
@@ -328,18 +551,23 @@ building lightweight production agents.
 
 ## Next Development Recommendation
 
-The next development target should be **v0.9.0: SharedMemoryPool Prototype**.
+After v0.9.0, the next development target should be **v0.9.5:
+Observability And Evaluation** or a smaller **v0.9.1 database-backed run store**
+if user feedback asks for stronger persistence first.
 
 Reasoning:
 
-- v0.8.1 and v0.8.2 created the retrieval and write-time safety foundation.
-- #1 and #39 both point toward safer multi-agent shared memory.
-- A small in-memory or SQLite prototype can validate the API before adding any
-  external storage dependencies.
+- v0.9.0 now covers checkpointed LightFlow runs, resume/rerun, approval nodes,
+  memory-safety controls, guardrail templates, and the shared-memory prototype.
+- The next pressure points are production measurement and stronger persistence:
+  evaluations, richer traces, database-backed run stores, and idempotency.
+- Database-backed durability should stay optional so the core package remains
+  lightweight.
 
 Suggested first implementation slice:
 
-1. Add a `SharedMemoryPool` interface or design doc.
-2. Start with an in-memory implementation and focused tests.
-3. Keep per-agent private memory separate from shared pool memory.
-4. Integrate namespace/provenance filtering from `MemoryPolicy`.
+1. Add an evaluation harness for task completion and tool-call success.
+2. Add richer trace fields for latency, retry count, and error categories.
+3. Add database-backed run-store adapters if persistence becomes the next user
+   priority.
+4. Add idempotency markers for external side-effect tools.

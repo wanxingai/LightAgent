@@ -74,6 +74,41 @@ memory user id, source, scope, agent name, and normalized text. This means a
 user memory and a reflection memory with the same text are not treated as the
 same write.
 
+### Low-Quality Write Blocking
+
+Use `min_write_length` and `reject_write_patterns` for simple default memory
+quality gates before a backend persists data:
+
+```python
+policy = MemoryPolicy(
+    min_write_length=12,
+    reject_write_patterns=(
+        r"ignore previous instructions",
+        r"system prompt",
+    ),
+)
+```
+
+These checks run before `memory_write_admission`, so application-specific
+classifiers can still perform deeper review after basic filtering.
+
+### Expiration-Aware Retrieval
+
+Memory records can include `expires_at` metadata. When
+`enforce_expires_at=True`, LightAgent only injects retrieved memories that have
+a valid future expiration value:
+
+```python
+policy = MemoryPolicy(
+    allow_unattributed_results=False,
+    enforce_expires_at=True,
+)
+```
+
+Adapters can store `expires_at` as an ISO-8601 timestamp or a Unix timestamp.
+Expired, malformed, or missing expiration metadata is filtered out when
+expiration enforcement is enabled.
+
 ### Trace Events
 
 When tracing is enabled, memory write controls emit:
