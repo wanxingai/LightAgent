@@ -37,6 +37,7 @@ LightAgent is an ultra‑lightweight, open‑source framework that now natively 
 
 ---
 ## News
+- <img src="https://img.alicdn.com/imgextra/i3/O1CN01SFL0Gu26nrQBFKXFR_!!6000000007707-2-tps-500-500.png" alt="new" width="30" height="30"/>**[2026-06-24]** LightAgent v0.9.0 Development: Adds checkpointed LightFlow workflows with resume/rerun support, approval nodes, richer step status and trace metadata, reusable Guardrails templates, stronger MemoryPolicy controls, and the first SharedMemoryPool prototype.
 - <img src="https://img.alicdn.com/imgextra/i3/O1CN01SFL0Gu26nrQBFKXFR_!!6000000007707-2-tps-500-500.png" alt="new" width="30" height="30"/>**[2026-06-14]** LightAgent v0.8.1 Development: Adds MemoryScope metadata conventions, stricter MemoryPolicy provenance filters, and guidance for separating trace, user memory, self-reflection memory, and LightSwarm delegation state.
 - **[2026-06-02]** LightAgent v0.8.0 Development: Adds initial LightFlow workflow orchestration for deterministic multi-step agent execution with DAG dependencies, step output passing, retries, and flow trace events.
 - **[2026-05-29]** LightAgent v0.7.0 Development: Adds opt-in trace observability with structured run/model/tool/error events, `agent.export_trace()`, and prompt-safe model request summaries for production debugging.
@@ -69,11 +70,13 @@ LightAgent is an ultra‑lightweight, open‑source framework that now natively 
 - **Tool Integration** 🛠️: Support for custom tools (`Tools`) and MCP tool integration, flexible expansion to meet diverse needs.  
 - **Complex Goals** 🌳: Built-in Tree of Thought (`ToT`) module with reflection, supporting complex task decomposition and multi-step reasoning, enhancing task processing capabilities.  
 - **Multi-Agent Collaboration** 🤖: Simpler to implement multi-agent collaboration than Swarm, with built-in LightSwarm for intent recognition and task delegation, enabling smarter handling of user input and delegating tasks to other agents as needed. 
-- **Workflow Orchestration** 🔁: LightFlow chains agents into deterministic multi-step workflows with explicit dependencies, step output passing, retries, and traceable execution.
+- **Workflow Orchestration** 🔁: LightFlow chains agents into deterministic multi-step workflows with explicit dependencies, step output passing, retries, checkpointed run records, resume/rerun support, approval nodes, fallback agents, and traceable execution.
+- **Shared Memory Prototype** 🧠: SharedMemoryPool provides append-first in-memory shared memory with provenance metadata, scoped retrieval, and MemoryPolicy-compatible results for multi-agent experiments.
 - **Independent Execution** 🤖: Tasks and tool calls are completed autonomously without human intervention.  
 - **Multi-Model Support** 🔄: Compatible with OpenAI-style providers such as OpenAI, OpenRouter, Zhipu ChatGLM, Baichuan, StepFun, DeepSeek, Qwen, vLLM, llama.cpp, and other OpenAI-compatible endpoints.  
 - **Streaming API** 🌊: Supports OpenAI streaming format API service output, seamlessly integrates with mainstream chat frameworks, enhancing user experience.  
 - **Trace Observability** 🔎: Opt-in `trace=True` run traces record structured run lifecycle, model request summaries, tool calls, tool results, and errors without changing the default string return value.  
+- **Guardrails Templates** 🛡️: Reusable input/tool/output guardrail templates help block private data, require confirmation for sensitive tools, validate high-risk parameters, and redact sensitive output.
 - **Tool Generator** 🚀: Just provide your API documentation to the [Tool Generator], which will automatically create exclusive tools for you, allowing you to quickly build hundreds of personalized custom tools in just 1 hour to improve efficiency and unleash your creative potential.
 - **Agent Self-Learning** 🧠️: Each agent has its own scene memory capabilities and the ability to self-learn from user conversations.
 - **Adaptive Tool Mechanism** 🛠️: Supports adding an unlimited number of tools, allowing the large model to first select a candidate tool set from thousands of tools, filtering irrelevant tools before submitting context to the large model, significantly reducing token consumption.
@@ -88,13 +91,19 @@ This page is docs-only and does not change any framework code.
 
 For common installation, model provider, tool, memory, MCP, Skills, streaming, and LightSwarm questions, see [FAQ](docs/FAQ.md).
 
-For deterministic multi-step workflows with explicit dependencies, see [LightFlow](docs/lightflow.md).
+For deterministic multi-step workflows, checkpointed run records, resume/rerun, approval nodes, fallback agents, and step status tracking, see [LightFlow](docs/lightflow.md).
 
 For custom tool creation, runtime tools, ToolRegistry, ToolLoader, AsyncToolDispatcher, and MCP tool integration, see [Tools Guide](docs/tools.md).
 
 For shared long-term memory or graph memory deployments, review the [Memory Security Guidance](docs/memory_security.md).
 
+For lightweight shared memory experiments, see [SharedMemoryPool](docs/shared_memory_pool.md).
+
+For memory write admission, expiration-aware retrieval, and low-quality memory write blocking, see [Memory Admission And Mutation Controls](docs/memory_admission.md).
+
 For separating trace, user memory, self-reflection memory, and LightSwarm delegation state, see [Memory, Trace, And Swarm Boundaries](docs/memory_trace_swarm_boundaries.md).
+
+For input, tool, and output safety policies, see [Guardrails](docs/guardrails.md).
 
 For OpenRouter, local LLM, and OpenAI-compatible provider setup, see [Model Provider Configuration](docs/model_providers.md).
 
@@ -167,6 +176,61 @@ print(result.trace)
 
 for event in agent.export_trace():
     print(event["type"], event["data"])
+```
+
+### Checkpoint a LightFlow Run (v0.9.0)
+
+`LightFlow` can persist workflow checkpoints and resume failed runs without
+starting from the first step again.
+
+```python
+from LightAgent import JsonLightFlowStore, LightAgent, LightFlow
+
+research_agent = LightAgent(model="gpt-4.1", api_key="your_api_key", base_url="your_base_url")
+writer_agent = LightAgent(model="gpt-4.1", api_key="your_api_key", base_url="your_base_url")
+
+store = JsonLightFlowStore(".lightflow_runs")
+flow = (
+    LightFlow(store=store)
+    .step("research", agent=research_agent, timeout=30)
+    .step("write", agent=writer_agent, depends_on=["research"], max_retry=2)
+)
+
+result = flow.run("Analyze this company", run_id="report-001", trace=True)
+
+if not result.success:
+    result = flow.resume("report-001")
+
+print(result.status)
+print(flow.get_run("report-001")["steps"])
+```
+
+### Use SharedMemoryPool (v0.9.0)
+
+`SharedMemoryPool` is a lightweight in-memory prototype for multi-agent shared
+memory experiments.
+
+```python
+from LightAgent import LightAgent, MemoryPolicy, SharedMemoryPool
+
+shared_memory = SharedMemoryPool(agent_name="writer")
+
+agent = LightAgent(
+    name="writer",
+    model="gpt-4.1",
+    api_key="your_api_key",
+    base_url="your_base_url",
+    memory=shared_memory,
+    memory_policy=MemoryPolicy(
+        namespace="tenant-a",
+        allow_unattributed_results=False,
+        allowed_sources=("user",),
+        allowed_scopes=("user",),
+    ),
+)
+
+agent.run("Remember that I prefer concise reports.", user_id="alice")
+print(shared_memory.list_records(user_id="tenant-a:alice"))
 ```
 
 ### Set Model Self-Perception via System Prompt
