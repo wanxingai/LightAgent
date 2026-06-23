@@ -69,6 +69,34 @@ Older release notes are available on [GitHub Releases](https://github.com/wanxin
 - **Agent Self-Learning** 🧠️: Each agent has its own scene memory capabilities and the ability to self-learn from user conversations.
 - **Adaptive Tool Mechanism** 🛠️: Supports adding an unlimited number of tools, allowing the large model to first select a candidate tool set from thousands of tools, filtering irrelevant tools before submitting context to the large model, significantly reducing token consumption.
 
+## 🧭 Architecture At A Glance
+
+| Layer | Main API | Use it when you need |
+| --- | --- | --- |
+| Single agent runtime | `LightAgent` | One agent with model calls, tools, memory, streaming, trace, and guardrails. |
+| Multi-agent routing | `LightSwarm` | Role-based delegation across specialized agents. |
+| Deterministic workflow | `LightFlow` | Ordered DAG workflows, retries, checkpoints, approvals, resume, and rerun. |
+| Tools and integrations | `tools`, `ToolRegistry`, MCP | Python tools, generated tools, runtime tool loading, or MCP tool servers. |
+| Memory boundary | `MemoryPolicy`, `MemoryScope` | Tenant isolation, provenance, trust, expiration, and write admission controls. |
+| Shared memory prototype | `SharedMemoryPool` | In-memory shared memory experiments across agents. |
+| Safety controls | `input_guardrails`, `tool_guardrails`, `output_guardrails` | Privacy blocking, sensitive tool confirmation, high-risk parameter checks, and output redaction. |
+| Observability | `trace=True`, `agent.export_trace()` | Structured run, model, tool, error, and workflow trace events. |
+
+## Core Usage Patterns
+
+LightAgent keeps the default call path simple while allowing production controls to be added incrementally.
+
+| Pattern | Minimal call | Notes |
+| --- | --- | --- |
+| Basic response | `agent.run(query)` | Returns a string by default. |
+| Streaming | `agent.run(query, stream=True)` | Returns OpenAI-compatible streaming chunks. |
+| Structured result | `agent.run(query, result_format="object")` | Returns content plus structured metadata. |
+| Trace | `agent.run(query, trace=True)` | Records events without changing the default string return. |
+| User memory | `agent.run(query, user_id="alice")` | Uses the configured memory backend and memory policy. |
+| Tools | `LightAgent(..., tools=[fn])` | Functions should expose `tool_info` metadata. |
+| Guardrails | `LightAgent(..., input_guardrails=[...])` | Add input, tool, and output policies per agent. |
+| Workflow | `LightFlow().step(...).run(query)` | Use for deterministic multi-step execution. |
+
 ## 🧩 Multi-agent troubleshooting (failure map)
 
 If you are using LightSwarm or other multi-agent patterns and start seeing role drift, cross-agent memory issues or confusing logs, you can check the
@@ -275,34 +303,222 @@ Multiple tool examples: tools = [search_news, get_weather, get_stock_realtime_da
 
 ## Function Details
 
-README keeps only the most common entry points. Full examples and production guidance live in the dedicated docs pages.
+README keeps the core usage model in one place. Longer examples, adapter-specific setup, and production guidance live in the dedicated docs pages.
 
 ### 1. Detachable Memory Module (`mem0`)
-LightAgent can use custom memory backends, including `mem0`, to persist and retrieve user context across conversations. See [Memory Security Guidance](docs/memory_security.md), [Memory Admission And Mutation Controls](docs/memory_admission.md), and [Memory, Trace, And Swarm Boundaries](docs/memory_trace_swarm_boundaries.md).
+LightAgent accepts any memory backend that provides `store(data, user_id)` and `retrieve(query, user_id)`. This keeps memory detachable: you can start with a simple custom class, use `mem0`, or plug in a vector/graph memory adapter without changing agent code.
+
+Use `user_id` to isolate conversations, and use `MemoryPolicy` when memory is shared across users, tenants, agents, or traces.
+
+```python
+from LightAgent import LightAgent, MemoryPolicy
+
+agent = LightAgent(
+    model="gpt-4.1",
+    api_key="your_api_key",
+    base_url="your_base_url",
+    memory=your_memory_backend,
+    memory_policy=MemoryPolicy(
+        namespace="tenant-a",
+        allowed_sources=("user", "reflection"),
+        allowed_scopes=("user", "agent"),
+        reject_duplicate_writes=True,
+        min_write_length=8,
+    ),
+)
+
+response = agent.run("Remember that I prefer concise reports.", user_id="alice")
+```
+
+See [Memory Security Guidance](docs/memory_security.md), [Memory Admission And Mutation Controls](docs/memory_admission.md), and [Memory, Trace, And Swarm Boundaries](docs/memory_trace_swarm_boundaries.md).
 
 ### 2. Tool Integration
-Use Python functions with `tool_info` metadata, runtime tools, ToolRegistry, ToolLoader, AsyncToolDispatcher, and MCP tools to extend an agent. See [Tools Guide](docs/tools.md).
+Use Python functions with `tool_info` metadata to expose controlled capabilities to an agent. LightAgent can also work with runtime tools, `ToolRegistry`, `ToolLoader`, `AsyncToolDispatcher`, generated tools, and MCP tools.
+
+```python
+from LightAgent import LightAgent
+
+def get_order_status(order_id: str) -> str:
+    return f"Order {order_id} is being processed."
+
+get_order_status.tool_info = {
+    "tool_name": "get_order_status",
+    "tool_description": "Get the status of an order.",
+    "tool_params": [
+        {"name": "order_id", "description": "Order ID", "type": "string", "required": True},
+    ],
+}
+
+agent = LightAgent(
+    model="gpt-4.1",
+    api_key="your_api_key",
+    base_url="your_base_url",
+    tools=[get_order_status],
+)
+```
+
+For advanced tool loading, generated tools, async dispatch, and MCP integration, see [Tools Guide](docs/tools.md).
 
 ### 3. Tool Generator
-`agent.create_tool()` can generate tool code from API documentation or natural-language descriptions. Keep generated tools in your own tools directory and review them before production use.
+`agent.create_tool()` can generate tool code from API documentation or natural-language descriptions. It is useful when converting an internal API document into callable Python tools.
+
+Keep generated tools in a reviewed tools directory, test them before production use, and avoid committing generated or experimental local tools unless they are part of the public package.
+
+```python
+agent.create_tool(
+    "Create a tool that calls the internal order status API.",
+    tools_directory="tools",
+)
+```
 
 ### 4. Tree of Thought (ToT)
-Enable `tree_of_thought=True` when a task needs explicit planning and reflection before tool use or final response generation.
+Enable `tree_of_thought=True` when a task needs explicit planning and reflection before tool use or final response generation. ToT is best for complex multi-step reasoning, tool selection, and tasks where the agent should inspect its plan before acting.
+
+```python
+agent = LightAgent(
+    model="gpt-4.1",
+    api_key="your_api_key",
+    base_url="your_base_url",
+    tree_of_thought=True,
+    tot_model="gpt-4.1",
+    tot_api_key="your_api_key",
+    tot_base_url="your_base_url",
+)
+```
 
 ### 5. Multi-Agent Collaboration
-`LightSwarm` routes work across specialized agents for role-based delegation and multi-agent task handling. For debugging role drift or cross-agent memory issues, see [Multi-agent failure map](docs/multi_agent_failure_map.md).
+`LightSwarm` routes work across specialized agents for role-based delegation and multi-agent task handling. Use it when one front-facing agent should delegate to domain agents such as support, HR, finance, research, or data analysis.
+
+Keep each agent's role narrow, give each agent clear boundaries, and avoid letting delegated agents write unrelated long-term memory unless the memory policy allows it.
+
+```python
+from LightAgent import LightAgent, LightSwarm
+
+frontdesk = LightAgent(name="frontdesk", role="Route requests to the right specialist.")
+finance = LightAgent(name="finance", role="Answer finance approval questions.")
+
+swarm = LightSwarm()
+swarm.register_agent(frontdesk, finance)
+result = swarm.run(agent=frontdesk, query="How do I approve a vendor payment?")
+```
+
+For debugging role drift or cross-agent memory issues, see [Multi-agent failure map](docs/multi_agent_failure_map.md).
 
 ### 6. Streaming API
-`agent.run(query, stream=True)` returns OpenAI-compatible streaming chunks and remains backward compatible with existing integrations.
+`agent.run(query, stream=True)` returns OpenAI-compatible streaming chunks and remains backward compatible with existing integrations. Use it for chat UIs, long responses, and agent services that should start sending output before the full answer is complete.
+
+```python
+for chunk in agent.run("Write a short report about AI agents.", stream=True):
+    print(chunk)
+```
 
 ### 7. Agent Self-Learning
-Self-learning can be combined with a memory backend so an agent can retain scenario-specific knowledge across users or sessions. Review the memory policy docs before enabling it in production.
+Self-learning can be combined with a memory backend so an agent can retain scenario-specific knowledge across users or sessions. In production, pair self-learning with `MemoryPolicy` so low-quality, private, expired, or unrelated content does not enter long-term memory.
+
+Recommended production controls:
+
+- Use `namespace` to separate tenants or environments.
+- Use `allowed_sources`, `allowed_scopes`, and `allowed_agent_names` to limit retrieved memory.
+- Use `memory_write_admission`, `reject_write_patterns`, `min_write_length`, and `reject_duplicate_writes` to control writes.
+- Use `enforce_expires_at=True` when memory records carry expiration metadata.
 
 ### 8. Langfuse Log Tracking
-LightAgent can send trace data to Langfuse through `tracetools` configuration. See [Trace Observability](docs/tracing.md) for the built-in trace API and related debugging guidance.
+LightAgent can send trace data to Langfuse through `tracetools` configuration. For most local debugging, start with built-in trace events:
+
+```python
+result = agent.run("Debug this workflow.", result_format="object", trace=True)
+print(result.trace_id)
+print(agent.export_trace())
+```
+
+See [Trace Observability](docs/tracing.md) for event shapes and production debugging guidance.
 
 ### 9. Agent Assessment
 Agent assessment is planned for future versions and will focus on evaluating agent behavior against business scenarios.
+
+### 10. LightFlow Workflows
+`LightFlow` is the deterministic workflow layer. Use it when a task should run through known steps instead of relying on free-form agent planning.
+
+Key v0.9.0 workflow controls:
+
+- Step states: `pending`, `running`, `success`, `failed`, `skipped`, `waiting_approval`.
+- DAG validation: `flow.validate(strict=True)` checks unknown dependencies, cycles, and isolated steps.
+- Step controls: `timeout`, `max_retry`, `cancel_if`, `fallback_agent`, `requires_approval`, and `approval_handler`.
+- Persistence: `JsonLightFlowStore` stores run records and checkpoints.
+- Recovery: `flow.resume(run_id)` continues incomplete runs; `flow.rerun_step(run_id, step_name)` reruns one step and downstream steps.
+- Inspection: `flow.get_run(run_id)` and `flow.list_runs()` expose workflow state for UIs.
+
+```python
+from LightAgent import JsonLightFlowStore, LightAgent, LightFlow
+
+store = JsonLightFlowStore(".lightflow_runs")
+draft_agent = LightAgent(model="gpt-4.1", api_key="your_api_key", base_url="your_base_url")
+review_agent = LightAgent(model="gpt-4.1", api_key="your_api_key", base_url="your_base_url")
+backup_agent = LightAgent(model="gpt-4.1", api_key="your_api_key", base_url="your_base_url")
+
+def approve(step, context):
+    return {"approved": True, "reason": "Approved by policy."}
+
+flow = (
+    LightFlow(store=store)
+    .step("draft", agent=draft_agent, timeout=30, max_retry=2)
+    .step(
+        "review",
+        agent=review_agent,
+        depends_on=["draft"],
+        requires_approval=True,
+        approval_handler=approve,
+        fallback_agent=backup_agent,
+    )
+)
+
+validation = flow.validate(strict=True)
+if validation["errors"]:
+    raise ValueError(validation["errors"])
+
+result = flow.run("Prepare a customer support summary.", run_id="case-001", trace=True)
+record = flow.get_run("case-001")
+```
+
+See [LightFlow](docs/lightflow.md) for complete workflow examples.
+
+### 11. Guardrails
+Guardrails are lightweight policy hooks around agent execution:
+
+- Input guardrails inspect the user query before model execution.
+- Tool guardrails inspect tool calls before execution.
+- Output guardrails inspect or redact final non-streaming output.
+
+```python
+from LightAgent import (
+    LightAgent,
+    high_risk_parameter_guardrail,
+    output_redaction_guardrail,
+    privacy_input_guardrail,
+    sensitive_tool_confirmation_guardrail,
+)
+
+agent = LightAgent(
+    model="gpt-4.1",
+    api_key="your_api_key",
+    base_url="your_base_url",
+    input_guardrails=[privacy_input_guardrail()],
+    tool_guardrails=[
+        sensitive_tool_confirmation_guardrail(["transfer_money"], approved=False),
+        high_risk_parameter_guardrail({
+            "amount": lambda value: value is not None and float(value) <= 1000,
+        }),
+    ],
+    output_guardrails=[output_redaction_guardrail()],
+)
+```
+
+Use default guardrail templates for privacy-sensitive input, sensitive tool confirmation, high-risk parameter validation, and output redaction. See [Guardrails](docs/guardrails.md).
+
+### 12. SharedMemoryPool
+`SharedMemoryPool` is an in-memory shared memory prototype for multi-agent experiments. It is append-first and keeps provenance metadata, making it useful for testing how multiple agents share information before adopting a durable vector or graph memory backend.
+
+Use it with `MemoryPolicy` so each agent retrieves only memory that matches the expected namespace, source, scope, trust, confidence, or agent name.
 
 ## Mainstream Agent Model Support
 
