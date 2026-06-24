@@ -39,6 +39,15 @@
 
 ---
 
+## ニュース
+- <img src="https://img.alicdn.com/imgextra/i3/O1CN01SFL0Gu26nrQBFKXFR_!!6000000007707-2-tps-500-500.png" alt="new" width="30" height="30"/>**[2026-06-24]** LightAgent v0.9.0：永続化 LightFlow checkpoint、resume/rerun、承認ノード、明確なステップ状態、trace メタデータ、Guardrails テンプレート、MemoryPolicy 制御、SharedMemoryPool プロトタイプを追加。
+- **[2026-06-14]** LightAgent v0.8.1：MemoryScope 規約と MemoryPolicy の出所・範囲・信頼度フィルタを追加。
+- **[2026-06-02]** LightAgent v0.8.0：決定的な複数ステップ workflow のための LightFlow を導入。
+
+過去のリリースノートは [GitHub Releases](https://github.com/wanxingai/LightAgent/releases) を参照してください。
+
+---
+
 ## ✨ 特徴
 
 - **軽量で効率的** 🚀：極限のシンプル設計で迅速なデプロイが可能、あらゆるスケールのアプリケーションシーンに適しています。（No LangChain, No LlamaIndex）100% Pythonで実装され、追加の依存関係は不要、コアコードはわずか1000行、完全にオープンソースです。
@@ -53,35 +62,55 @@
 - **Toolsツールジェネレーター** 🚀：APIドキュメントを[Toolsツールジェネレーター]に渡すだけで、数百のカスタマイズツールを短時間で自動生成し、効率を向上させ、創造的な可能性を解放します。
 - **エージェントの自己学習** 🧠️：各エージェントは自身のシーンメモリ機能を持ち、ユーザーの対話から自己学習する能力を備えています。
 - **適応型ツールメカニズム** 🛠️：無限のツールを追加可能、大量のツールの中から大モデルが候補ツールの集合を選び、無関係なツールをフィルタリングした後、文脈を再び大モデルに提出することによって、トークン消費を大幅に削減できます。
+- **ワークフロー編成** 🔁：LightFlow は明示的な依存関係、出力受け渡し、リトライ、checkpoint、resume/rerun、承認ノード、fallback agent、追跡可能な実行を備えた決定的 workflow を構成します。
+- **共有メモリプロトタイプ** 🧠：SharedMemoryPool は出所メタデータ、スコープ付き検索、MemoryPolicy 互換結果を備えたインメモリ共有メモリを提供します。
+- **Guardrails テンプレート** 🛡️：入力、ツール、出力の再利用可能な安全ポリシーにより、個人情報の遮断、機密ツールの確認、高リスク引数の検証、出力のマスキングを行えます。
 
+## 🧭 アーキテクチャ概要
+
+| レイヤー | 主な API | 用途 |
+| --- | --- | --- |
+| 単一 Agent 実行 | `LightAgent` | モデル呼び出し、ツール、メモリ、ストリーミング、trace、guardrails。 |
+| マルチ Agent ルーティング | `LightSwarm` | 専門 Agent 間の役割ベース委譲。 |
+| 決定的 workflow | `LightFlow` | DAG、リトライ、checkpoint、承認、resume、rerun。 |
+| ツールと統合 | `tools`、`ToolRegistry`、MCP | Python ツール、生成ツール、実行時ロード、MCP サーバー。 |
+| メモリ境界 | `MemoryPolicy`、`MemoryScope` | テナント分離、出所、信頼、期限、書き込み許可。 |
+| 共有メモリ | `SharedMemoryPool` | Agent 間の共有メモリ実験。 |
+| 安全制御 | `input_guardrails`、`tool_guardrails`、`output_guardrails` | プライバシー、ツール確認、リスク引数、出力マスキング。 |
+| 可観測性 | `trace=True`、`agent.export_trace()` | 実行、モデル、ツール、エラー、workflow の構造化イベント。 |
+
+## 主要な利用パターン
+
+LightAgent はデフォルトの呼び出しを簡単に保ちつつ、本番向け制御を段階的に追加できます。
+
+| パターン | 最小呼び出し | 説明 |
+| --- | --- | --- |
+| 基本応答 | `agent.run(query)` | デフォルトで文字列を返します。 |
+| ストリーミング | `agent.run(query, stream=True)` | OpenAI 互換 chunk を返します。 |
+| 構造化結果 | `agent.run(query, result_format="object")` | 内容とメタデータを返します。 |
+| Trace | `agent.run(query, trace=True)` | デフォルトの文字列返却を変えずにイベントを記録します。 |
+| ユーザーメモリ | `agent.run(query, user_id="alice")` | 設定済みメモリ backend と MemoryPolicy を使います。 |
+| ツール | `LightAgent(..., tools=[fn])` | 関数は `tool_info` を持つべきです。 |
+| Guardrails | `LightAgent(..., input_guardrails=[...])` | 入力、ツール、出力ポリシーを追加します。 |
+| Workflow | `LightFlow().step(...).run(query)` | 決定的な多段階実行に使います。 |
+
+## 📋 ドキュメント
+
+- インストール、モデル、ツール、メモリ、MCP、Skills、ストリーミング、LightSwarm については [FAQ](docs/FAQ.md) を参照してください。
+- 決定的 workflow、checkpoint、resume/rerun、承認、fallback agent、ステップ状態については [LightFlow](docs/lightflow.md) を参照してください。
+- カスタムツール、ToolRegistry、ToolLoader、AsyncToolDispatcher、MCP については [Tools Guide](docs/tools.md) を参照してください。
+- 共有長期メモリまたはグラフメモリについては [Memory Security Guidance](docs/memory_security.md) を参照してください。
+- SharedMemoryPool については [SharedMemoryPool](docs/shared_memory_pool.md) を参照してください。
+- メモリ書き込みの受け入れ制御と期限については [Memory Admission And Mutation Controls](docs/memory_admission.md) を参照してください。
+- 入力、ツール、出力の安全ポリシーについては [Guardrails](docs/guardrails.md) を参照してください。
+- OpenRouter、ローカルモデル、OpenAI 互換プロバイダーについては [Model Provider Configuration](docs/model_providers.md) を参照してください。
+- 構造化 trace については [Trace Observability](docs/tracing.md) を参照してください。
 
 ## 🚧 近日公開
 
 - **エージェント協調通信** 🛠️：エージェント間で情報を共有し、メッセージを伝達することができ、複雑な情報通信とタスク協調を実現します。
 - **エージェント評価** 📊：エージェントの評価ツールを内蔵しており、構築したエージェントを評価および最適化し、ビジネスシーンに直結し、知能レベルを継続的に向上させます。
 
-## 内蔵「思考の流れ」
-（Thought Flow）方法は、システム的かつ構造的で柔軟な思考過程により、複雑なシーンの課題に効果的に対応できます。
-以下は具体的な実施手順です：
-```text
-問題の定義：コアな問題と目標を明確にする。
-
-情報収集：関連する情報とデータを系統的に収集する。
-
-問題分解：複雑な問題を複数のサブ問題またはモジュールに分解する。
-
-多次元分析：各サブ問題を異なる角度とレベルから分析する。
-
-関連付け：サブ問題間の関連性と依存関係を特定する。
-
-解決策の生成：各サブ問題に対して可能な解決策を提案する。
-
-評価と選択：各解決策の実現可能性と影響を評価し、最適な解決策を選択する。
-
-実施とフィードバック：選定した解決策を実施し、フィードバックに基づいて調整する。
-```
-
----
 ## 🌟 なぜLightAgentを選ぶのか？
 
 - **オープンソースで無料** 💖：完全にオープンソース、コミュニティ主導で継続的に更新されています。貢献を歓迎します！  
@@ -119,6 +148,78 @@ agent = LightAgent(model="gpt-4o-mini", api_key="your_api_key", base_url="your_b
 response = agent.run("こんにちは、あなたは誰ですか？")
 print(response)
 ```
+
+### 実行 Trace を確認する（v0.7.0）
+
+Trace は opt-in で、`agent.run()` のデフォルト動作との互換性を保ちます。
+
+```python
+from LightAgent import LightAgent
+
+agent = LightAgent(model="gpt-4.1", api_key="your_api_key", base_url="your_base_url")
+
+result = agent.run("Hello, who are you?", result_format="object", trace=True)
+print(result.content)
+print(result.trace_id)
+print(result.trace)
+
+for event in agent.export_trace():
+    print(event["type"], event["data"])
+```
+
+### LightFlow 実行を checkpoint する（v0.9.0）
+
+`LightFlow` は workflow checkpoint を永続化し、失敗した実行を最初からではなく途中から再開できます。
+
+```python
+from LightAgent import JsonLightFlowStore, LightAgent, LightFlow
+
+research_agent = LightAgent(model="gpt-4.1", api_key="your_api_key", base_url="your_base_url")
+writer_agent = LightAgent(model="gpt-4.1", api_key="your_api_key", base_url="your_base_url")
+
+store = JsonLightFlowStore(".lightflow_runs")
+flow = (
+    LightFlow(store=store)
+    .step("research", agent=research_agent, timeout=30)
+    .step("write", agent=writer_agent, depends_on=["research"], max_retry=2)
+)
+
+result = flow.run("Analyze this company", run_id="report-001", trace=True)
+
+if not result.success:
+    result = flow.resume("report-001")
+
+print(result.status)
+print(flow.get_run("report-001")["steps"])
+```
+
+### SharedMemoryPool を使う（v0.9.0）
+
+`SharedMemoryPool` はマルチ Agent 共有メモリ実験向けの軽量インメモリプロトタイプです。
+
+```python
+from LightAgent import LightAgent, MemoryPolicy, SharedMemoryPool
+
+shared_memory = SharedMemoryPool(agent_name="writer")
+
+agent = LightAgent(
+    name="writer",
+    model="gpt-4.1",
+    api_key="your_api_key",
+    base_url="your_base_url",
+    memory=shared_memory,
+    memory_policy=MemoryPolicy(
+        namespace="tenant-a",
+        allow_unattributed_results=False,
+        allowed_sources=("user",),
+        allowed_scopes=("user",),
+    ),
+)
+
+agent.run("Remember that I prefer concise reports.", user_id="alice")
+print(shared_memory.list_records(user_id="tenant-a:alice"))
+```
+
 
 ### systemプロンプトを使ってモデルの自己認識を設定する
 
@@ -174,474 +275,80 @@ print(response)
 
 ## 機能詳細
 
-### 1. 分解可能な全自動メモリモジュール（`mem0`）
-LightAgentは外部拡張の`mem0`メモリモジュールをサポートし、文脈メモリと履歴管理を自動的に行い、開発者がメモリの追加や検索を手動でトリガーする必要はありません。メモリモジュールを通じて、エージェントは複数回の対話で文脈の一貫性を維持できます。
+README には中核的な利用モデルを残し、長い例、アダプタ設定、本番運用の詳細は専用ドキュメントに置いています。
 
-```python
-# メモリモジュールの有効化
+### 1. 分離可能なメモリモジュール（`mem0`）
+LightAgent は `store(data, user_id)` と `retrieve(query, user_id)` を持つ任意のメモリ backend を受け付けます。会話分離には `user_id`、共有メモリには `MemoryPolicy` を使います。
 
-# またはカスタムメモリモジュールを使用します。以下はmem0の例です https://github.com/mem0ai/mem0/
-from mem0 import Memory
-from LightAgent import LightAgent
-import os
-from loguru import logger
-
-class CustomMemory:
-    def __init__(self):
-        self.memories = []
-        os.environ["OPENAI_API_KEY"] = "your_api_key"
-        os.environ["OPENAI_BASE_URL"] = "your_base_url"
-        # Mem0の初期化
-        config = {
-            "version": "v1.1"
-        }
-        # mem0でqdrantをベクターデータベースとして使用する場合、configを次のコードに変更します
-        # config = {
-        #     "vector_store": {
-        #         "provider": "qdrant",
-        #         "config": {
-        #             "host": "localhost",
-        #             "port": 6333,
-        #         }
-        #     },
-        #     "version": "v1.1"
-        # }
-        self.m = Memory.from_config(config_dict=config)
-
-    def store(self, data: str, user_id):
-        """メモリの保存 開発者はストレージメソッドの内部実装を変更できます。現在の例はmem0のメモリ追加メソッドです"""
-        result = self.m.add(data, user_id=user_id)
-        return result
-
-    def retrieve(self, query: str, user_id):
-        """関連メモリの検索 開発者は検索メソッドの内部実装を変更できます。現在の例はmem0のメモリ検索メソッドです"""
-        result = self.m.search(query, user_id=user_id)
-        return result
-
-agent = LightAgent(
-        role="あなたはLightAgentです、ユーザーが多くのツールを使用するのを助ける役立つアシスタントです。",  # systemロールの説明
-        model="deepseek-chat",  # 対応モデル：openai、chatglm、deepseek、qwenなど
-        api_key="your_api_key",  # あなたの大モデルサービスプロバイダAPIキーに置き換えます
-        base_url="your_base_url",  # あなたの大モデルサービスプロバイダapi urlに置き換えます
-        memory=CustomMemory(),  # メモリ機能を有効化
-        tree_of_thought=False,  # 思考連鎖を有効化
-    )
-
-# メモリ付きテスト & ツールを追加する必要がある場合は、エージェントにツールを追加してメモリ付きツール呼び出しを実現します
-
-user_id = "user_01"
-logger.info("\n=========== 次の会話 ===========")
-query = "三亜には面白い観光スポットがありますか？友達がたくさん三亜へ旅行していたので、私も遊びに行きたいです"
-print(agent.run(query, stream=False, user_id=user_id))
-logger.info("\n=========== 次の会話 ===========")
-query = "私はどこに旅行したいですか？"
-print(agent.run(query, stream=False, user_id=user_id))
-```
-
-出力は以下のようになります：
-```python
-=========== 次の会話 ===========
-2025-01-01 21:55:15.886 | INFO     | __main__:run_conversation:115 - 
-問題を考え始めました: 三亜には面白い観光スポットがありますか？友達がたくさん三亜へ旅行していたので、私も遊びに行きたいです
-2025-01-01 21:55:28.676 | INFO     | __main__:run_conversation:118 - 最終返信: 
-三亜は中国海南省の人気旅行都市で、美しいビーチ、熱帯気候、豊富な観光資源で知られています。以下は三亜で訪れる価値のある観光スポットです：
-
-1. **亚龙湾**：東のハワイとも称され、長いビーチと澄んだ海水があり、泳ぐのに最適な場所です。
-
-2. **天涯海角**：壮大な海の景色とロマンチックな伝説に惹かれる著名な文化的スポットです。ここにある大きな石には「天涯」と「海角」という文字が彫られ、永遠の愛を象徴しています。
-
-3. **南山文化観光区**：高さ108メートルの南山海上観音像があり、世界で最も高い海の観音像です。ここでは仏教文化を体験し、寺院や庭園を訪れることができます。
-
-4. **蜈支洲島**：原初の自然の風景と豊富な水中活動で知られる小島です。ここではダイビング、シュノーケリング、海釣りなどが楽しめます。
-
-5. **大東海**：三亜市内にあるビーチで、便利な交通と豊かなナイトライフが人気です。
-
-6. **三亜湾**：22キロの長さを誇るビーチで、夕日を見るのに最適な場所です。比較的静かなビーチで、穏やかに過ごしたい方に向いています。
-
-7. **呀诺达熱帯雨林文化観光区**：熱帯雨林の公園で、熱帯雨林の自然を体験し、さまざまな冒険活動に参加できます。
-
-8. **鹿回頭公園**：山の頂に位置する公園で、三亜市内と三亜湾の美しい景色を眺められます。ここには鹿に関する美しい伝説もあります。
-
-9. **西島**：比較的原始的な小島で、静かなビーチと豊富な海洋生物が観光客を惹きつけます。
-
-10. **三亜千古情**：大規模な文化テーマパークで、パフォーマンスや展示を通じて海南の歴史と文化を紹介しています。
-
-上記の観光スポットに加え、三亜には他にも探索すべき場所が多数あります。熱帯植物園や海鮮市場などもおすすめで、特に新鮮な海鮮や熱帯フルーツは見逃せません。旅行を計画する際は、事前に天候予報と観光地の開園時間を確認し、楽しい旅行体験を確保することをお勧めします。
-2025-01-01 21:55:28.676 | INFO     | __main__:<module>:191 - 
-=========== 次の会話 ===========
-2025-01-01 21:55:28.676 | INFO     | __main__:run_conversation:115 - 
-問題を考え始めました: 私はどこに旅行したいですか？
-関連するメモリを発見:
-ユーザーは三亜に旅行したい
-ユーザーの友人は三亜に旅行したことがある。
-2025-01-01 21:55:38.797 | INFO     | __main__:run_conversation:118 - 最終返信: 
-ユーザーが以前言及した情報に基づくと、ユーザーの友人は既に三亜（Sanya）を訪れており、ユーザー自身も三亜に興味を示しています。そのため、三亜はユーザーにとって適した旅行先かもしれません。以下は三亜についての旅行情報です：
-
-### 三亜観光のおすすめ：
-1. **亚龙湾**：美しいビーチと澄んだ海水があり、泳ぎや日光浴が楽しめる場所です。
-2. **天涯海角**：三亜の象徴的な観光スポットで、独特の岩とロマンチックな伝説が訪問者を引きつけます。
-3. **南山文化観光区**：有名な南山寺と108メートルの海上観音像があり、仏教文化に大きな影響を与えています。
-4. **蜈支洲島**：ダイビングや海上のアクティビティに最適で、島には豊富な海洋生物とサンゴ礁があります。 
-5. **大東海**：三亜市内のビーチで、交通が便利で家族やカップルに人気です。
-
-### その他のおすすめ：
-もしユーザーが三亜について既に知っているか、他の目的地を探求したい場合は、以下の他の人気旅行地を提案します：
-1. **桂林**：独特のカルスト地形と漓江の風景で知られています。
-2. **麗江**：古都と玉龍雪山が主要な観光スポットで、歴史文化と自然風景を好む旅行者に適しています。
-3. **張家界**：特異な石柱と自然景観で有名で、《アバター》映画の撮影地の一つです。
-
-ユーザーは自身の興味と時間に基づいて適した旅行先を選ぶことができます。詳細な情報が必要な場合やスケジュールの計画を手伝ってほしい場合は、いつでもお知らせください！
-```
-
-### 2. ツール統合（無限のカスタムツールサポート）
-パーソナライズされたツールカスタマイズ（`Tools`）を取り入れ、`tools`メソッドを使って専用ツールを簡単に統合できます。これらのツールは任意のPython関数であり、パラメータ型の注釈をサポートしているため、柔軟性と精度が保証されます。また、AI駆動のツール生成器も提供し、ツールを自動生成してクリエイティブを解放します。
-
-```python
-
-import requests
-from LightAgent import LightAgent
-
-# ツールを定義
-def get_weather(
-        city_name: str
-) -> str:
-    """
-    市の天気情報を取得
-    :param city_name: 市名
-    :return: 天気情報
-    """
-    if not isinstance(city_name, str):
-        raise TypeError("市名は文字列でなければなりません")
-
-    key_selection = {
-        "current_condition": ["temp_C", "FeelsLikeC", "humidity", "weatherDesc", "observation_time"],
-    }
-    try:
-        resp = requests.get(f"https://wttr.in/{city_name}?format=j1")
-        resp.raise_for_status()
-        resp = resp.json()
-        ret = {k: {_v: resp[k][0][_v] for _v in v} for k, v in key_selection.items()}
-    except:
-        import traceback
-        ret = "天気データの取得中にエラーが発生しました！\n" + traceback.format_exc()
-
-    return str(ret)
-
-# 関数内部でツール情報を定義
-get_weather.tool_info = {
-    "tool_name": "get_weather",
-    "tool_description": "指定した市の現在の天気情報を取得",
-    "tool_params": [
-        {"name": "city_name", "description": "市名", "type": "string", "required": True},
-    ]
-}
-
-def search_news(
-        keyword: str,
-        max_results: int = 5
-) -> str:
-    """
-    キーワードに基づいてニュースを検索
-    :param keyword: 検索キーワード
-    :param max_results: 最大結果数、デフォルトは5
-    :return: ニュース検索結果
-    """
-    results = f"{keyword}を検索したところ、{max_results}件の関連情報が見つかりました"
-    return str(results)
-
-# 関数内部でツール情報を定義
-search_news.tool_info = {
-    "tool_name": "search_news",
-    "tool_description": "キーワードに基づいてニュースを検索",
-    "tool_params": [
-        {"name": "keyword", "description": "検索キーワード", "type": "string", "required": True},
-        {"name": "max_results", "description": "返される最大結果数", "type": "int", "required": False},
-    ]
-}
-
-def get_user_info(
-        user_id: str
-) -> str:
-    """
-    ユーザー情報を取得
-    :param user_id: ユーザーID
-    :return: ユーザー情報
-    """
-    if not isinstance(user_id, str):
-        raise TypeError("ユーザーIDは文字列でなければなりません")
-
-    try:
-        # ユーザー情報APIを使用すると仮定し、サンプルURLを用います
-        url = f"https://api.example.com/users/{user_id}"
-        response = requests.get(url)
-        response.raise_for_status()
-        user_data = response.json()
-        user_info = {
-            "name": user_data.get("name"),
-            "email": user_data.get("email"),
-            "created_at": user_data.get("created_at")
-        }
-    except:
-        import traceback
-        user_info = "ユーザーデータの取得中にエラーが発生しました！\n" + traceback.format_exc()
-
-    return str(user_info)
-
-# 関数内部でツール情報を定義
-get_user_info.tool_info = {
-    "tool_name": "get_user_info",
-    "tool_description": "指定したユーザーの情報を取得",
-    "tool_params": [
-        {"name": "user_id", "description": "ユーザーID", "type": "string", "required": True},
-    ]
-}
-
-# カスタムツール
-tools = [get_weather, search_news, get_user_info]  # すべてのツールを含む
-
-# エージェントの初期化
-# あなたのモデルパラメータmodel、api_key、base_urlに置き換えます
-agent = LightAgent(model="qwen-turbo-2024-11-01", api_key="your_api_key", base_url="your_base_url", tools=tools)
-
-query = "現在の三亜の天気はどうなっていますか？"
-response = agent.run(query, stream=False)  # エージェントを使ってクエリを実行
-print(response)
-```
+### 2. ツール統合
+`tool_info` メタデータを持つ Python 関数で Agent に制御された能力を公開します。ToolRegistry、ToolLoader、AsyncToolDispatcher、MCP は [Tools Guide](docs/tools.md) を参照してください。
 
 ### 3. ツール生成器
-ツール生成器は、ユーザーが提供したテキスト記述に基づいてツールコードを自動生成し、指定されたディレクトリに保存するモジュールです。この機能は、API呼び出しツールやデータ処理ツールなど、迅速に生成する必要があるシーンで特に役立ちます。
-
-使用例
-
-以下はツール生成器を使用するサンプルコードです：
-
-```python
-import json
-import os
-import sys
-from LightAgent import LightAgent
-
-# LightAgentを初期化
-agent = LightAgent(
-    name="エージェントA",  # エージェント名
-    instructions="あなたは便利なエージェントです。",  # ロールの説明
-    role="あなたはツール生成器です。ユーザーが提供するテキスト記述に基づいて相応しいツールコードを自動生成し、それを指定されたディレクトリに保存する作業を行います。生成されたコードの正確性と有用性を確認してください。",
-    model="deepseek-chat",  # あなたのモデルに置き換えます。対応するモデル：openai、chatglm、deepseek、qwenなど
-    api_key="your_api_key",  # あなたのAPIキーに置き換えます
-    base_url="your_base_url",  # あなたのAPI URLに置き換えます
-)
-
-# サンプルテキスト記述
-text = """
-新浪株式インタフェースは、株式市場データの取得機能を提供し、株価、リアルタイム取引データ、K線チャートデータなどを含みます。
-
-新浪株式インタフェースの機能紹介
-1、株式の市場データを取得：
-リアルタイムの相場データ: リアルタイム相場APIを使用すると、株式の最新の価格、取引量、上昇幅などの情報を取得できます。
-分単位の相場データ: 分単位相場APIを使用すると、株式の逐分取引データ、オープン価格、クローズ価格、高価格、低価格などを取得できます。
-
-2、株式の歴史的K線チャートデータの取得：
-K線チャートデータ: K線チャートAPIを通じて、株式の過去の取引データを取得できます。オープン価格、クローズ価格、高価格、低価格、取引量などを含みます。必要に応じて、異なる時間周期および移動平均周期を選択できます。
-調整後のデータ: 調整後のK線チャートデータを取得できます。前調整と後調整の選択が可能で、株式の価格変動の分析において、より正確に行えます。
-
-新浪株式インタフェースからデータを取得するサンプル
-1、株式の市場データを取得：
-APIアドレス：http://hq.sinajs.cn/list=[株式コード]
-サンプル：株式コードが"sh600519"（貴州茅台）のリアルタイムの相場データを取得したい場合、次のAPIアドレスを使用します：http://hq.sinajs.cn/list=sh600519
-上記のAPIアドレスにHTTP GETリクエストを送信することで、その株式のリアルタイムの相場データが入ったレスポンスを受け取ります。
-
-2、株式の歴史的K線チャートデータを取得：
-APIアドレス：http://money.finance.sina.com.cn/quotes_service/api/json_v2.php/CN_MarketData.getKLineData?symbol=[株式コード]&scale=[時間周期]&ma=[移動平均周期]&datalen=[データ長]
-サンプル：株式コードが"sh600519"（貴州茅台）のデイリーK線チャートデータを取得するには、以下のAPIアドレスを使用します：http://money.finance.sina.com.cn/quotes_service/api/json_v2.php/CN_MarketData.getKLineData?symbol=sh600519&scale=240&ma=no&datalen=1023
-上記のAPIアドレスにHTTP GETリクエストを送信することで、その株式の歴史的K線チャートデータが入ったレスポンスを受け取ります。
-"""
-
-# toolsディレクトリのパスを構築
-project_root = os.path.dirname(os.path.abspath(__file__))
-tools_directory = os.path.join(project_root, "tools")
-
-# toolsディレクトリが存在しない場合は作成
-if not os.path.exists(tools_directory):
-    os.makedirs(tools_directory)
-
-print(f"Toolsディレクトリが作成されました: {tools_directory}")
-
-# ツールコードを生成するためにエージェントを使用
-agent.create_tool(text, tools_directory=tools_directory)
-```
-実行後、toolsディレクトリにget_stock_kline_data.pyとget_stock_realtime_data.pyの2つのファイルが生成されます。
+`agent.create_tool()` は API 文書や自然言語説明からツールコードを生成できます。本番前にレビューとテストを行ってください。
 
 ### 4. 思考ツリー（ToT）
-内蔵の思考ツリー機能は、複雑なタスクの分解と多段階推論をサポートします。思考ツリーを通じて、エージェントは複雑なタスクをより良く処理できます。
+明示的な計画、反省、ツール選択が必要な場合は `tree_of_thought=True` を有効にします。
+
+### 5. マルチ Agent 協調
+`LightSwarm` は専門 Agent 間で作業を委譲します。役割を狭く保ち、メモリ書き込みをポリシーで制御してください。
+
+### 6. ストリーミング API
+`agent.run(query, stream=True)` はチャット UI や長文出力向けに OpenAI 互換 chunk を返します。
+
+### 7. Agent 自己学習
+自己学習は `MemoryPolicy` と組み合わせ、個人情報、期限切れ、無関係な内容を避けるべきです。
+
+### 8. Trace と Langfuse
+LightAgent は組み込み trace または Langfuse で実行を観測できます。
+
+### 9. Agent 評価
+Agent 評価は業務シナリオに対する振る舞いを測定する予定です。
+
+### 10. LightFlow Workflow
+`LightFlow` は既知の手順で実行するための決定的 workflow 層です。
+
+- ステップ状態：`pending`、`running`、`success`、`failed`、`skipped`、`waiting_approval`。
+- DAG 検証：`flow.validate(strict=True)`。
+- ステップ制御：`timeout`、`max_retry`、`cancel_if`、`fallback_agent`、`requires_approval`、`approval_handler`。
+- 永続化と復旧：`JsonLightFlowStore`、`flow.resume(run_id)`、`flow.rerun_step(run_id, step_name)`、`flow.get_run(run_id)`、`flow.list_runs()`。
+
+[LightFlow](docs/lightflow.md) を参照してください。
+
+### 11. Guardrails
+Guardrails は入力、ツール呼び出し、出力を検査する軽量 hook です。
 
 ```python
-# 思考の木を有効にする
+from LightAgent import (
+    LightAgent,
+    high_risk_parameter_guardrail,
+    output_redaction_guardrail,
+    privacy_input_guardrail,
+    sensitive_tool_confirmation_guardrail,
+)
+
 agent = LightAgent(
-    model="gpt-4.1", 
-    api_key="your_api_key", 
-    base_url= "your_base_url", 
-    tree_of_thought=True,  # 思考の木を有効にする
-    tot_model="gpt-4o", 
-    tot_api_key="sk-uXx0H0B***17778F1",  # あなたの deepseek r1 API Key に置き換えてください
-    tot_base_url="https://api.openai.com/v1",  # api url
-    filter_tools=False,  # 自適応ツールメカニズムを無効にする
+    model="gpt-4.1",
+    api_key="your_api_key",
+    base_url="your_base_url",
+    input_guardrails=[privacy_input_guardrail()],
+    tool_guardrails=[
+        sensitive_tool_confirmation_guardrail(["transfer_money"], approved=False),
+        high_risk_parameter_guardrail({"amount": lambda value: float(value) <= 1000}),
+    ],
+    output_guardrails=[output_redaction_guardrail()],
 )
 ```
-ToTを有効にすると、デフォルトで自適応ツールメカニズムが有効になります。無効にする必要がある場合は、LightAgentの初期化時にパラメータfilter_tools=Falseを追加してください。
 
-### 5. マルチエージェント協調
-Swarmのようなマルチエージェント協調作業をサポートし、タスク処理の効率を向上させます。複数のエージェントが協力して複雑なタスクを完了することができます。
+[Guardrails](docs/guardrails.md) を参照してください。
 
-```python
-from LightAgent import LightAgent, LightSwarm
-# 環境変数OPENAI_API_KEYとOPENAI_BASE_URLを設定
-# モデルはデフォルトでgpt-4o-miniを使用
-
-# LightSwarmインスタンスを作成
-light_swarm = LightSwarm()
-
-# 複数のエージェントを作成
-agent_a = LightAgent(
-    name="エージェントA",
-    instructions="私はフロントデスク担当者です",
-    role="フロントデスク担当者、訪問者を迎え入れ、基本的な情報を提供する役割を持ちます。毎回の回答前に自己紹介を行い、顧客のビジネス問題に直接答えることはできません。他の役割へ案内することしかできません。もし現在は質問を解決できない場合は、今はお手伝いできませんとお答えください。",
-)
-
-agent_b = LightAgent(
-    name="エージェントB",
-    instructions="私は会議室の予約担当です",
-    role="会議室予約管理者、1号、2号、3号の会議室の予約、キャンセル、照会を担当します。毎回の回答前に自己紹介を行い、非常に丁寧に質問にお答えします。",
-)
-
-agent_c = LightAgent(
-    name="エージェントC",
-    instructions="私は技術サポートスペシャリストです、技術問題を扱います。毎回の回答前に自己紹介を行い、ユーザーの技術問題に対してできる限り詳しくお答えします。問題が私の能力を超えている場合は、ユーザーをより上位の技術サポートに案内します。",
-    role="技術サポートスペシャリスト、ハードウェア、ソフトウェア、ネットワークなどに関する技術問題の相談と解決を担当します。",
-)
-
-agent_d = LightAgent(
-    name="エージェントD",
-    instructions="私は人事担当者です、人事に関連する問題を扱います。毎回の回答前に自己紹介を行い、ユーザーの質問にできる限り詳細にお答えします。問題がさらに進む必要がある場合は、人事部門に連絡するようユーザーを案内します。",
-    role="人事担当者、従業員の入職、退職、休暇、福利厚生などの業務の相談と処理を担当します。",
-)
-
-# エージェントをLightSwarmインスタンスに自動登録します
-light_swarm.register_agent(agent_a, agent_b, agent_c, agent_d)
-
-# エージェントAを実行
-res = light_swarm.run(agent=agent_a, query="こんにちは、私はアリスです、王小明が入職を済ませたかどうか確認したいです", stream=False)
-print(res)
-```
-出力は以下のようになります：
-```python
-こんにちは、私は人事担当者エージェントDです。王小明が入職を済ませたかどうかの質問については、システム記録を確認する必要があります。しばらくお待ちください。
-（システム記録を確認中...）
-私たちの記録によると、王小明は2025年1月5日に入職手続きを完了しました。すべての必要書類に署名し、社員番号とオフィス位置が割り当てられています。さらなる詳細情報が必要な場合や他に質問があれば、人事部門にご連絡ください。私たちはいつでもお手伝いする準備ができています。
-```
-
-### 6. ストリームAPI
-OpenAIストリーム形式のAPIサービス出力をサポートし、主要なチャットフレームワークとシームレスに接続できます。
-
-```python
-# ストリーム出力を有効化
-response = agent.run("AIについての文章を生成してください", stream=True)
-for chunk in response:
-    print(chunk)
-```
-
-### 7. エージェント評価（近日公開）
-内蔵のエージェント評価ツールにより、エージェントのパフォーマンスを評価し最適化することが容易になります。
+### 12. SharedMemoryPool
+`SharedMemoryPool` はマルチ Agent 共有メモリ実験用のインメモリプロトタイプで、`MemoryPolicy` と併用します。
 
 ## 主流エージェントモデルサポート
-様々な大モデルとの互換性があり、OpenAI、智谱ChatGLM、DeepSeek、Qwenシリーズの大モデルを含みます。
 
-#### 現在テスト済みの大モデル
-OpenAI Series
- - gpt-3.5-turbo
- - gpt-4
- - gpt-4o
- - gpt-4o-mini
- - gpt-4.1
- - gpt-4.1-mini
- - gpt-4.1-nano
- - and GPT-5、GPT-5.1、GPT-5.2、GPT-5.3、GPT-5.4 
+LightAgent は OpenAI 互換 chat completion endpoint に対応します：OpenAI、OpenRouter、Zhipu ChatGLM、DeepSeek、Qwen、StepFun、Moonshot/Kimi、MiniMax、vLLM、llama.cpp、Ollama、自ホスト gateway。
 
-ChatGLM
- - GLM-5.1
- - GLM-4.7
- - GLM-4.5
- - GLM-4.5-Air
- - GLM-4.5-X
- - GLM-4.5-AirX
- - GLM-4.5-Flash
- - GLM-4-Plus
- - GLM-4-Air-0111
- - GLM-4-Flash
- - GLM-4-FlashX
- - GLM-4-alltools
- - GLM-4
- - GLM-3-Turbo
- - ChatGLM3-6B
- - GLM-4-9B-Chat
-
-DeepSeek Series
- - DeepSeek-r1
- - DeepSeek-v3
- - DeepSeek-v4
-
-stepfun
- - step-1-8k
- - step-1-32k
- - step-1-128k (issues with multi-tool calls)
- - step-1-256k (issues with multi-tool calls)
- - step-1-flash (recommended, cost-effective)
- - step-2-16k (issues with multi-tool calls)
- - step-3.5-flash
-
-Qwen Series
- - qwen-plus-2024-11-25
- - qwen-plus-2024-11-27
- - qwen-plus-1220
- - qwen-plus
- - qwen-plus-latest 
- - qwen2.5-72b-instruct
- - qwen2.5-32b-instruct
- - qwen2.5-14b-instruct
- - qwen2.5-7b-instruct 
- - qwen-turbo-latest
- - qwen-turbo-2024-11-01
- - qwen-turbo
- - qwen-long
- - qwq-32b
- - qwen3-0.6b
- - qwen3-1.7b
- - qwen3-4b
- - qwen3-8b
- - qwen3-14b
- - qwen3-32b
- - qwen3-30b-a3b
- - qwen3-235b-a22b
- - Qwen3-30B-A3B-Thinking-2507
- - Qwen3-30B-A3B-Instruct-2507
- - Qwen3.5
- - Qwen3.6
-
-
-MiniMax Series
-- MiniMax-M2.7
-- MiniMax-M2.5
-- MiniMax-M2.1
-- MiniMax-M2
-
-
-Moonshot Series (Kimi)
-- moonshot-v1-8k
-- moonshot-v1-32k
-- moonshot-v1-128k
-- Kimi K2.6
-
-
----
+For provider-specific parameters, base URLs, local model setup, and troubleshooting, see [Model Provider Configuration](docs/model_providers.md).
 
 ## 使用シーン
 

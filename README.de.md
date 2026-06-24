@@ -37,6 +37,15 @@
 
 ---
 
+## Neuigkeiten
+- <img src="https://img.alicdn.com/imgextra/i3/O1CN01SFL0Gu26nrQBFKXFR_!!6000000007707-2-tps-500-500.png" alt="new" width="30" height="30"/>**[2026-06-24]** LightAgent v0.9.0: ergänzt persistente LightFlow-Checkpoints, Resume/Rerun, Freigabeknoten, klarere Schrittzustände, Trace-Metadaten, Guardrails-Vorlagen, MemoryPolicy-Kontrollen und den SharedMemoryPool-Prototyp.
+- **[2026-06-14]** LightAgent v0.8.1: ergänzt MemoryScope-Konventionen und MemoryPolicy-Filter nach Herkunft, Umfang und Vertrauen.
+- **[2026-06-02]** LightAgent v0.8.0: führt LightFlow für deterministische mehrstufige Workflows ein.
+
+Ältere Hinweise finden Sie in den [GitHub Releases](https://github.com/wanxingai/LightAgent/releases).
+
+---
+
 ## ✨ Eigenschaften
 
 - **Leicht und effizient** 🚀: Minimalistisches Design, schnelle Bereitstellung, geeignet für verschiedene Anwendungsfälle. (Kein LangChain, Kein LlamaIndex) 100% Python-Implementierung, keine zusätzlichen Abhängigkeiten, der Kerncode umfasst nur 1000 Zeilen und ist vollständig Open Source. 
@@ -51,7 +60,49 @@
 - **Werkzeuggenerator** 🚀: Geben Sie einfach Ihre API-Dokumentation an den [Werkzeuggenerator] weiter, und er wird automatisch Ihre maßgeschneiderten Werkzeuge erstellen, sodass Sie in nur einer Stunde Hunderte von personalisierten benutzerdefinierten Werkzeugen schnell erstellen können, um die Effizienz zu steigern und Ihr kreatives Potenzial freizusetzen.
 - **Selbstlernender Agent** 🧠️: Jeder Agent hat die Fähigkeit, seine eigene Szenarienerinnerung zu entwickeln und aus den Gesprächen mit Benutzern zu lernen.
 - **Adaptive Werkzeugmechanismen** 🛠️: Unterstützung für die Hinzufügung unbegrenzter Werkzeuge, Auswahl von Kandidatenwerkzeugen aus Tausenden von Werkzeugen durch das große Modell, Filtern irrelevanter Werkzeuge und anschließende Einreichung des Kontexts an das große Modell, was den Token-Verbrauch erheblich senken kann.
+- **Workflow-Orchestrierung** 🔁: LightFlow verkettet Agenten zu deterministischen Workflows mit expliziten Abhängigkeiten, Ausgabeübergabe, Wiederholungen, Checkpoints, Resume/Rerun, Freigaben, Fallback-Agenten und nachvollziehbarer Ausführung.
+- **Shared-Memory-Prototyp** 🧠: SharedMemoryPool bietet gemeinsam genutzten In-Memory-Speicher mit Herkunftsmetadaten, bereichsbezogener Suche und MemoryPolicy-kompatiblen Ergebnissen.
+- **Guardrails-Vorlagen** 🛡️: Wiederverwendbare Eingabe-, Werkzeug- und Ausgabe-Regeln blockieren private Daten, bestätigen sensible Tools, prüfen riskante Parameter und redigieren Ausgaben.
 
+## 🧭 Architektur auf einen Blick
+
+| Ebene | Haupt-API | Nutzen Sie sie für |
+| --- | --- | --- |
+| Einzel-Agent-Runtime | `LightAgent` | Einen Agenten mit Modell, Tools, Speicher, Streaming, Trace und Guardrails. |
+| Multi-Agent-Routing | `LightSwarm` | Rollenbasierte Delegation zwischen spezialisierten Agenten. |
+| Deterministischer Workflow | `LightFlow` | DAG, Wiederholungen, Checkpoints, Freigaben, Resume und Rerun. |
+| Tools und Integrationen | `tools`, `ToolRegistry`, MCP | Python-Tools, generierte Tools, Runtime-Laden oder MCP-Server. |
+| Speichergrenze | `MemoryPolicy`, `MemoryScope` | Tenant-Isolation, Herkunft, Vertrauen, Ablauf und Schreibzulassung. |
+| Gemeinsamer Speicher | `SharedMemoryPool` | Experimente mit gemeinsamem Speicher zwischen Agenten. |
+| Sicherheit | `input_guardrails`, `tool_guardrails`, `output_guardrails` | Datenschutz, Tool-Bestätigung, riskante Parameter und Ausgaberedaktion. |
+| Beobachtbarkeit | `trace=True`, `agent.export_trace()` | Strukturierte Run-, Modell-, Tool-, Fehler- und Workflow-Ereignisse. |
+
+## Zentrale Nutzungsmuster
+
+LightAgent hält den Standardaufruf einfach und erlaubt Produktionskontrollen schrittweise.
+
+| Muster | Minimaler Aufruf | Hinweise |
+| --- | --- | --- |
+| Basisantwort | `agent.run(query)` | Gibt standardmäßig einen String zurück. |
+| Streaming | `agent.run(query, stream=True)` | Gibt OpenAI-kompatible Chunks zurück. |
+| Strukturiertes Ergebnis | `agent.run(query, result_format="object")` | Gibt Inhalt und Metadaten zurück. |
+| Trace | `agent.run(query, trace=True)` | Zeichnet Ereignisse auf, ohne den Standard-String zu ändern. |
+| Benutzerspeicher | `agent.run(query, user_id="alice")` | Nutzt konfigurierten Speicher und MemoryPolicy. |
+| Tools | `LightAgent(..., tools=[fn])` | Funktionen sollten `tool_info` bereitstellen. |
+| Guardrails | `LightAgent(..., input_guardrails=[...])` | Fügt Eingabe-, Tool- und Ausgabe-Policies hinzu. |
+| Workflow | `LightFlow().step(...).run(query)` | Für deterministische mehrstufige Ausführung. |
+
+## 📋 Dokumentation
+
+- Für Installation, Modelle, Tools, Speicher, MCP, Skills, Streaming und LightSwarm siehe [FAQ](docs/FAQ.md).
+- Für deterministische Workflows, Checkpoints, Resume/Rerun, Freigaben, Fallback-Agenten und Schrittstatus siehe [LightFlow](docs/lightflow.md).
+- Für eigene Tools, ToolRegistry, ToolLoader, AsyncToolDispatcher und MCP siehe [Tools Guide](docs/tools.md).
+- Für gemeinsamen Langzeitspeicher oder Graphspeicher siehe [Memory Security Guidance](docs/memory_security.md).
+- Für SharedMemoryPool siehe [SharedMemoryPool](docs/shared_memory_pool.md).
+- Für Speicher-Schreibzulassung und Ablaufregeln siehe [Memory Admission And Mutation Controls](docs/memory_admission.md).
+- Für Eingabe-, Werkzeug- und Ausgabesicherheit siehe [Guardrails](docs/guardrails.md).
+- Für OpenRouter, lokale Modelle und OpenAI-kompatible Anbieter siehe [Model Provider Configuration](docs/model_providers.md).
+- Für strukturierte Traces siehe [Trace Observability](docs/tracing.md).
 
 ## 🚧 Bald verfügbar
 
@@ -59,28 +110,6 @@
 - **Agentenbewertung** 📊: Integriertes Agentenbewertungstool zur einfachen Bewertung und Optimierung Ihrer erstellten Agenten, um sie an Geschäftsszenarien anzupassen und das Intelligenzniveau kontinuierlich zu verbessern.  
 
 
-## Integrierte „Denkfluss“-Methode
-Durch systematische, strukturierte und flexible Denkprozesse kann die Methode effektiv auf Herausforderungen in komplexen Szenarien reagieren.
-Hier sind die spezifischen Umsetzungsschritte:
-```text
-Problemdefinition: Klärung des Kernproblems und der Ziele.
-
-Informationssammlung: Systematische Sammlung relevanter Informationen und Daten.
-
-Problemanalyse: Zerlegung komplexer Probleme in mehrere Teilprobleme oder Module.
-
-Multidimensionale Analyse: Analyse jedes Teilproblems aus verschiedenen Perspektiven und Ebenen.
-
-Beziehungen herstellen: Identifizierung der Zusammenhänge und Abhängigkeiten zwischen den Teilproblemen.
-
-Lösungen generieren: Vorschlag möglicher Lösungen für jedes Teilproblem.
-
-Bewertung und Auswahl: Bewertung der Machbarkeit und Auswirkungen der Lösungen, Auswahl der optimalen Lösung.
-
-Implementierung und Feedback: Umsetzung der ausgewählten Lösung und Anpassung basierend auf dem Feedback.
-```
-
----
 ## 🌟 Warum LightAgent wählen?
 
 - **Open Source und kostenlos** 💖: Vollständig Open Source, gemeinschaftsgetrieben, kontinuierliche Updates, Beiträge sind willkommen!  
@@ -119,6 +148,78 @@ agent = LightAgent(model="gpt-4o-mini", api_key="your_api_key", base_url= "your_
 response = agent.run("Hallo, wer bist du?")
 print(response)
 ```
+
+### Einen Run-Trace prüfen (v0.7.0)
+
+Tracing ist optional und hält das Standardverhalten von `agent.run()` kompatibel.
+
+```python
+from LightAgent import LightAgent
+
+agent = LightAgent(model="gpt-4.1", api_key="your_api_key", base_url="your_base_url")
+
+result = agent.run("Hello, who are you?", result_format="object", trace=True)
+print(result.content)
+print(result.trace_id)
+print(result.trace)
+
+for event in agent.export_trace():
+    print(event["type"], event["data"])
+```
+
+### Einen LightFlow-Run checkpointen (v0.9.0)
+
+`LightFlow` kann Workflow-Checkpoints speichern und fehlgeschlagene Runs fortsetzen, ohne beim ersten Schritt neu zu starten.
+
+```python
+from LightAgent import JsonLightFlowStore, LightAgent, LightFlow
+
+research_agent = LightAgent(model="gpt-4.1", api_key="your_api_key", base_url="your_base_url")
+writer_agent = LightAgent(model="gpt-4.1", api_key="your_api_key", base_url="your_base_url")
+
+store = JsonLightFlowStore(".lightflow_runs")
+flow = (
+    LightFlow(store=store)
+    .step("research", agent=research_agent, timeout=30)
+    .step("write", agent=writer_agent, depends_on=["research"], max_retry=2)
+)
+
+result = flow.run("Analyze this company", run_id="report-001", trace=True)
+
+if not result.success:
+    result = flow.resume("report-001")
+
+print(result.status)
+print(flow.get_run("report-001")["steps"])
+```
+
+### SharedMemoryPool verwenden (v0.9.0)
+
+`SharedMemoryPool` ist ein leichter In-Memory-Prototyp für gemeinsame Multi-Agent-Speicherexperimente.
+
+```python
+from LightAgent import LightAgent, MemoryPolicy, SharedMemoryPool
+
+shared_memory = SharedMemoryPool(agent_name="writer")
+
+agent = LightAgent(
+    name="writer",
+    model="gpt-4.1",
+    api_key="your_api_key",
+    base_url="your_base_url",
+    memory=shared_memory,
+    memory_policy=MemoryPolicy(
+        namespace="tenant-a",
+        allow_unattributed_results=False,
+        allowed_sources=("user",),
+        allowed_scopes=("user",),
+    ),
+)
+
+agent.run("Remember that I prefer concise reports.", user_id="alice")
+print(shared_memory.list_records(user_id="tenant-a:alice"))
+```
+
 
 ### Festlegen des Selbstbewusstseins des Modells durch System-Prompt
 
@@ -175,481 +276,80 @@ Beispiele für mehrere Werkzeuge: tools = [search_news,get_weather,get_stock_rea
 
 ## Funktionale Details
 
-### 1. Abnehmbares, vollautomatisches Gedächtnismodul (`mem0`)
-LightAgent unterstützt die externe Erweiterung des `mem0`-Gedächtnismoduls, das automatisch Kontextgedächtnis und Historienverwaltung durchführt, ohne dass Entwickler manuell Gedächtnis hinzufügen oder abrufen müssen. Durch das Gedächtnismodul kann der Agent die Konsistenz des Kontexts über mehrere Dialoge hinweg aufrechterhalten.
+README enthält das zentrale Nutzungsmodell; längere Beispiele, Adapter-Setup und Produktionspraxis stehen in den Spezialdokumenten.
 
-```python
-# Aktivieren des Gedächtnismoduls
+### 1. Abnehmbares Speichermodul (`mem0`)
+LightAgent akzeptiert jedes Speicher-Backend mit `store(data, user_id)` und `retrieve(query, user_id)`. Verwenden Sie `user_id` zur Isolation und `MemoryPolicy` bei gemeinsamem Speicher.
 
-# Oder verwenden Sie ein benutzerdefiniertes Gedächtnismodul, hier als Beispiel mem0 https://github.com/mem0ai/mem0/
-from mem0 import Memory
-from LightAgent import LightAgent
-import os
-from loguru import logger
+### 2. Tool-Integration
+Python-Funktionen mit `tool_info` stellen kontrollierte Fähigkeiten bereit. Für ToolRegistry, ToolLoader, AsyncToolDispatcher und MCP siehe [Tools Guide](docs/tools.md).
 
-class CustomMemory:
-    def __init__(self):
-        self.memories = []
-        os.environ["OPENAI_API_KEY"] = "your_api_key"
-        os.environ["OPENAI_BASE_URL"] = "your_base_url"
-        # Initialisieren von Mem0
-        config = {
-            "version": "v1.1"
-        }
-        # Wenn Sie qdrant als Vektorspeicher für das Gedächtnis verwenden möchten, ändern Sie die Konfiguration wie folgt
-        # config = {
-        #     "vector_store": {
-        #         "provider": "qdrant",
-        #         "config": {
-        #             "host": "localhost",
-        #             "port": 6333,
-        #         }
-        #     },
-        #     "version": "v1.1"
-        # }
-        self.m = Memory.from_config(config_dict=config)
-
-    def store(self, data: str, user_id):
-        """Speichern von Erinnerungen. Entwickler können die interne Implementierung der Speichermethode anpassen, das aktuelle Beispiel ist die Methode zum Hinzufügen von Erinnerungen von mem0."""
-        result = self.m.add(data, user_id=user_id)
-        return result
-
-    def retrieve(self, query: str, user_id):
-        """Abrufen relevanter Erinnerungen. Entwickler können die interne Implementierung der Abrufmethode anpassen, das aktuelle Beispiel ist die Methode zum Suchen von Erinnerungen von mem0."""
-        result = self.m.search(query, user_id=user_id)
-        return result
-
-agent = LightAgent(
-        role="Bitte erinnere dich, dass du LightAgent bist, ein nützlicher Assistent, der den Benutzern hilft, mehrere Werkzeuge zu verwenden.",  # Systemrollenbeschreibung
-        model="deepseek-chat",  # Unterstützte Modelle: openai, chatglm, deepseek, qwen usw.
-        api_key="your_api_key",  # Ersetzen Sie durch Ihren API-Schlüssel des großen Modells
-        base_url="your_base_url",  # Ersetzen Sie durch die API-URL Ihres großen Modells
-        memory=CustomMemory(),  # Aktivieren der Gedächtnisfunktion
-        tree_of_thought=False,  # Aktivieren der Denkbaumfunktion
-    )
-
-# Gedächtnistests & Wenn Werkzeuge hinzugefügt werden müssen, können Sie die Werkzeuge selbst zum Agenten hinzufügen, um die Werkzeugaufrufe mit Gedächtnis zu realisieren
-
-user_id = "user_01"
-logger.info("\n=========== nächstes Gespräch ===========")
-query = "Erzählen Sie mir von den Sehenswürdigkeiten in Sanya, viele meiner Freunde sind nach Sanya gereist, ich möchte auch dorthin."
-print(agent.run(query, stream=False, user_id=user_id))
-logger.info("\n=========== nächstes Gespräch ===========")
-query = "Wo möchte ich reisen?"
-print(agent.run(query, stream=False, user_id=user_id))
-```
-
-Die Ausgabe sieht wie folgt aus:
-```python
-=========== nächstes Gespräch ===========
-2025-01-01 21:55:15.886 | INFO     | __main__:run_conversation:115 - 
-Beginne, das Problem zu durchdenken: Erzählen Sie mir von den Sehenswürdigkeiten in Sanya, viele meiner Freunde sind nach Sanya gereist, ich möchte auch dorthin.
-2025-01-01 21:55:28.676 | INFO     | __main__:run_conversation:118 - Endgültige Antwort: 
-Sanya ist eine beliebte Touristenstadt in der Provinz Hainan, China, bekannt für ihre schönen Strände, tropisches Klima und reichhaltige Tourismusressourcen. Hier sind einige Sehenswürdigkeiten in Sanya, die einen Besuch wert sind:
-
-1. **Yalong Bay**: Bekannt als "Hawaii des Ostens", hat einen langen Strand und klares Wasser, ideal zum Schwimmen, Tauchen und Sonnenbaden.
-
-2. **Tianya Haijiao**: Dies ist eine berühmte Kulturlandschaft, die Touristen mit ihrer majestätischen Meereslandschaft und romantischen Legenden anzieht. Auf den großen Steinen sind die Worte "Tianya" und "Haijiao" eingraviert, die ewige Liebe symbolisieren.
-
-3. **Nanshan Kultur Tourismusgebiet**: Hier gibt es eine 108 Meter hohe Nanshan Meeres-Guan Yin-Statue, die höchste Meeres-Guan Yin-Statue der Welt. Touristen können hier die buddhistische Kultur erleben und Tempel und Gärten besuchen.
-
-4. **Wuzhizhou Island**: Diese kleine Insel ist bekannt für ihre unberührte Natur und reichhaltigen Wasseraktivitäten. Touristen können hier tauchen, schnorcheln und angeln.
-
-5. **Dadonghai**: Dies ist ein Strand in der Innenstadt von Sanya, der aufgrund seiner bequemen Verkehrsanbindung und des lebhaften Nachtlebens bei Touristen beliebt ist.
-
-6. **Sanya Bay**: Dies ist ein 22 Kilometer langer Strand, der ein guter Ort ist, um den Sonnenuntergang zu beobachten. Der Strand hier ist relativ ruhig und eignet sich für Touristen, die Ruhe mögen.
-
-7. **Yanuoda Regenwald Kultur Tourismusgebiet**: Dies ist ein tropischer Regenwaldpark, in dem Touristen die natürliche Schönheit des tropischen Regenwaldes erleben und an verschiedenen Abenteueraktivitäten teilnehmen können.
-
-8. **Luhuitou Park**: Dies ist ein Park auf einem Hügel, von dem aus man die gesamte Innenstadt von Sanya und die Sanya Bay überblicken kann. Hier gibt es auch eine schöne Legende über Rehe.
-
-9. **Xidao**: Dies ist eine relativ unberührte kleine Insel, die Touristen mit ihren ruhigen Stränden und reichhaltigen Meereslebewesen anzieht.
-
-10. **Sanya Qian Guqing**: Dies ist ein großes Kulturthemenpark, der die Geschichte und Kultur von Hainan durch Aufführungen und Ausstellungen präsentiert.
-
-Neben den oben genannten Sehenswürdigkeiten gibt es in Sanya viele andere Orte, die es wert sind, erkundet zu werden, wie tropische Botanische Gärten und Fischmärkte. Die Küche in Sanya ist ebenfalls ein Highlight, insbesondere frische Meeresfrüchte und tropische Früchte. Bei der Reiseplanung wird empfohlen, die Wettervorhersage und die Öffnungszeiten der Sehenswürdigkeiten im Voraus zu überprüfen, um ein angenehmes Reiseerlebnis zu gewährleisten.
-2025-01-01 21:55:28.676 | INFO     | __main__:<module>:191 - 
-=========== nächstes Gespräch ===========
-2025-01-01 21:55:28.676 | INFO     | __main__:run_conversation:115 - 
-Beginne, das Problem zu durchdenken: Wo möchte ich reisen?
-Relevante Erinnerungen gefunden:
-Benutzer möchte nach Sanya reisen
-Freunde des Benutzers sind nach Sanya gereist。
-2025-01-01 21:55:38.797 | INFO     | __main__:run_conversation:118 - Endgültige Antwort: 
-Basierend auf den zuvor erwähnten Informationen möchte der Benutzer nach Sanya reisen, und seine Freunde haben bereits Sanya besucht. Daher könnte Sanya ein geeignetes Reiseziel für den Benutzer sein. Hier sind einige Reiseinformationen über Sanya zur Referenz für den Benutzer:
-
-### Reiseempfehlungen für Sanya:
-1. **Yalong Bay**: Bekannt als "Hawaii des Ostens", hat schöne Strände und klares Wasser, ideal zum Schwimmen und Sonnenbaden.
-2. **Tianya Haijiao**: Das Wahrzeichen von Sanya, zieht Touristen mit seinen einzigartigen Felsen und romantischen Legenden an.
-3. **Nanshan Kultur Tourismusgebiet**: Hier gibt es den berühmten Nanshan-Tempel und die 108 Meter hohe Meeres-Guan Yin-Statue, die wichtige buddhistische Kulturstätten sind.
-4. **Wuzhizhou Island**: Ideal zum Tauchen und für Wassersport, die Insel hat reichhaltige Meereslebewesen und Korallenriffe.
-5. **Dadonghai**: Ein Strand in der Innenstadt von Sanya, der für Familien und Paare geeignet ist.
-
-### Weitere Empfehlungen:
-Wenn der Benutzer bereits über Sanya informiert ist oder andere Reiseziele erkunden möchte, hier sind einige andere beliebte Reiseziele:
-1. **Guilin**: Bekannt für seine einzigartige Karstlandschaft und die Landschaft des Li-Flusses.
-2. **Lijiang**: Die Altstadt und der Jade Dragon Snow Mountain sind die Hauptattraktionen, geeignet für Reisende, die an Geschichte und Natur interessiert sind.
-3. **Zhangjiajie**: Berühmt für seine einzigartigen Säulen und Naturlandschaften, ist einer der Drehorte für den Film "Avatar".
-
-Der Benutzer kann je nach seinen Interessen und Zeitplan ein passendes Reiseziel auswählen. Wenn der Benutzer detailliertere Informationen oder Hilfe bei der Reiseplanung benötigt, lassen Sie es uns bitte wissen!
-```
-
-### 2. Werkzeugintegration (unbegrenzte benutzerdefinierte Werkzeugunterstützung)
-Nutzen Sie die Anpassung von Werkzeugen (`Tools`) und integrieren Sie Ihre maßgeschneiderten Werkzeuge einfach über die `tools`-Methode. Diese Werkzeuge können beliebige Python-Funktionen sein und unterstützen Typannotationen für Parameter, um Flexibilität und Genauigkeit zu gewährleisten. Darüber hinaus bieten wir einen intelligenten, KI-gesteuerten Werkzeuggenerator, der Ihnen hilft, Werkzeuge automatisiert zu erstellen und Ihre Kreativität freizusetzen.
-
-```python
-
-import requests
-from LightAgent import LightAgent
-
-# Definieren des Werkzeugs
-def get_weather(
-        city_name: str
-) -> str:
-    """
-    Holen Sie sich Wetterinformationen für die Stadt
-    :param city_name: Stadtname
-    :return: Wetterinformationen
-    """
-    if not isinstance(city_name, str):
-        raise TypeError("Der Stadtname muss ein String sein")
-
-    key_selection = {
-        "current_condition": ["temp_C", "FeelsLikeC", "humidity", "weatherDesc", "observation_time"],
-    }
-    try:
-        resp = requests.get(f"https://wttr.in/{city_name}?format=j1")
-        resp.raise_for_status()
-        resp = resp.json()
-        ret = {k: {_v: resp[k][0][_v] for _v in v} for k, v in key_selection.items()}
-    except:
-        import traceback
-        ret = "Fehler beim Abrufen der Wetterdaten!\n" + traceback.format_exc()
-
-    return str(ret)
-# Definieren Sie die Werkzeuginformationen innerhalb der Funktion
-get_weather.tool_info = {
-    "tool_name": "get_weather",
-    "tool_description": "Holen Sie sich die aktuellen Wetterinformationen für die angegebene Stadt",
-    "tool_params": [
-        {"name": "city_name", "description": "Der Name der Stadt, die abgefragt werden soll", "type": "string", "required": True},
-    ]
-}
-
-def search_news(
-        keyword: str,
-        max_results: int = 5
-) -> str:
-    """
-    Suchen Sie Nachrichten basierend auf Schlüsselwörtern
-    :param keyword: Suchbegriff
-    :param max_results: Maximale Anzahl der zurückgegebenen Ergebnisse, standardmäßig 5
-    :return: Nachrichten Suchergebnisse
-    """
-    results = f"Durch die Suche nach {keyword} habe ich {max_results} relevante Informationen gefunden."
-    return str(results)
-
-# Definieren Sie die Werkzeuginformationen innerhalb der Funktion
-search_news.tool_info = {
-    "tool_name": "search_news",
-    "tool_description": "Suchen Sie Nachrichten basierend auf Schlüsselwörtern",
-    "tool_params": [
-        {"name": "keyword", "description": "Suchbegriff", "type": "string", "required": True},
-        {"name": "max_results", "description": "Maximale Anzahl der zurückgegebenen Ergebnisse", "type": "int", "required": False},
-    ]
-}
-
-def get_user_info(
-        user_id: str
-) -> str:
-    """
-    Holen Sie sich Benutzerinformationen
-    :param user_id: Benutzer-ID
-    :return: Benutzerinformationen
-    """
-    if not isinstance(user_id, str):
-        raise TypeError("Die Benutzer-ID muss ein String sein")
-
-    try:
-        # Angenommen, wir verwenden eine Benutzerinformations-API, hier mit einer Beispiel-URL
-        url = f"https://api.example.com/users/{user_id}"
-        response = requests.get(url)
-        response.raise_for_status()
-        user_data = response.json()
-        user_info = {
-            "name": user_data.get("name"),
-            "email": user_data.get("email"),
-            "created_at": user_data.get("created_at")
-        }
-    except:
-        import traceback
-        user_info = "Fehler beim Abrufen der Benutzerdaten!\n" + traceback.format_exc()
-
-    return str(user_info)
-
-# Definieren Sie die Werkzeuginformationen innerhalb der Funktion
-get_user_info.tool_info = {
-    "tool_name": "get_user_info",
-    "tool_description": "Holen Sie sich die Informationen des angegebenen Benutzers",
-    "tool_params": [
-        {"name": "user_id", "description": "Benutzer-ID", "type": "string", "required": True},
-    ]
-}
-
-# Benutzerdefinierte Werkzeuge
-tools = [get_weather, search_news, get_user_info]  # Enthält alle Werkzeuge
-
-# Initialisieren des Agenten
-# Ersetzen Sie durch Ihre Modellparameter model, api_key, base_url
-agent = LightAgent(model="qwen-turbo-2024-11-01", api_key="your_api_key", base_url= "your_base_url", tools=tools)
-
-query = "Wie ist das aktuelle Wetter in Sanya?"
-response = agent.run(query, stream=False)  # Verwenden Sie den Agenten, um die Abfrage auszuführen
-print(response)
-```
-
-### 3. Werkzeuggenerator
-Der Werkzeuggenerator ist ein Modul zur automatischen Erstellung von Werkzeugcode. Er kann basierend auf der vom Benutzer bereitgestellten Textbeschreibung automatisch den entsprechenden Werkzeugcode generieren und in einem angegebenen Verzeichnis speichern. Diese Funktion ist besonders nützlich für Szenarien, in denen schnell API-Aufrufwerkzeuge, Datenverarbeitungswerkzeuge usw. erstellt werden müssen.
-
-Verwendungsbeispiel
-
-Hier ist ein Beispielcode zur Verwendung des Werkzeuggenerators:
-
-```python
-import json
-import os
-import sys
-from LightAgent import LightAgent
-
-# Initialisieren von LightAgent
-agent = LightAgent(
-    name="Agent A",  # Agentenname
-    instructions="Du bist ein hilfreicher Agent.",  # Rollenbeschreibung
-    role="Bitte erinnere dich, dass du der Werkzeuggenerator bist. Deine Aufgabe ist es, basierend auf der vom Benutzer bereitgestellten Textbeschreibung automatisch den entsprechenden Werkzeugcode zu generieren und in einem angegebenen Verzeichnis zu speichern. Bitte stelle sicher, dass der generierte Code genau, verwendbar und den Anforderungen des Benutzers entspricht.",  # Rollenbeschreibung des Werkzeuggenerators
-    model="deepseek-chat",  # Ersetzen Sie durch Ihr Modell. Unterstützte Modelle: openai, chatglm, deepseek, qwen usw.
-    api_key="your_api_key",  # Ersetzen Sie durch Ihren API-Schlüssel
-    base_url="your_base_url",  # Ersetzen Sie durch Ihre API-URL
-)
-
-# Beispieltextbeschreibung
-text = """
-Die Sina Aktien-API bietet die Funktion, Marktdaten für Aktien abzurufen, einschließlich Aktienkurse, Echtzeit-Handelsdaten, K-Linien-Daten usw.
-
-Funktionen der Sina Aktien-API
-1. Abrufen von Aktienkursdaten:
-Echtzeitkursdaten: Mit der Echtzeitkurs-API können Sie die neuesten Angebote, Handelsvolumen, Preisänderungen usw. für Aktien abrufen.
-Minutenkursdaten: Mit der Minutenkurs-API können Sie die Handelsdaten für Aktien im Minutentakt abrufen, einschließlich Eröffnungspreis, Schlusskurs, Höchstpreis, Tiefstpreis usw.
-
-2. Abrufen von historischen K-Linien-Daten für Aktien:
-K-Linien-Daten: Über die K-Linien-API können Sie historische Handelsdaten für Aktien abrufen, einschließlich Eröffnungspreis, Schlusskurs, Höchstpreis, Tiefstpreis, Handelsvolumen usw. Sie können verschiedene Zeitperioden und gleitende Durchschnittsperioden auswählen.
-Anpassungsdaten: Sie können die Anpassungsdaten für K-Linien abrufen, einschließlich Voranpassung und Nachanpassung, um die Preisbewegungen von Aktien genauer zu analysieren.
-
-Beispiel zum Abrufen von Daten über die Sina Aktien-API
-1. Abrufen von Aktienkursdaten:
-API-Adresse: http://hq.sinajs.cn/list=[Aktiencode]
-Beispiel: Um die Echtzeitkursdaten für die Aktie mit dem Code "sh600519" (Kweichow Moutai) abzurufen, können Sie die folgende API-Adresse verwenden: http://hq.sinajs.cn/list=sh600519
-Durch das Senden einer HTTP GET-Anfrage an die oben genannte API-Adresse erhalten Sie eine Antwort, die die Echtzeitkursdaten dieser Aktie enthält.
-
-2. Abrufen von historischen K-Linien-Daten für Aktien:
-API-Adresse: http://money.finance.sina.com.cn/quotes_service/api/json_v2.php/CN_MarketData.getKLineData?symbol=[Aktiencode]&scale=[Zeitperiode]&ma=[Durchschnittsperiode]&datalen=[Datenlänge]
-Beispiel: Um die täglichen K-Linien-Daten für die Aktie mit dem Code "sh600519" (Kweichow Moutai) abzurufen, können Sie die folgende API-Adresse verwenden: http://money.finance.sina.com.cn/quotes_service/api/json_v2.php/CN_MarketData.getKLineData?symbol=sh600519&scale=240&ma=no&datalen=1023
-Durch das Senden einer HTTP GET-Anfrage an die oben genannte API-Adresse erhalten Sie eine Antwort, die die historischen K-Linien-Daten dieser Aktie enthält.
-"""
-
-# Erstellen des Pfads zum Werkzeugsverzeichnis
-project_root = os.path.dirname(os.path.abspath(__file__))
-tools_directory = os.path.join(project_root, "tools")
-
-# Wenn das Werkzeugsverzeichnis nicht existiert, erstellen Sie es
-if not os.path.exists(tools_directory):
-    os.makedirs(tools_directory)
-
-print(f"Werkzeugsverzeichnis erstellt: {tools_directory}")
-
-# Verwenden Sie den Agenten, um Werkzeugcode zu generieren
-agent.create_tool(text, tools_directory=tools_directory)
-```
-Nach der Ausführung werden im Werkzeugsverzeichnis zwei Dateien generiert: get_stock_kline_data.py und get_stock_realtime_data.py
+### 3. Tool-Generator
+`agent.create_tool()` erzeugt Tool-Code aus API-Dokumentation oder natürlicher Sprache. Prüfen und testen Sie generierte Tools vor Produktion.
 
 ### 4. Denkbaum (ToT)
-Integriertes Denkbaum-Modul, das komplexe Aufgabenzerlegungen und mehrstufiges Denken unterstützt. Durch den Denkbaum kann der Agent komplexe Aufgaben besser bearbeiten.
-
-```python
-# Aktivieren Sie den Denkbaum
-agent = LightAgent(
-    model="qwen-turbo-2024-11-01", 
-    api_key="your_api_key", 
-    base_url= "your_base_url", 
-    tree_of_thought=True,  # Aktivieren Sie den Denkbaum
-    tot_model="deepseek-r1", 
-    tot_api_key="sk-uXx0H0B***17778F1",  # Ersetzen Sie dies durch Ihren deepseek r1 API-Schlüssel
-    tot_base_url="https://api.deepseek.com/v1",  # API-URL
-    filter_tools=False,  # Deaktivieren Sie die adaptive Werkzeugmechanismus
-)
-```
-Nachdem ToT aktiviert ist, wird standardmäßig der adaptive Werkzeugmechanismus aktiviert. Wenn Sie ihn deaktivieren möchten, fügen Sie beim Initialisieren von LightAgent den Parameter filter_tools=False hinzu.
-
-
+Aktivieren Sie `tree_of_thought=True` für Aufgaben mit expliziter Planung, Reflexion und Tool-Auswahl.
 
 ### 5. Multi-Agenten-Kooperation
-Unterstützt swarmähnliche Multi-Agenten-Kooperation zur Verbesserung der Effizienz bei der Aufgabenbearbeitung. Mehrere Agenten können gemeinsam komplexe Aufgaben erledigen.
+`LightSwarm` delegiert Arbeit zwischen spezialisierten Agenten. Rollen sollten eng und Speicherzugriffe kontrolliert sein.
+
+### 6. Streaming-API
+`agent.run(query, stream=True)` gibt OpenAI-kompatible Chunks für Chat-UIs und lange Antworten zurück.
+
+### 7. Selbstlernen des Agenten
+Selbstlernen sollte mit `MemoryPolicy` kombiniert werden, um private, abgelaufene oder irrelevante Inhalte zu vermeiden.
+
+### 8. Trace und Langfuse
+LightAgent macht Ausführung über integrierte Traces oder Langfuse sichtbar.
+
+### 9. Agentenbewertung
+Agentenbewertung wird Verhalten anhand von Geschäftsszenarien messen.
+
+### 10. LightFlow-Workflows
+`LightFlow` ist die deterministische Workflow-Schicht für bekannte Ausführungsschritte.
+
+- Schrittzustände: `pending`, `running`, `success`, `failed`, `skipped`, `waiting_approval`.
+- DAG-Validierung: `flow.validate(strict=True)`.
+- Schrittsteuerung: `timeout`, `max_retry`, `cancel_if`, `fallback_agent`, `requires_approval`, `approval_handler`.
+- Persistenz und Wiederaufnahme: `JsonLightFlowStore`, `flow.resume(run_id)`, `flow.rerun_step(run_id, step_name)`, `flow.get_run(run_id)`, `flow.list_runs()`.
+
+Siehe [LightFlow](docs/lightflow.md).
+
+### 11. Guardrails
+Guardrails sind leichte Hooks um Eingabe, Werkzeugaufrufe und Ausgabe.
 
 ```python
-from LightAgent import LightAgent, LightSwarm
-# Setzen Sie die Umgebungsvariablen OPENAI_API_KEY und OPENAI_BASE_URL
-# Standardmäßig wird das Modell gpt-4o-mini verwendet
-
-# Erstellen Sie eine LightSwarm-Instanz
-light_swarm = LightSwarm()
-
-# Erstellen Sie mehrere Agenten
-agent_a = LightAgent(
-    name="Agent A",
-    instructions="Ich bin Agent A, der Empfangsmitarbeiter.",
-    role="Empfangsmitarbeiter, verantwortlich für die Begrüßung von Besuchern und die Bereitstellung grundlegender Informationen. Bitte geben Sie bei jeder Antwort zuerst Ihre Identität an und helfen Sie den Benutzern, zu anderen Rollen zu navigieren, ohne direkt auf geschäftliche Fragen der Kunden zu antworten. Wenn ich das Problem des Benutzers nicht lösen kann, antworte bitte: Es tut mir leid, ich kann derzeit nicht helfen!",
+from LightAgent import (
+    LightAgent,
+    high_risk_parameter_guardrail,
+    output_redaction_guardrail,
+    privacy_input_guardrail,
+    sensitive_tool_confirmation_guardrail,
 )
 
-agent_b = LightAgent(
-    name="Agent B",
-    instructions="Ich bin Agent B, verantwortlich für die Buchung von Besprechungsräumen.",
-    role="Besprechungsraum-Administrator, verantwortlich für die Buchung, Stornierung und Abfrage der Besprechungsräume 1, 2 und 3. Bitte geben Sie bei jeder Antwort zuerst Ihre Identität an und antworten Sie höflich auf die Fragen der Benutzer.",
+agent = LightAgent(
+    model="gpt-4.1",
+    api_key="your_api_key",
+    base_url="your_base_url",
+    input_guardrails=[privacy_input_guardrail()],
+    tool_guardrails=[
+        sensitive_tool_confirmation_guardrail(["transfer_money"], approved=False),
+        high_risk_parameter_guardrail({"amount": lambda value: float(value) <= 1000}),
+    ],
+    output_guardrails=[output_redaction_guardrail()],
 )
-
-agent_c = LightAgent(
-    name="Agent C",
-    instructions="Ich bin Agent C, der technische Supportmitarbeiter, verantwortlich für technische Probleme. Bitte geben Sie bei jeder Antwort zuerst Ihre Identität an und beantworten Sie die technischen Fragen der Benutzer so detailliert wie möglich. Wenn das Problem über meine Fähigkeiten hinausgeht, leiten Sie den Benutzer an den höheren technischen Support weiter.",
-    role="Technischer Supportmitarbeiter, verantwortlich für die Beratung und Lösung von technischen Problemen im Zusammenhang mit Hardware, Software und Netzwerken.",
-)
-
-agent_d = LightAgent(
-    name="Agent D",
-    instructions="Ich bin Agent D, der Personalmitarbeiter, verantwortlich für Personalangelegenheiten. Bitte geben Sie bei jeder Antwort zuerst Ihre Identität an und beantworten Sie die Fragen der Benutzer so detailliert wie möglich. Wenn das Problem weiter bearbeitet werden muss, leiten Sie den Benutzer an die Personalabteilung weiter.",
-    role="Personalmitarbeiter, verantwortlich für die Beratung und Bearbeitung von Mitarbeiteranfragen zu Einstellungen, Kündigungen, Urlaub und Leistungen.",
-)
-
-# Automatische Registrierung der Agenten in der LightSwarm-Instanz
-light_swarm.register_agent(agent_a, agent_b, agent_c, agent_d)
-
-# Ausführen von Agent A
-res = light_swarm.run(agent=agent_a, query="Hallo, ich bin Alice, ich möchte wissen, ob Wang Xiaoming eingestellt wurde.", stream=False)
-print(res)
-```
-Die Ausgabe sieht wie folgt aus:
-```python
-Hallo, ich bin der Personalmitarbeiter Agent D. Bezüglich der Frage, ob Wang Xiaoming eingestellt wurde, muss ich unsere Systemaufzeichnungen überprüfen. Bitte einen Moment Geduld.
-(Überprüfung der Systemaufzeichnungen...)
-Laut unseren Aufzeichnungen hat Wang Xiaoming am 5. Januar 2025 seine Einstellung abgeschlossen. Er hat alle erforderlichen Dokumente unterzeichnet und wurde einer Mitarbeiter-ID und einem Bürostandort zugewiesen. Wenn Sie weitere Informationen benötigen oder andere Fragen haben, wenden Sie sich bitte jederzeit an die Personalabteilung. Wir sind jederzeit bereit, Ihnen zu helfen.
 ```
 
-### 6. Stream-API 
-Unterstützt die Ausgabe von OpenAI Stream-Format-API-Diensten, nahtlose Integration in gängige Chat-Frameworks.
+Siehe [Guardrails](docs/guardrails.md).
 
-```python
-# Aktivieren der Streaming-Ausgabe
-response = agent.run("Bitte generiere einen Artikel über KI", stream=True)
-for chunk in response:
-    print(chunk)
-```
-
-
-### 7. Agentenbewertung (Bald verfügbar)
-Integriertes Agentenbewertungstool zur einfachen Bewertung und Optimierung der Agentenleistung.
-
-
+### 12. SharedMemoryPool
+`SharedMemoryPool` ist ein In-Memory-Prototyp für gemeinsamen Multi-Agent-Speicher und sollte mit `MemoryPolicy` genutzt werden.
 
 ## Unterstützung für gängige Agentenmodelle
-Kompatibel mit verschiedenen großen Modellen, einschließlich OpenAI, Zhiyu ChatGLM, DeepSeek, Qwen-Serie große Modelle.
 
-#### Derzeit getestete kompatible große Modelle
-OpenAI Series
- - gpt-3.5-turbo
- - gpt-4
- - gpt-4o
- - gpt-4o-mini
- - gpt-4.1
- - gpt-4.1-mini
- - gpt-4.1-nano
- - and GPT-5、GPT-5.1、GPT-5.2、GPT-5.3、GPT-5.4 
+LightAgent arbeitet mit OpenAI-kompatiblen Chat-Completion-Endpunkten: OpenAI, OpenRouter, Zhipu ChatGLM, DeepSeek, Qwen, StepFun, Moonshot/Kimi, MiniMax, vLLM, llama.cpp, Ollama und eigene Gateways.
 
-ChatGLM
- - GLM-5.1
- - GLM-4.7
- - GLM-4.5
- - GLM-4.5-Air
- - GLM-4.5-X
- - GLM-4.5-AirX
- - GLM-4.5-Flash
- - GLM-4-Plus
- - GLM-4-Air-0111
- - GLM-4-Flash
- - GLM-4-FlashX
- - GLM-4-alltools
- - GLM-4
- - GLM-3-Turbo
- - ChatGLM3-6B
- - GLM-4-9B-Chat
-
-DeepSeek Series
- - DeepSeek-r1
- - DeepSeek-v3
- - DeepSeek-v4
-
-stepfun
- - step-1-8k
- - step-1-32k
- - step-1-128k (issues with multi-tool calls)
- - step-1-256k (issues with multi-tool calls)
- - step-1-flash (recommended, cost-effective)
- - step-2-16k (issues with multi-tool calls)
- - step-3.5-flash
-
-Qwen Series
- - qwen-plus-2024-11-25
- - qwen-plus-2024-11-27
- - qwen-plus-1220
- - qwen-plus
- - qwen-plus-latest 
- - qwen2.5-72b-instruct
- - qwen2.5-32b-instruct
- - qwen2.5-14b-instruct
- - qwen2.5-7b-instruct 
- - qwen-turbo-latest
- - qwen-turbo-2024-11-01
- - qwen-turbo
- - qwen-long
- - qwq-32b
- - qwen3-0.6b
- - qwen3-1.7b
- - qwen3-4b
- - qwen3-8b
- - qwen3-14b
- - qwen3-32b
- - qwen3-30b-a3b
- - qwen3-235b-a22b
- - Qwen3-30B-A3B-Thinking-2507
- - Qwen3-30B-A3B-Instruct-2507
- - Qwen3.5
- - Qwen3.6
-
-
-MiniMax Series
-- MiniMax-M2.7
-- MiniMax-M2.5
-- MiniMax-M2.1
-- MiniMax-M2
-
-
-Moonshot Series (Kimi)
-- moonshot-v1-8k
-- moonshot-v1-32k
-- moonshot-v1-128k
-- Kimi K2.6
-
-
-
-
-
----
+For provider-specific parameters, base URLs, local model setup, and troubleshooting, see [Model Provider Configuration](docs/model_providers.md).
 
 ## Anwendungsszenarien
 
