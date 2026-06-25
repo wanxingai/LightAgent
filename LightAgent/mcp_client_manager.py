@@ -6,6 +6,7 @@
 最后更新: 2026-02-20
 """
 
+import re
 from functools import partial
 from typing import Optional, Dict, Any
 
@@ -26,6 +27,7 @@ class MCPClientManager:
         self.session: Optional[ClientSession] = None
         self.exit_stack = AsyncExitStack()
         self.server_sessions = {}
+        self.last_mcp_errors = []
 
     async def _create_session(self, server_name: str, config: dict):
         """创建并管理会话上下文"""
@@ -60,6 +62,7 @@ class MCPClientManager:
 
     async def register_mcp_tool(self) -> bool:
         """自动注册所有MCP服务的工具"""
+        self.last_mcp_errors.clear()
         registered_count = 0
         enabled_servers = [
             (name, config)
@@ -122,8 +125,10 @@ class MCPClientManager:
                         registered_count += 1
                         print(f"✅ The registered MCP tool : {tool.name}")
                     except Exception as e:
+                        self._record_error(server_name, f"register_tool:{getattr(tool, 'name', 'unknown')}", e)
                         continue
             except Exception as e:
+                self._record_error(server_name, "register_server", e)
                 continue
 
         await self.cleanup()
@@ -139,6 +144,7 @@ class MCPClientManager:
 
     async def call_tool(self, tool_name: str, arguments: dict, target_server: str = None):
         """通用工具调用方法"""
+        self.last_mcp_errors.clear()
         enabled_servers = [
             (name, config)
             for name, config in self.config["mcpServers"].items()
@@ -172,9 +178,10 @@ class MCPClientManager:
                         "result": result.content[0].text
                     }
             except Exception as e:
+                self._record_error(server_name, f"call_tool:{tool_name}", e)
                 continue
 
-        raise ValueError(f"工具 {tool_name} 在可用服务器中未找到")
+        raise ValueError(self._format_tool_not_found(tool_name))
 
     def _validate_arguments(self, arguments: dict, schema: dict):
         """简单参数校验"""
@@ -182,3 +189,30 @@ class MCPClientManager:
         for field in required_fields:
             if field not in arguments:
                 raise ValueError(f"缺少必要参数: {field}")
+
+    def _record_error(self, server_name: str, phase: str, error: Exception):
+        """记录MCP失败原因，避免把真实连接/执行失败伪装成工具不存在。"""
+        self.last_mcp_errors.append({
+            "server": server_name,
+            "phase": phase,
+            "error_type": type(error).__name__,
+            "message": self._sanitize_error_message(str(error)),
+        })
+
+    def _format_tool_not_found(self, tool_name: str) -> str:
+        if not self.last_mcp_errors:
+            return f"工具 {tool_name} 在可用服务器中未找到"
+
+        details = "; ".join(
+            f"{item['server']}::{item['phase']} -> {item['error_type']}: {item['message']}"
+            for item in self.last_mcp_errors[:3]
+        )
+        if len(self.last_mcp_errors) > 3:
+            details += f"; ... {len(self.last_mcp_errors) - 3} more"
+        return f"工具 {tool_name} 在可用服务器中未找到。MCP诊断: {details}"
+
+    @staticmethod
+    def _sanitize_error_message(message: str) -> str:
+        message = re.sub(r"(Bearer\s+)[A-Za-z0-9._~+/=-]+", r"\1[redacted]", message)
+        message = re.sub(r"(sk-[A-Za-z0-9_-]{8,})", "[redacted]", message)
+        return message
