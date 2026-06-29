@@ -520,7 +520,48 @@ agent = LightAgent(
 
 Use default guardrail templates for privacy-sensitive input, sensitive tool confirmation, high-risk parameter validation, and output redaction. See [Guardrails](docs/guardrails.md).
 
-### 12. SharedMemoryPool
+### 12. Runtime Hooks
+Runtime hooks are ordered middleware for production policies that need to observe, replace, or block lifecycle payloads without changing the default `agent.run()` behavior.
+
+```python
+from LightAgent import HookDecision, LightAgent
+
+
+def redact_before_model(ctx):
+    if ctx.phase != "before_model_request":
+        return None
+
+    params = dict(ctx.payload["params"])
+    messages = list(params["messages"])
+    messages[-1] = {
+        **messages[-1],
+        "content": messages[-1]["content"].replace("secret-token", "[REDACTED]"),
+    }
+    params["messages"] = messages
+    return HookDecision.replace({"params": params})
+
+
+def block_dangerous_tool(ctx):
+    if ctx.phase == "before_tool_call" and ctx.payload["tool_name"] == "delete_file":
+        return HookDecision.block("delete_file requires manual approval")
+    return None
+
+
+agent = LightAgent(
+    model="gpt-4.1",
+    api_key="your_api_key",
+    base_url="your_base_url",
+    hooks=[redact_before_model, block_dangerous_tool],
+)
+
+result = agent.run("Summarize this secret-token safely.", result_format="object", trace=True)
+print(result.content)
+print(result.trace)
+```
+
+Hooks can target `before_run`, `before_model_request`, `after_model_response`, `before_tool_call`, `after_tool_result`, `before_memory_write`, and `after_memory_write`. `LightFlow(hooks=[...])` also supports step lifecycle hooks such as `before_flow_step`, `after_flow_step`, `on_approval_required`, `on_resume`, and `on_rerun`. See [Runtime Hooks](docs/runtime_hooks.md).
+
+### 13. SharedMemoryPool
 `SharedMemoryPool` is an in-memory shared memory prototype for multi-agent experiments. It is append-first and keeps provenance metadata, making it useful for testing how multiple agents share information before adopting a durable vector or graph memory backend.
 
 Use it with `MemoryPolicy` so each agent retrieves only memory that matches the expected namespace, source, scope, trust, confidence, or agent name.
