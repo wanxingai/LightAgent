@@ -26,7 +26,7 @@ class _LiteLLMCompletions:
             params['api_key'] = self._api_key
         if self._base_url:
             params['api_base'] = self._base_url
-        params['drop_params'] = True
+        params.setdefault('drop_params', True)
         return self._litellm.completion(**params)
 
 
