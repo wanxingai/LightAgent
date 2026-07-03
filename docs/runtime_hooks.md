@@ -92,3 +92,5 @@ result = agent.run(
 
 `LightFlow` automatically passes the flow trace as the parent trace for each
 step agent run.
+
+For practical production patterns, see [Runtime Hook Recipes](runtime_hook_recipes.md).

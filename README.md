@@ -559,7 +559,7 @@ print(result.content)
 print(result.trace)
 ```
 
-Hooks can target `before_run`, `after_run`, `on_error`, `before_model_request`, `after_model_response`, `before_tool_call`, `after_tool_result`, `before_memory_retrieve`, `after_memory_retrieve`, `before_memory_write`, and `after_memory_write`. `LightFlow(hooks=[...])` also supports step lifecycle hooks such as `before_flow_step`, `after_flow_step`, `on_approval_required`, `on_resume`, and `on_rerun`. See [Runtime Hooks](docs/runtime_hooks.md).
+Hooks can target `before_run`, `after_run`, `on_error`, `before_model_request`, `after_model_response`, `before_tool_call`, `after_tool_result`, `before_memory_retrieve`, `after_memory_retrieve`, `before_memory_write`, and `after_memory_write`. `LightFlow(hooks=[...])` also supports step lifecycle hooks such as `before_flow_step`, `after_flow_step`, `on_approval_required`, `on_resume`, and `on_rerun`. See [Runtime Hooks](docs/runtime_hooks.md) and [Runtime Hook Recipes](docs/runtime_hook_recipes.md).
 
 ### 13. SharedMemoryPool
 `SharedMemoryPool` is an in-memory shared memory prototype for multi-agent experiments. It is append-first and keeps provenance metadata, making it useful for testing how multiple agents share information before adopting a durable vector or graph memory backend.

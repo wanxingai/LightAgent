@@ -469,6 +469,12 @@ class LightAgent:
         })
         if not input_decision.allowed:
             error_msg = self._format_guardrail_error("input", input_decision.reason)
+            self._record_policy_adapter_event(
+                "before_run",
+                "input_guardrails",
+                "block",
+                reason=input_decision.reason,
+            )
             self._record_trace("guardrail_block", {"stage": "input", "reason": input_decision.reason})
             self._finish_run(success=False, error=error_msg, stage="input_guardrail")
             if stream:
@@ -478,6 +484,8 @@ class LightAgent:
                 return stream_result
             return self._format_run_result(error_msg, result_format, traceid, error_msg)
         if input_decision.value is not None:
+            if input_decision.value != query:
+                self._record_policy_adapter_event("before_run", "input_guardrails", "replace")
             query = input_decision.value
 
         # 初始化历史记录
@@ -628,6 +636,27 @@ class LightAgent:
             self._record_trace("hook_block", {"phase": phase, "reason": decision.reason})
         return decision
 
+    def _record_policy_adapter_event(
+            self,
+            phase: str,
+            adapter: str,
+            action: str,
+            *,
+            reason: str | None = None,
+            metadata: Dict[str, Any] | None = None,
+    ) -> None:
+        event = {
+            "phase": phase,
+            "hook": adapter,
+            "action": action,
+            "adapter": True,
+        }
+        if reason:
+            event["reason"] = reason
+        if metadata:
+            event.update(metadata)
+        self._record_trace("hook_decision", event)
+
     def _finish_run(
             self,
             *,
@@ -714,23 +743,40 @@ class LightAgent:
             details["reason"] = reason
         return format_error_code("LA-GUARDRAIL", details)
 
-    def _check_tool_guardrails(self, tool_name: str, arguments: Dict[str, Any]) -> str | None:
+    def _apply_tool_guardrails(self, tool_name: str, arguments: Dict[str, Any]) -> tuple[Dict[str, Any], str | None]:
         decision = self.guardrails.check_tool(tool_name, arguments, {
             "agent_name": self.name,
             "trace_id": self.traceid,
         })
         if decision.allowed:
-            return None
+            if isinstance(decision.value, dict):
+                updated_arguments = decision.value.get("arguments", arguments)
+                if isinstance(updated_arguments, dict) and updated_arguments != arguments:
+                    self._record_policy_adapter_event(
+                        "before_tool_call",
+                        "tool_guardrails",
+                        "replace",
+                        metadata={"tool": tool_name},
+                    )
+                    return updated_arguments, None
+            return arguments, None
         error_msg = self._format_guardrail_error("tool", decision.reason)
+        self._record_policy_adapter_event(
+            "before_tool_call",
+            "tool_guardrails",
+            "block",
+            reason=decision.reason,
+            metadata={"tool": tool_name},
+        )
         self._record_trace("guardrail_block", {
             "stage": "tool",
             "tool": tool_name,
             "reason": decision.reason,
         })
-        return error_msg
+        return arguments, error_msg
 
     def _prepare_tool_call(self, tool_name: str, arguments: Dict[str, Any]) -> tuple[Dict[str, Any], str | None]:
-        guardrail_error = self._check_tool_guardrails(tool_name, arguments)
+        arguments, guardrail_error = self._apply_tool_guardrails(tool_name, arguments)
         if guardrail_error:
             return arguments, guardrail_error
 
@@ -769,9 +815,17 @@ class LightAgent:
         })
         if not decision.allowed:
             error_msg = self._format_guardrail_error("output", decision.reason)
+            self._record_policy_adapter_event(
+                "after_model_response",
+                "output_guardrails",
+                "block",
+                reason=decision.reason,
+            )
             self._record_trace("guardrail_block", {"stage": "output", "reason": decision.reason})
             return error_msg
         if decision.value is not None:
+            if str(decision.value) != output:
+                self._record_policy_adapter_event("after_model_response", "output_guardrails", "replace")
             return str(decision.value)
         return output
 
@@ -1004,6 +1058,13 @@ class LightAgent:
             recent_fingerprints=getattr(self, "_memory_write_fingerprints", set()),
         )
         if not decision.allowed:
+            self._record_policy_adapter_event(
+                "before_memory_write",
+                "memory_write_admission",
+                "block",
+                reason=decision.reason,
+                metadata={"source": source, "scope": scope},
+            )
             self._record_trace("memory_write_block", {
                 "reason": decision.reason,
                 "source": source,
@@ -1013,6 +1074,13 @@ class LightAgent:
             return False
 
         stored_data = decision.value if decision.value is not None else data
+        if decision.value is not None and decision.value != data:
+            self._record_policy_adapter_event(
+                "before_memory_write",
+                "memory_write_admission",
+                "replace",
+                metadata={"source": source, "scope": scope},
+            )
         metadata = MemoryScope(
             source=source,
             scope=scope,

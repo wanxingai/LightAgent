@@ -1,3 +1,4 @@
+import asyncio
 import json
 from types import SimpleNamespace
 
@@ -179,6 +180,60 @@ def test_before_model_request_hook_can_replace_payload():
     assert result.content == "hello"
     assert completions.calls[0]["messages"][-1]["content"] == "rewritten"
     assert any(event["type"] == "hook_decision" for event in result.trace)
+
+
+def test_async_hook_can_replace_model_request_payload():
+    async def async_rewrite(ctx):
+        if ctx.phase != "before_model_request":
+            return None
+        params = dict(ctx.payload["params"])
+        messages = list(params["messages"])
+        messages[-1] = {**messages[-1], "content": "async rewritten"}
+        params["messages"] = messages
+        return HookDecision.replace({"params": params})
+
+    agent = LightAgent(
+        model="gpt-4o-mini",
+        api_key="test-key",
+        base_url="http://127.0.0.1:9/v1",
+        auto_discover_skills=False,
+        hooks=[async_rewrite],
+    )
+    completions = attach_client(agent, StaticCompletions("hello"))
+
+    result = agent.run("hello", result_format="object", trace=True)
+
+    assert result.content == "hello"
+    assert completions.calls[0]["messages"][-1]["content"] == "async rewritten"
+
+
+def test_async_hook_can_run_inside_existing_event_loop():
+    async def async_rewrite(ctx):
+        if ctx.phase != "before_model_request":
+            return None
+        await asyncio.sleep(0)
+        params = dict(ctx.payload["params"])
+        messages = list(params["messages"])
+        messages[-1] = {**messages[-1], "content": "loop rewritten"}
+        params["messages"] = messages
+        return HookDecision.replace({"params": params})
+
+    async def run_agent_inside_loop():
+        agent = LightAgent(
+            model="gpt-4o-mini",
+            api_key="test-key",
+            base_url="http://127.0.0.1:9/v1",
+            auto_discover_skills=False,
+            hooks=[async_rewrite],
+        )
+        completions = attach_client(agent, StaticCompletions("hello"))
+
+        result = agent.run("hello", result_format="object", trace=True)
+
+        assert result.content == "hello"
+        assert completions.calls[0]["messages"][-1]["content"] == "loop rewritten"
+
+    asyncio.run(run_agent_inside_loop())
 
 
 def test_hook_can_block_run_before_model_request():

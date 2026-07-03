@@ -7,7 +7,11 @@ Runtime hook primitives for LightAgent lifecycle extensions.
 
 from __future__ import annotations
 
+import asyncio
+import concurrent.futures
+import inspect
 from dataclasses import dataclass, field
+from collections.abc import Awaitable
 from typing import Any, Callable
 
 
@@ -81,6 +85,8 @@ class HookManager:
             hook_name = getattr(hook, "__name__", hook.__class__.__name__)
             try:
                 raw = self._call_hook(hook, context)
+                if inspect.isawaitable(raw):
+                    raw = self._run_awaitable(raw)
                 decision = self._normalize(raw)
             except Exception as exc:
                 hook_events.append({
@@ -138,6 +144,17 @@ class HookManager:
         if callable(hook):
             return hook(context)
         return None
+
+    @staticmethod
+    def _run_awaitable(awaitable: Awaitable[Any]) -> Any:
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            return asyncio.run(awaitable)
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(asyncio.run, awaitable)
+            return future.result()
 
     @staticmethod
     def _normalize(raw: Any) -> HookDecision:

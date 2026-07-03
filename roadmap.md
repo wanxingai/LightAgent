@@ -251,6 +251,9 @@ Implemented in the first slice:
   traces, LightFlow step calls, and memory write metadata.
 - Added `after_run`, `on_error`, `before_memory_retrieve`, and
   `after_memory_retrieve` to close the core agent and memory-read lifecycle.
+- Added async-compatible hook execution and production recipes for redaction,
+  budgets, routing, tool policy, memory filtering, export, and evaluation
+  sampling.
 - Kept existing `agent.run("hello")` and
   `agent.run(query, stream=True, user_id=user_id)` behavior compatible.
 
@@ -260,12 +263,9 @@ Remaining work:
   applications.
 - Add remaining handoff hook support after the LightSwarm handoff contract is
   stabilized.
-- Keep `input_guardrails`, `tool_guardrails`, `output_guardrails`, and
-  `memory_write_admission` backward compatible, either as adapters on top of
-  hooks or as parallel legacy APIs during the transition.
-- Provide built-in examples for metrics export, cost budget limits, PII
-  redaction, tool allow/deny policies, model routing, prompt enrichment, and
-  tool-call audit logging.
+- Continue hardening guardrail and memory policy adapter traces while preserving
+  the current public APIs.
+- Expand production recipes as new integration targets appear.
 - Add tests for hook ordering, no-op compatibility, payload replacement,
   blocking, retry/fallback signaling, sync/async behavior, error isolation,
   trace integration, and LightFlow step hook behavior.

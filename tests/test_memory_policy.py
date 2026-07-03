@@ -246,9 +246,12 @@ def test_memory_write_admission_can_rewrite_memory_before_store():
     policy = MemoryPolicy(memory_write_admission=normalize)
     agent, _ = make_agent(memory, memory_policy=policy)
 
-    agent.run("hello", user_id="alice")
+    result = agent.run("hello", user_id="alice", result_format="object", trace=True)
 
     assert memory.store_calls[0]["data"] == "user::HELLO"
+    adapter_event = next(event for event in result.trace if event["type"] == "hook_decision")
+    assert adapter_event["data"]["hook"] == "memory_write_admission"
+    assert adapter_event["data"]["action"] == "replace"
 
 
 def test_memory_policy_duplicate_fingerprints_are_scope_aware():
