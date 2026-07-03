@@ -3,7 +3,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from LightAgent import LightAgent, MemoryAdmissionDecision, MemoryPolicy, MemoryScope, ToolLoader
+from LightAgent import HookDecision, LightAgent, MemoryAdmissionDecision, MemoryPolicy, MemoryScope, ToolLoader
 
 
 class StaticCompletions:
@@ -318,6 +318,80 @@ def test_memory_write_hook_and_trace_hierarchy_metadata_are_stored():
     assert stored["metadata"]["trace_id"] == result.trace_id
     assert stored["metadata"]["parent_trace_id"] == "parent-trace"
     assert stored["metadata"]["run_group_id"] == "group-1"
+
+
+def test_memory_retrieve_hooks_can_rewrite_and_filter_results():
+    calls = []
+
+    def memory_hooks(ctx):
+        calls.append((ctx.phase, dict(ctx.payload)))
+        if ctx.phase == "before_memory_retrieve":
+            return HookDecision.replace({
+                **ctx.payload,
+                "query": "rewritten query",
+                "memory_user_id": "tenant-a:alice",
+            })
+        if ctx.phase == "after_memory_retrieve":
+            memories = dict(ctx.payload["memories"])
+            memories["results"] = [
+                item for item in memories["results"]
+                if item["memory"] == "allowed memory"
+            ]
+            return HookDecision.replace({**ctx.payload, "memories": memories})
+        return None
+
+    memory = RecordingMemory([
+        {"memory": "allowed memory", "metadata": {"user_id": "tenant-a:alice"}},
+        {"memory": "blocked memory", "metadata": {"user_id": "tenant-a:alice"}},
+    ])
+    agent = LightAgent(
+        model="gpt-4o-mini",
+        api_key="test-key",
+        base_url="http://127.0.0.1:9/v1",
+        memory=memory,
+        memory_policy=MemoryPolicy(namespace="tenant-a"),
+        auto_discover_skills=False,
+        hooks=[memory_hooks],
+    )
+    completions = StaticCompletions()
+    agent.client = SimpleNamespace(chat=SimpleNamespace(completions=completions))
+
+    result = agent.run("hello", user_id="alice", result_format="object", trace=True)
+
+    assert result.content == "done"
+    assert memory.retrieve_calls[0] == {"query": "rewritten query", "user_id": "tenant-a:alice"}
+    user_message = completions.calls[0]["messages"][-1]["content"]
+    assert "allowed memory" in user_message
+    assert "blocked memory" not in user_message
+    memory_phases = [phase for phase, _ in calls if phase in ("before_memory_retrieve", "after_memory_retrieve")]
+    assert memory_phases == ["before_memory_retrieve", "after_memory_retrieve"]
+    assert any(event["type"] == "hook_decision" for event in result.trace)
+
+
+def test_before_memory_retrieve_hook_can_block_prompt_injection():
+    def block_retrieve(ctx):
+        if ctx.phase == "before_memory_retrieve":
+            return HookDecision.block("tenant disabled memory reads")
+        return None
+
+    memory = RecordingMemory([{"memory": "should not appear", "metadata": {"user_id": "alice"}}])
+    agent = LightAgent(
+        model="gpt-4o-mini",
+        api_key="test-key",
+        base_url="http://127.0.0.1:9/v1",
+        memory=memory,
+        auto_discover_skills=False,
+        hooks=[block_retrieve],
+    )
+    completions = StaticCompletions()
+    agent.client = SimpleNamespace(chat=SimpleNamespace(completions=completions))
+
+    result = agent.run("hello", user_id="alice", result_format="object", trace=True)
+
+    assert result.content == "done"
+    assert memory.retrieve_calls == []
+    assert "should not appear" not in completions.calls[0]["messages"][-1]["content"]
+    assert any(event["type"] == "memory_retrieve_block" for event in result.trace)
 
 
 def test_tool_loader_rejects_unsafe_tool_names():
