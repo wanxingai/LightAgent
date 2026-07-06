@@ -49,6 +49,54 @@ class ToolCallCompletions:
         return SimpleNamespace(choices=[SimpleNamespace(message=message)])
 
 
+class LoopingStreamToolCallCompletions:
+    def __init__(self, max_create_calls):
+        self.calls = []
+        self.max_create_calls = max_create_calls
+
+    def create(self, **params):
+        self.calls.append(params)
+        if len(self.calls) > self.max_create_calls:
+            raise AssertionError("stream loop exceeded max_retry")
+
+        call_id = f"call_runtime_add_{len(self.calls)}"
+        return iter([
+            SimpleNamespace(
+                choices=[
+                    SimpleNamespace(
+                        delta=SimpleNamespace(
+                            reasoning_content=None,
+                            content=None,
+                            tool_calls=[
+                                SimpleNamespace(
+                                    index=0,
+                                    id=call_id,
+                                    function=SimpleNamespace(
+                                        name="runtime_add",
+                                        arguments=json.dumps({"a": 20, "b": 22}),
+                                    ),
+                                )
+                            ],
+                        ),
+                        finish_reason=None,
+                    )
+                ],
+            ),
+            SimpleNamespace(
+                choices=[
+                    SimpleNamespace(
+                        delta=SimpleNamespace(
+                            reasoning_content=None,
+                            content=None,
+                            tool_calls=None,
+                        ),
+                        finish_reason="tool_calls",
+                    )
+                ],
+            ),
+        ])
+
+
 class ErrorCompletions:
     def __init__(self, status_code):
         self.status_code = status_code
@@ -134,6 +182,20 @@ def test_stream_default_remains_generator_and_event_is_opt_in():
     assert isinstance(event, StreamEvent)
     assert event.type == "error"
     assert str(event.data).startswith("[LA-429]")
+
+
+def test_stream_tool_loop_stops_at_max_retry():
+    agent = make_agent()
+    completions = attach_client(agent, LoopingStreamToolCallCompletions(max_create_calls=2))
+
+    chunks = list(agent.run("loop", tools=[runtime_add], stream=True, max_retry=2, trace=True))
+
+    assert len(completions.calls) == 2
+    assert any("Max tool iterations(2) reached." in str(chunk) for chunk in chunks)
+    assert agent.export_trace()[-1]["data"] == {
+        "success": False,
+        "error": "max_tool_iterations_reached",
+    }
 
 
 def test_tool_parameter_validation_missing_required_and_wrong_type():

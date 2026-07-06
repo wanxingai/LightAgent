@@ -1161,6 +1161,7 @@ class LightAgent:
         """流式处理逻辑"""
         for _ in range(max_retry):
             try:
+                tool_iterations = 0
                 # 处理当前响应（可能包含多轮工具调用）
                 while True:
                     # 初始化变量
@@ -1394,6 +1395,21 @@ class LightAgent:
 
                             # 如果调用了finish工具，则结束处理
                             if finish_called:
+                                return
+
+                            tool_iterations += 1
+                            if tool_iterations >= max_retry:
+                                error_msg = f"Max tool iterations({max_retry}) reached."
+                                self.log("ERROR", "max_tool_iterations_reached", {"message": error_msg})
+                                self._record_trace("error", {
+                                    "stage": "max_tool_iterations",
+                                    "error": error_msg,
+                                })
+                                self._record_trace("run_end", {
+                                    "success": False,
+                                    "error": "max_tool_iterations_reached",
+                                })
+                                yield error_msg
                                 return
 
                             # 准备下一轮请求
