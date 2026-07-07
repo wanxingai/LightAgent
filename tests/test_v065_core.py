@@ -240,6 +240,37 @@ def test_stream_tool_loop_uses_finish_run_hooks():
     assert run_end_events[0]["data"]["stage"] == "max_tool_iterations"
 
 
+def test_on_error_capture_in_stream_tool_loop():
+    errors = []
+
+    def capture_error(ctx):
+        if ctx.phase == "on_error":
+            errors.append(dict(ctx.payload))
+        return None
+
+    agent = make_agent(hooks=[capture_error])
+    attach_client(agent, LoopingStreamToolCallCompletions(max_create_calls=1))
+
+    chunks = list(agent.run(
+        "loop",
+        tools=[runtime_add],
+        stream=True,
+        max_retry=3,
+        max_tool_iterations=1,
+        trace=True,
+    ))
+
+    assert any("Max tool iterations(1) reached." in str(chunk) for chunk in chunks)
+    assert errors == [{
+        "success": False,
+        "content": None,
+        "error": "max_tool_iterations_reached",
+        "stage": "max_tool_iterations",
+        "message": "Max tool iterations(1) reached.",
+        "max_tool_iterations": 1,
+    }]
+
+
 def test_tool_parameter_validation_missing_required_and_wrong_type():
     dispatcher = AsyncToolDispatcher(
         {"runtime_add": runtime_add},
