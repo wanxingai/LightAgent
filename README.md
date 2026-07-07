@@ -37,6 +37,7 @@ LightAgent is an ultra‑lightweight, open‑source framework that now natively 
 
 ---
 ## News
+- <img src="https://img.alicdn.com/imgextra/i3/O1CN01SFL0Gu26nrQBFKXFR_!!6000000007707-2-tps-500-500.png" alt="new" width="30" height="30"/>**[2026-07-08]** LightAgent v0.9.3 Development: Hardens runtime hook lifecycle and streaming tool safety with `max_tool_iterations`, consistent `on_error` / `after_run` closure, and expanded regression coverage.
 - <img src="https://img.alicdn.com/imgextra/i3/O1CN01SFL0Gu26nrQBFKXFR_!!6000000007707-2-tps-500-500.png" alt="new" width="30" height="30"/>**[2026-06-24]** LightAgent v0.9.0 Development: Adds checkpointed LightFlow workflows with resume/rerun support, approval nodes, richer step status and trace metadata, reusable Guardrails templates, stronger MemoryPolicy controls, and the first SharedMemoryPool prototype.
 - <img src="https://img.alicdn.com/imgextra/i3/O1CN01SFL0Gu26nrQBFKXFR_!!6000000007707-2-tps-500-500.png" alt="new" width="30" height="30"/>**[2026-06-14]** LightAgent v0.8.1 Development: Adds MemoryScope metadata conventions, stricter MemoryPolicy provenance filters, and guidance for separating trace, user memory, self-reflection memory, and LightSwarm delegation state.
 - **[2026-06-02]** LightAgent v0.8.0 Development: Adds initial LightFlow workflow orchestration for deterministic multi-step agent execution with DAG dependencies, step output passing, retries, and flow trace events.
