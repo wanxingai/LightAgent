@@ -82,6 +82,9 @@ def test_input_guardrail_blocks_before_model_request():
     assert "secret detected" in result.error
     assert completions.calls == []
     assert "guardrail_block" in [event["type"] for event in result.trace]
+    adapter_events = [event for event in result.trace if event["type"] == "hook_decision"]
+    assert adapter_events[0]["data"]["hook"] == "input_guardrails"
+    assert adapter_events[0]["data"]["adapter"] is True
     assert result.trace[-1]["data"]["success"] is False
 
 
@@ -113,6 +116,37 @@ def test_tool_guardrail_blocks_tool_execution_and_returns_tool_error_to_model():
     assert completions.calls[1]["messages"][-1]["content"].startswith("[LA-GUARDRAIL]")
     assert "file access requires approval" in completions.calls[1]["messages"][-1]["content"]
     assert "guardrail_block" in [event["type"] for event in result.trace]
+    adapter_event = next(event for event in result.trace if event["type"] == "hook_decision")
+    assert adapter_event["data"]["hook"] == "tool_guardrails"
+    assert adapter_event["data"]["adapter"] is True
+
+
+def test_tool_guardrail_can_rewrite_arguments_before_hook_and_execution():
+    observed = []
+
+    def rewrite_tool_args(tool_call, context):
+        return GuardrailDecision(
+            True,
+            value={**tool_call, "arguments": {"path": "/safe/file.txt"}},
+        )
+
+    def safe_tool(path):
+        observed.append(path)
+        return f"read {path}"
+
+    safe_tool.tool_info = dangerous_tool.tool_info
+
+    agent = make_agent(tool_guardrails=[rewrite_tool_args])
+    completions = attach_client(agent, ToolCallCompletions())
+
+    result = agent.run("read a file", tools=[safe_tool], result_format="object", trace=True)
+
+    assert result.content == "tool was blocked"
+    assert observed == ["/safe/file.txt"]
+    assert completions.calls[1]["messages"][-1]["content"] == "read /safe/file.txt"
+    adapter_event = next(event for event in result.trace if event["type"] == "hook_decision")
+    assert adapter_event["data"]["hook"] == "tool_guardrails"
+    assert adapter_event["data"]["action"] == "replace"
 
 
 def test_output_guardrail_can_rewrite_non_streaming_response():
@@ -140,6 +174,8 @@ def test_output_guardrail_can_block_non_streaming_response():
 
     assert result.error.startswith("[LA-GUARDRAIL]")
     assert "final answer contains a secret" in result.error
+    adapter_event = next(event for event in result.trace if event["type"] == "hook_decision")
+    assert adapter_event["data"]["hook"] == "output_guardrails"
     assert result.trace[-1]["data"]["success"] is False
 
 

@@ -453,7 +453,7 @@ class LightAgent:
         })
         if before_run.action == HOOK_BLOCK:
             error_msg = self._format_hook_error("before_run", before_run.reason)
-            self._record_trace("run_end", {"success": False, "error": error_msg})
+            self._finish_run(success=False, error=error_msg, stage="before_run")
             if stream:
                 stream_result = self._error_stream(error_msg)
                 if result_format == "event":
@@ -469,8 +469,14 @@ class LightAgent:
         })
         if not input_decision.allowed:
             error_msg = self._format_guardrail_error("input", input_decision.reason)
+            self._record_policy_adapter_event(
+                "before_run",
+                "input_guardrails",
+                "block",
+                reason=input_decision.reason,
+            )
             self._record_trace("guardrail_block", {"stage": "input", "reason": input_decision.reason})
-            self._record_trace("run_end", {"success": False, "error": error_msg})
+            self._finish_run(success=False, error=error_msg, stage="input_guardrail")
             if stream:
                 stream_result = self._error_stream(error_msg)
                 if result_format == "event":
@@ -478,6 +484,8 @@ class LightAgent:
                 return stream_result
             return self._format_run_result(error_msg, result_format, traceid, error_msg)
         if input_decision.value is not None:
+            if input_decision.value != query:
+                self._record_policy_adapter_event("before_run", "input_guardrails", "replace")
             query = input_decision.value
 
         # 初始化历史记录
@@ -564,7 +572,7 @@ class LightAgent:
         self.log("DEBUG", "first_request_params", {"params": self.chat_params})
         hook_error = self._prepare_model_request()
         if hook_error:
-            self._record_trace("run_end", {"success": False, "error": hook_error})
+            self._finish_run(success=False, error=hook_error, stage="before_model_request")
             if stream:
                 stream_result = self._error_stream(hook_error)
                 if result_format == "event":
@@ -577,7 +585,7 @@ class LightAgent:
             error_msg = format_lightagent_error(e, "create chat completion")
             self.log("ERROR", "model_request_failed", {"error": error_msg})
             self._record_trace("error", {"stage": "model_request", "error": error_msg})
-            self._record_trace("run_end", {"success": False, "error": error_msg})
+            self._finish_run(success=False, error=error_msg, stage="model_request")
             if stream:
                 stream_result = self._error_stream(error_msg)
                 if result_format == "event":
@@ -628,6 +636,69 @@ class LightAgent:
             self._record_trace("hook_block", {"phase": phase, "reason": decision.reason})
         return decision
 
+    def _record_policy_adapter_event(
+            self,
+            phase: str,
+            adapter: str,
+            action: str,
+            *,
+            reason: str | None = None,
+            metadata: Dict[str, Any] | None = None,
+    ) -> None:
+        event = {
+            "phase": phase,
+            "hook": adapter,
+            "action": action,
+            "adapter": True,
+        }
+        if reason:
+            event["reason"] = reason
+        if metadata:
+            event.update(metadata)
+        self._record_trace("hook_decision", event)
+
+    def _finish_run(
+            self,
+            *,
+            success: bool,
+            content: Any = None,
+            error: str | None = None,
+            stage: str | None = None,
+            extra: Dict[str, Any] | None = None,
+    ) -> HookDecision:
+        """Close a run with on_error/after_run hooks and a run_end trace event."""
+        payload = {
+            "success": success,
+            "content": content,
+            "error": error,
+            "stage": stage,
+        }
+        if extra:
+            payload.update(extra)
+        if not success:
+            self._run_hooks("on_error", payload)
+        decision = self._run_hooks("after_run", payload)
+        if decision.payload:
+            if "content" in decision.payload:
+                content = decision.payload["content"]
+            if "error" in decision.payload:
+                error = decision.payload["error"]
+        run_end = {"success": success}
+        if error is not None:
+            run_end["error"] = error
+        if stage is not None:
+            run_end["stage"] = stage
+        if extra:
+            run_end.update(extra)
+        self._record_trace("run_end", run_end)
+        return decision
+
+    def _notify_error(self, *, stage: str, error: str, **payload: Any) -> HookDecision:
+        """Notify error hooks for recoverable or non-terminal runtime errors."""
+        data = {"stage": stage, "error": error}
+        data.update(payload)
+        return self._run_hooks("on_error", data)
+
     @staticmethod
     def _format_hook_error(phase: str, reason: str | None = None) -> str:
         details = {"phase": phase}
@@ -672,23 +743,40 @@ class LightAgent:
             details["reason"] = reason
         return format_error_code("LA-GUARDRAIL", details)
 
-    def _check_tool_guardrails(self, tool_name: str, arguments: Dict[str, Any]) -> str | None:
+    def _apply_tool_guardrails(self, tool_name: str, arguments: Dict[str, Any]) -> tuple[Dict[str, Any], str | None]:
         decision = self.guardrails.check_tool(tool_name, arguments, {
             "agent_name": self.name,
             "trace_id": self.traceid,
         })
         if decision.allowed:
-            return None
+            if isinstance(decision.value, dict):
+                updated_arguments = decision.value.get("arguments", arguments)
+                if isinstance(updated_arguments, dict) and updated_arguments != arguments:
+                    self._record_policy_adapter_event(
+                        "before_tool_call",
+                        "tool_guardrails",
+                        "replace",
+                        metadata={"tool": tool_name},
+                    )
+                    return updated_arguments, None
+            return arguments, None
         error_msg = self._format_guardrail_error("tool", decision.reason)
+        self._record_policy_adapter_event(
+            "before_tool_call",
+            "tool_guardrails",
+            "block",
+            reason=decision.reason,
+            metadata={"tool": tool_name},
+        )
         self._record_trace("guardrail_block", {
             "stage": "tool",
             "tool": tool_name,
             "reason": decision.reason,
         })
-        return error_msg
+        return arguments, error_msg
 
     def _prepare_tool_call(self, tool_name: str, arguments: Dict[str, Any]) -> tuple[Dict[str, Any], str | None]:
-        guardrail_error = self._check_tool_guardrails(tool_name, arguments)
+        arguments, guardrail_error = self._apply_tool_guardrails(tool_name, arguments)
         if guardrail_error:
             return arguments, guardrail_error
 
@@ -727,9 +815,17 @@ class LightAgent:
         })
         if not decision.allowed:
             error_msg = self._format_guardrail_error("output", decision.reason)
+            self._record_policy_adapter_event(
+                "after_model_response",
+                "output_guardrails",
+                "block",
+                reason=decision.reason,
+            )
             self._record_trace("guardrail_block", {"stage": "output", "reason": decision.reason})
             return error_msg
         if decision.value is not None:
+            if str(decision.value) != output:
+                self._record_policy_adapter_event("after_model_response", "output_guardrails", "replace")
             return str(decision.value)
         return output
 
@@ -822,8 +918,13 @@ class LightAgent:
 
         context = ""
         memory_user_id = self.memory_policy.scoped_user_id(user_id)
-        related_memories = self.memory.retrieve(query=query, user_id=memory_user_id)
-        related_memories = self._filter_memory_results(related_memories, memory_user_id, user_id)
+        related_memories = self._retrieve_memory_with_hooks(
+            query=query,
+            memory_user_id=memory_user_id,
+            original_user_id=user_id,
+            source="user",
+            scope="user",
+        )
         if related_memories and related_memories.get("results"):
             context += "\n##用户偏好\n用户之前提到了:\n" + "\n".join(
                 [m["memory"] for m in related_memories["results"]]
@@ -838,8 +939,13 @@ class LightAgent:
 
         if self.self_learning:
             agent_user_id = self.memory_policy.scoped_user_id(self.name)
-            agent_memories = self.memory.retrieve(query=query, user_id=agent_user_id)
-            agent_memories = self._filter_memory_results(agent_memories, agent_user_id, self.name)
+            agent_memories = self._retrieve_memory_with_hooks(
+                query=query,
+                memory_user_id=agent_user_id,
+                original_user_id=self.name,
+                source="reflection",
+                scope="agent",
+            )
             if agent_memories and agent_memories.get("results"):
                 context += "\n##问题相关补充信息:\n" + "\n".join(
                     [m["memory"] for m in agent_memories["results"]]
@@ -853,6 +959,57 @@ class LightAgent:
             )
 
         return f"{context}\n##用户提问：\n{query}" if context else query
+
+    def _retrieve_memory_with_hooks(
+            self,
+            *,
+            query: str,
+            memory_user_id: str,
+            original_user_id: str,
+            source: str,
+            scope: str,
+    ) -> Any:
+        """Retrieve memories through hook and MemoryPolicy boundaries."""
+        before = self._run_hooks("before_memory_retrieve", {
+            "query": query,
+            "memory_user_id": str(memory_user_id),
+            "original_user_id": str(original_user_id),
+            "source": source,
+            "scope": scope,
+        })
+        if before.action == HOOK_BLOCK:
+            self._record_trace("memory_retrieve_block", {
+                "reason": before.reason,
+                "source": source,
+                "scope": scope,
+                "user_id": str(original_user_id),
+            })
+            return {"results": []}
+        if before.payload:
+            query = str(before.payload.get("query", query))
+            memory_user_id = str(before.payload.get("memory_user_id", memory_user_id))
+
+        memories = self.memory.retrieve(query=query, user_id=memory_user_id)
+        after = self._run_hooks("after_memory_retrieve", {
+            "query": query,
+            "memory_user_id": str(memory_user_id),
+            "original_user_id": str(original_user_id),
+            "source": source,
+            "scope": scope,
+            "memories": memories,
+        })
+        if after.action == HOOK_BLOCK:
+            self._record_trace("memory_retrieve_block", {
+                "reason": after.reason,
+                "source": source,
+                "scope": scope,
+                "user_id": str(original_user_id),
+            })
+            return {"results": []}
+        if after.payload and "memories" in after.payload:
+            memories = after.payload["memories"]
+
+        return self._filter_memory_results(memories, memory_user_id, original_user_id)
 
     def _store_memory_with_policy(
             self,
@@ -901,6 +1058,13 @@ class LightAgent:
             recent_fingerprints=getattr(self, "_memory_write_fingerprints", set()),
         )
         if not decision.allowed:
+            self._record_policy_adapter_event(
+                "before_memory_write",
+                "memory_write_admission",
+                "block",
+                reason=decision.reason,
+                metadata={"source": source, "scope": scope},
+            )
             self._record_trace("memory_write_block", {
                 "reason": decision.reason,
                 "source": source,
@@ -910,6 +1074,13 @@ class LightAgent:
             return False
 
         stored_data = decision.value if decision.value is not None else data
+        if decision.value is not None and decision.value != data:
+            self._record_policy_adapter_event(
+                "before_memory_write",
+                "memory_write_admission",
+                "replace",
+                metadata={"source": source, "scope": scope},
+            )
         metadata = MemoryScope(
             source=source,
             scope=scope,
@@ -1023,6 +1194,11 @@ class LightAgent:
                             "tool": function_call.name,
                             "error": single_tool_response,
                         })
+                        self._notify_error(
+                            stage="tool_arguments",
+                            error=single_tool_response,
+                            tool=function_call.name,
+                        )
                         self.chat_params["messages"].append({
                             "role": "tool",
                             "tool_call_id": tool_call.id,
@@ -1038,6 +1214,11 @@ class LightAgent:
                             "tool": function_call.name,
                             "error": guardrail_error,
                         })
+                        self._notify_error(
+                            stage="tool_guardrail",
+                            error=guardrail_error,
+                            tool=function_call.name,
+                        )
                         self.chat_params["messages"].append({
                             "role": "tool",
                             "tool_call_id": tool_call.id,
@@ -1126,20 +1307,20 @@ class LightAgent:
                 self._record_trace("model_response", {"content": reply})
                 if isinstance(reply, str) and reply.startswith("[LA-GUARDRAIL]"):
                     self._record_trace("error", {"stage": "output_guardrail", "error": reply})
-                    self._record_trace("run_end", {"success": False, "error": reply})
+                    self._finish_run(success=False, content=reply, error=reply, stage="output_guardrail")
                     return reply
-                self._record_trace("run_end", {"success": True})
+                self._finish_run(success=True, content=reply)
                 return reply
 
             # 更新响应
             if function_call_name == 'finish':
-                self._record_trace("run_end", {"success": True, "finish_tool": True})
+                self._finish_run(success=True, stage="finish_tool", extra={"finish_tool": True})
                 return  # 如果最后调用了finish工具，则结束生成器
             # print("params:",self.chat_params)
             self.log("DEBUG", "non_stream chat-completions params", {"params": self.chat_params})
             hook_error = self._prepare_model_request()
             if hook_error:
-                self._record_trace("run_end", {"success": False, "error": hook_error})
+                self._finish_run(success=False, error=hook_error, stage="before_model_request")
                 return hook_error
 
             try:
@@ -1148,13 +1329,13 @@ class LightAgent:
                 error_msg = format_lightagent_error(e, "continue chat completion")
                 self.log("ERROR", "model_request_failed", {"error": error_msg})
                 self._record_trace("error", {"stage": "model_request", "error": error_msg})
-                self._record_trace("run_end", {"success": False, "error": error_msg})
+                self._finish_run(success=False, error=error_msg, stage="model_request")
                 return error_msg
 
         # 重试次数用尽
         self.log("ERROR", "max_retry_reached", {"message": "Failed to generate a valid response."})
         self._record_trace("error", {"stage": "max_retry", "error": "Failed to generate a valid response."})
-        self._record_trace("run_end", {"success": False, "error": "max_retry_reached"})
+        self._finish_run(success=False, error="max_retry_reached", stage="max_retry")
         return "Failed to generate a valid response."
 
     def _run_stream_logic(self, response, max_retry) -> Generator[str, None, None]:
@@ -1252,7 +1433,7 @@ class LightAgent:
                             if not any(tc["name"] for tc in tool_calls):  # tool_calls 是之前收集的工具调用列表
                                 self.log("INFO", "stream_response", {"output": output})
                                 self._record_trace("model_response", {"content": output})
-                                self._record_trace("run_end", {"success": True})
+                                self._finish_run(success=True, content=output)
                                 return  # 结束生成器
                             # 否则（有工具调用），不提前退出，让循环自然结束，后续会由循环外的工具处理逻辑接管
 
@@ -1299,6 +1480,11 @@ class LightAgent:
                                                 "tool": tool_name,
                                                 "error": guardrail_error,
                                             })
+                                            self._notify_error(
+                                                stage="tool_guardrail",
+                                                error=guardrail_error,
+                                                tool=tool_name,
+                                            )
                                             tool_responses.append(guardrail_error)
                                             yield {"name": tool_name, "title": tool_title, "error": guardrail_error}
                                             continue
@@ -1364,7 +1550,12 @@ class LightAgent:
                                         if tool_name == 'finish':
                                             finish_called = True
                                             self.log("INFO", "finish_tool_called", {"response": combined_response})
-                                            self._record_trace("run_end", {"success": True, "finish_tool": True})
+                                            self._finish_run(
+                                                success=True,
+                                                content=combined_response,
+                                                stage="finish_tool",
+                                                extra={"finish_tool": True},
+                                            )
 
                                     except json.JSONDecodeError as e:
                                         error_msg = format_error_code("LA-JSON", f"{str(e)}; arguments: {arguments}")
@@ -1375,6 +1566,11 @@ class LightAgent:
                                             "tool": tool_name,
                                             "error": error_msg,
                                         })
+                                        self._notify_error(
+                                            stage="tool_arguments",
+                                            error=error_msg,
+                                            tool=tool_name,
+                                        )
                                         tool_responses.append(error_msg)
                                         yield {"name": tool_name, "title": tool_title, "error": error_msg}
 
@@ -1390,6 +1586,11 @@ class LightAgent:
                                             "tool": tool_name,
                                             "error": error_msg,
                                         })
+                                        self._notify_error(
+                                            stage="tool_execution",
+                                            error=error_msg,
+                                            tool=tool_name,
+                                        )
                                         tool_responses.append(error_msg)
                                         yield {"name": tool_name, "title": tool_title, "error": error_msg}
 
@@ -1450,7 +1651,7 @@ class LightAgent:
                             self.log("DEBUG", "stream next_request_params", {"params": self.chat_params})
                             hook_error = self._prepare_model_request()
                             if hook_error:
-                                self._record_trace("run_end", {"success": False, "error": hook_error})
+                                self._finish_run(success=False, error=hook_error, stage="before_model_request")
                                 yield hook_error
                                 return
                             try:
@@ -1459,20 +1660,21 @@ class LightAgent:
                                 error_msg = format_lightagent_error(e, "continue streaming chat completion")
                                 self.log("ERROR", "model_request_failed", {"error": error_msg})
                                 self._record_trace("error", {"stage": "model_request", "error": error_msg})
-                                self._record_trace("run_end", {"success": False, "error": error_msg})
+                                self._finish_run(success=False, error=error_msg, stage="model_request")
                                 yield error_msg
                                 return
                             break
             except Exception as e:
                 self.log("WARNING", "retry", {"error": str(e)})
                 self._record_trace("error", {"stage": "stream_retry", "error": str(e)})
+                self._notify_error(stage="stream_retry", error=str(e))
                 continue
 
         else:
             # 重试次数用尽
             self.log("ERROR", "max_retry_reached", {"message": f"Max retry({max_retry}) reached."})
             self._record_trace("error", {"stage": "max_retry", "error": "Failed to stream a valid response."})
-            self._record_trace("run_end", {"success": False, "error": "max_retry_reached"})
+            self._finish_run(success=False, error="max_retry_reached", stage="max_retry")
             yield "Failed to stream a valid response."
             return  # 或者直接退出
 

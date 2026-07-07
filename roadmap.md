@@ -1,6 +1,6 @@
 # LightAgent Roadmap
 
-Last updated: 2026-06-29
+Last updated: 2026-07-03
 
 LightAgent should continue to evolve as a lightweight, low-dependency agent
 framework rather than a broad replacement for LangChain, LangGraph, CrewAI, or
@@ -249,6 +249,11 @@ Implemented in the first slice:
   failures through `hook_decision` and `hook_block`.
 - Added `parent_trace_id` and `run_group_id` support to agent traces, flow
   traces, LightFlow step calls, and memory write metadata.
+- Added `after_run`, `on_error`, `before_memory_retrieve`, and
+  `after_memory_retrieve` to close the core agent and memory-read lifecycle.
+- Added async-compatible hook execution and production recipes for redaction,
+  budgets, routing, tool policy, memory filtering, export, and evaluation
+  sampling.
 - Kept existing `agent.run("hello")` and
   `agent.run(query, stream=True, user_id=user_id)` behavior compatible.
 
@@ -256,15 +261,11 @@ Remaining work:
 
 - Add async hook execution without forcing async usage onto simple local
   applications.
-- Add remaining agent hooks: `after_run`, `on_error`, and `on_handoff`.
-- Add memory retrieval hooks: `before_memory_retrieve` and
-  `after_memory_retrieve`.
-- Keep `input_guardrails`, `tool_guardrails`, `output_guardrails`, and
-  `memory_write_admission` backward compatible, either as adapters on top of
-  hooks or as parallel legacy APIs during the transition.
-- Provide built-in examples for metrics export, cost budget limits, PII
-  redaction, tool allow/deny policies, model routing, prompt enrichment, and
-  tool-call audit logging.
+- Add remaining handoff hook support after the LightSwarm handoff contract is
+  stabilized.
+- Continue hardening guardrail and memory policy adapter traces while preserving
+  the current public APIs.
+- Expand production recipes as new integration targets appear.
 - Add tests for hook ordering, no-op compatibility, payload replacement,
   blocking, retry/fallback signaling, sync/async behavior, error isolation,
   trace integration, and LightFlow step hook behavior.
@@ -557,9 +558,10 @@ or LightFlow while preserving explicit boundaries and inspectable behavior.
 
 ### v0.9.1 Workstream: Runtime Hooks And Middleware
 
-Status: first implementation slice completed in v0.9.1. Remaining items should
-move into v0.9.2 unless user feedback reprioritizes observability or
-persistence work.
+Status: first implementation slice completed in v0.9.1. Run-end, error, and
+memory-read lifecycle hooks completed in v0.9.2. Remaining items should move
+into the next hook hardening release unless user feedback reprioritizes
+observability or persistence work.
 
 Goal: introduce a minimal lifecycle hook system that lets applications observe,
 modify, block, retry, or route execution at well-defined points.
@@ -580,7 +582,8 @@ modify, block, retry, or route execution at well-defined points.
 
 ### Remaining Work
 
-- Add run end, error, handoff, and memory retrieval hooks.
+- Add handoff hooks after the LightSwarm handoff contract is stabilized.
+- Add async-compatible hook execution.
 - Convert or adapt existing guardrails and memory write admission into the new
   lifecycle model without breaking current public APIs.
 - Document common hook recipes:
@@ -735,8 +738,9 @@ building lightweight production agents.
 
 ### Next P1
 
-- v0.9.2 runtime hook completion and production recipes.
-- Remaining lifecycle hooks for run end, errors, handoff, and memory retrieval.
+- Runtime hook hardening and production recipes after v0.9.2.
+- Remaining lifecycle work for handoff hooks and async-compatible hook
+  execution.
 - Backward-compatible adapters for guardrails and memory write admission on top
   of hook lifecycle concepts.
 - Async-compatible hook execution and more examples for redaction, model
@@ -760,11 +764,12 @@ building lightweight production agents.
 
 ## Next Development Recommendation
 
-After v0.9.1, the next development target should be **v0.9.2:
-Runtime Hook Completion And Recipes**. Database-backed run stores and richer
-observability should follow after the hook layer is complete, because hooks
-provide the cleanest integration point for policy, audit, metrics, evaluation,
-model routing, and human review.
+After v0.9.2, the next development target should be **runtime hook hardening
+and production recipes**, or **v0.9.5 Observability, Evaluation, And Human
+Review** if the hook layer is stable enough. Database-backed run stores and
+richer observability should follow after the hook layer is complete, because
+hooks provide the cleanest integration point for policy, audit, metrics,
+evaluation, model routing, and human review.
 
 Reasoning:
 
@@ -781,10 +786,10 @@ Reasoning:
 
 Suggested first implementation slice:
 
-1. Add remaining agent hooks for run end, error, and handoff.
-2. Add memory retrieval hooks for scope, tenant, confidence, and expiration
+1. Add handoff hooks after the LightSwarm handoff contract is stable.
+2. Add async-compatible hook execution.
+3. Add more production recipes for scope, tenant, confidence, and expiration
    enforcement before prompt injection.
-3. Add async-compatible hook execution.
 4. Adapt guardrails and memory write admission into the hook lifecycle while
    preserving current public constructor parameters.
 5. Add practical recipes for PII redaction, model routing, tool audit logging,

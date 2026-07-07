@@ -1,3 +1,4 @@
+import asyncio
 import json
 from types import SimpleNamespace
 
@@ -181,6 +182,60 @@ def test_before_model_request_hook_can_replace_payload():
     assert any(event["type"] == "hook_decision" for event in result.trace)
 
 
+def test_async_hook_can_replace_model_request_payload():
+    async def async_rewrite(ctx):
+        if ctx.phase != "before_model_request":
+            return None
+        params = dict(ctx.payload["params"])
+        messages = list(params["messages"])
+        messages[-1] = {**messages[-1], "content": "async rewritten"}
+        params["messages"] = messages
+        return HookDecision.replace({"params": params})
+
+    agent = LightAgent(
+        model="gpt-4o-mini",
+        api_key="test-key",
+        base_url="http://127.0.0.1:9/v1",
+        auto_discover_skills=False,
+        hooks=[async_rewrite],
+    )
+    completions = attach_client(agent, StaticCompletions("hello"))
+
+    result = agent.run("hello", result_format="object", trace=True)
+
+    assert result.content == "hello"
+    assert completions.calls[0]["messages"][-1]["content"] == "async rewritten"
+
+
+def test_async_hook_can_run_inside_existing_event_loop():
+    async def async_rewrite(ctx):
+        if ctx.phase != "before_model_request":
+            return None
+        await asyncio.sleep(0)
+        params = dict(ctx.payload["params"])
+        messages = list(params["messages"])
+        messages[-1] = {**messages[-1], "content": "loop rewritten"}
+        params["messages"] = messages
+        return HookDecision.replace({"params": params})
+
+    async def run_agent_inside_loop():
+        agent = LightAgent(
+            model="gpt-4o-mini",
+            api_key="test-key",
+            base_url="http://127.0.0.1:9/v1",
+            auto_discover_skills=False,
+            hooks=[async_rewrite],
+        )
+        completions = attach_client(agent, StaticCompletions("hello"))
+
+        result = agent.run("hello", result_format="object", trace=True)
+
+        assert result.content == "hello"
+        assert completions.calls[0]["messages"][-1]["content"] == "loop rewritten"
+
+    asyncio.run(run_agent_inside_loop())
+
+
 def test_hook_can_block_run_before_model_request():
     def block_model(ctx):
         if ctx.phase == "before_model_request":
@@ -233,3 +288,52 @@ def test_tool_hooks_can_replace_arguments_and_outputs():
     assert completions.calls[1]["messages"][-1]["content"] == "hooked output"
     tool_result = next(event for event in result.trace if event["type"] == "tool_result")
     assert tool_result["data"]["output"] == "hooked output"
+
+
+def test_after_run_hook_closes_successful_run():
+    phases = []
+
+    def audit_run(ctx):
+        phases.append((ctx.phase, ctx.payload.get("success"), ctx.payload.get("content")))
+        return None
+
+    agent = LightAgent(
+        model="gpt-4o-mini",
+        api_key="test-key",
+        base_url="http://127.0.0.1:9/v1",
+        auto_discover_skills=False,
+        hooks=[audit_run],
+    )
+    attach_client(agent, StaticCompletions("hello"))
+
+    result = agent.run("hello", result_format="object", trace=True)
+
+    assert result.content == "hello"
+    assert ("after_run", True, "hello") in phases
+
+
+def test_on_error_hook_runs_for_hook_block():
+    errors = []
+
+    def block_and_collect(ctx):
+        if ctx.phase == "before_model_request":
+            return HookDecision.block("budget exceeded")
+        if ctx.phase == "on_error":
+            errors.append(ctx.payload)
+        return None
+
+    agent = LightAgent(
+        model="gpt-4o-mini",
+        api_key="test-key",
+        base_url="http://127.0.0.1:9/v1",
+        auto_discover_skills=False,
+        hooks=[block_and_collect],
+    )
+    attach_client(agent, StaticCompletions("should not run"))
+
+    result = agent.run("hello", result_format="object", trace=True)
+
+    assert result.error.startswith("[LA-HOOK]")
+    assert errors[0]["stage"] == "before_model_request"
+    assert errors[0]["success"] is False
+    assert "budget exceeded" in errors[0]["error"]

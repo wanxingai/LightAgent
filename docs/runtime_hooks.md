@@ -1,8 +1,9 @@
 ## Runtime Hooks
 
-LightAgent v0.9.1 adds a small ordered hook layer for policy, audit, redaction,
-routing, and payload mutation without changing the default `agent.run()`
-behavior.
+LightAgent v0.9.1 introduced a small ordered hook layer for policy, audit,
+redaction, routing, and payload mutation without changing the default
+`agent.run()` behavior. LightAgent v0.9.2 completes the core agent lifecycle
+with run-end, error, and memory-read hooks.
 
 Hooks can be plain callables or objects with methods named after a lifecycle
 phase. A hook receives a `HookContext` and may return:
@@ -48,10 +49,14 @@ Supported first-slice phases:
 | Phase | Payload |
 | --- | --- |
 | `before_run` | Query, runtime tools, stream mode, result format, and metadata. |
+| `after_run` | Final success flag, content, error, stage, and run metadata. |
+| `on_error` | Error stage, error text, success flag, and phase-specific context. |
 | `before_model_request` | OpenAI-compatible request params. |
 | `after_model_response` | Final non-streaming model content before output guardrails. |
 | `before_tool_call` | Tool name and parsed arguments. |
 | `after_tool_result` | Tool name and tool output. |
+| `before_memory_retrieve` | Query, target memory user id, original user id, source, and scope. |
+| `after_memory_retrieve` | Retrieved memory payload before final `MemoryPolicy` filtering. |
 | `before_memory_write` | Memory data, source, scope, and target user id. |
 | `after_memory_write` | Stored data, metadata, source, scope, and target user id. |
 
@@ -87,3 +92,5 @@ result = agent.run(
 
 `LightFlow` automatically passes the flow trace as the parent trace for each
 step agent run.
+
+For practical production patterns, see [Runtime Hook Recipes](runtime_hook_recipes.md).
