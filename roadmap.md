@@ -1,6 +1,6 @@
 # LightAgent Roadmap
 
-Last updated: 2026-07-03
+Last updated: 2026-07-08
 
 LightAgent should continue to evolve as a lightweight, low-dependency agent
 framework rather than a broad replacement for LangChain, LangGraph, CrewAI, or
@@ -259,8 +259,6 @@ Implemented in the first slice:
 
 Remaining work:
 
-- Add async hook execution without forcing async usage onto simple local
-  applications.
 - Add remaining handoff hook support after the LightSwarm handoff contract is
   stabilized.
 - Continue hardening guardrail and memory policy adapter traces while preserving
@@ -269,6 +267,26 @@ Remaining work:
 - Add tests for hook ordering, no-op compatibility, payload replacement,
   blocking, retry/fallback signaling, sync/async behavior, error isolation,
   trace integration, and LightFlow step hook behavior.
+
+### v0.9.3: Runtime Hook Hardening And Stream Safety
+
+Status: in development.
+
+Goal: stabilize the runtime hook lifecycle and stream safety behavior before
+adding larger workflow or observability features.
+
+Planned work:
+
+- Close streaming tool-loop limit failures through `_finish_run(...)` so
+  `on_error`, `after_run`, and `run_end` stay consistent.
+- Add `max_tool_iterations` as an explicit stream tool-call loop limit while
+  keeping the default behavior compatible with `max_retry`.
+- Add focused regression tests for stream tool-loop limits, hook lifecycle
+  closure, and trace behavior on failure.
+- Keep async hook support as completed v0.9.2 behavior and continue expanding
+  sync/async hook coverage through tests.
+- Document how production applications can monitor stream tool-loop errors with
+  `on_error` hooks.
 
 Draft usage model:
 
@@ -579,13 +597,16 @@ modify, block, retry, or route execution at well-defined points.
 - Record hook activity through trace events so blocked operations and payload
   changes are auditable.
 - Add trace hierarchy fields through `parent_trace_id` and `run_group_id`.
+- Add run-end, error, memory-read, and async-compatible hook execution in the
+  v0.9.2 line.
 
 ### Remaining Work
 
 - Add handoff hooks after the LightSwarm handoff contract is stabilized.
-- Add async-compatible hook execution.
 - Convert or adapt existing guardrails and memory write admission into the new
   lifecycle model without breaking current public APIs.
+- Harden stream failure paths so hook lifecycles stay consistent when tool-call
+  loops hit safety limits.
 - Document common hook recipes:
   - PII redaction before model calls;
   - budget enforcement before model/tool execution;
@@ -738,13 +759,12 @@ building lightweight production agents.
 
 ### Next P1
 
-- Runtime hook hardening and production recipes after v0.9.2.
-- Remaining lifecycle work for handoff hooks and async-compatible hook
-  execution.
+- Runtime hook hardening and stream safety for v0.9.3.
+- Remaining lifecycle work for handoff hooks after the LightSwarm handoff
+  contract is stable.
 - Backward-compatible adapters for guardrails and memory write admission on top
   of hook lifecycle concepts.
-- Async-compatible hook execution and more examples for redaction, model
-  routing, audit logging, and cost budgets.
+- More examples for redaction, model routing, audit logging, and cost budgets.
 
 ### P2
 
@@ -764,12 +784,11 @@ building lightweight production agents.
 
 ## Next Development Recommendation
 
-After v0.9.2, the next development target should be **runtime hook hardening
-and production recipes**, or **v0.9.5 Observability, Evaluation, And Human
-Review** if the hook layer is stable enough. Database-backed run stores and
-richer observability should follow after the hook layer is complete, because
-hooks provide the cleanest integration point for policy, audit, metrics,
-evaluation, model routing, and human review.
+After v0.9.2, the current development target is **v0.9.3 Runtime Hook
+Hardening And Stream Safety**. Database-backed run stores and richer
+observability should follow after the hook layer is stable, because hooks
+provide the cleanest integration point for policy, audit, metrics, evaluation,
+model routing, and human review.
 
 Reasoning:
 
@@ -787,10 +806,9 @@ Reasoning:
 Suggested first implementation slice:
 
 1. Add handoff hooks after the LightSwarm handoff contract is stable.
-2. Add async-compatible hook execution.
-3. Add more production recipes for scope, tenant, confidence, and expiration
+2. Add more production recipes for scope, tenant, confidence, and expiration
    enforcement before prompt injection.
-4. Adapt guardrails and memory write admission into the hook lifecycle while
+3. Adapt guardrails and memory write admission into the hook lifecycle while
    preserving current public constructor parameters.
-5. Add practical recipes for PII redaction, model routing, tool audit logging,
+4. Add practical recipes for PII redaction, model routing, tool audit logging,
    and cost-budget enforcement.

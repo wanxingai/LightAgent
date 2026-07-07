@@ -12,12 +12,13 @@ from LightAgent import (
 )
 
 
-def make_agent():
+def make_agent(**kwargs):
     return LightAgent(
         model="gpt-4o-mini",
         api_key="test-key",
         base_url="http://127.0.0.1:9/v1",
         auto_discover_skills=False,
+        **kwargs,
     )
 
 
@@ -192,10 +193,51 @@ def test_stream_tool_loop_stops_at_max_retry():
 
     assert len(completions.calls) == 2
     assert any("Max tool iterations(2) reached." in str(chunk) for chunk in chunks)
-    assert agent.export_trace()[-1]["data"] == {
+    assert {
         "success": False,
         "error": "max_tool_iterations_reached",
-    }
+        "stage": "max_tool_iterations",
+        "max_tool_iterations": 2,
+    }.items() <= agent.export_trace()[-1]["data"].items()
+
+
+def test_stream_tool_loop_respects_max_tool_iterations():
+    agent = make_agent()
+    completions = attach_client(agent, LoopingStreamToolCallCompletions(max_create_calls=1))
+
+    chunks = list(agent.run(
+        "loop",
+        tools=[runtime_add],
+        stream=True,
+        max_retry=5,
+        max_tool_iterations=1,
+        trace=True,
+    ))
+
+    assert len(completions.calls) == 1
+    assert any("Max tool iterations(1) reached." in str(chunk) for chunk in chunks)
+    assert agent.export_trace()[-1]["data"]["max_tool_iterations"] == 1
+
+
+def test_stream_tool_loop_uses_finish_run_hooks():
+    events = []
+
+    def collect_lifecycle(ctx):
+        if ctx.phase in {"on_error", "after_run"}:
+            events.append((ctx.phase, dict(ctx.payload)))
+        return None
+
+    agent = make_agent(hooks=[collect_lifecycle])
+    attach_client(agent, LoopingStreamToolCallCompletions(max_create_calls=2))
+
+    list(agent.run("loop", tools=[runtime_add], stream=True, max_retry=2, trace=True))
+
+    assert [phase for phase, _ in events] == ["on_error", "after_run"]
+    assert events[0][1]["stage"] == "max_tool_iterations"
+    assert events[0][1]["error"] == "max_tool_iterations_reached"
+    run_end_events = [event for event in agent.export_trace() if event["type"] == "run_end"]
+    assert len(run_end_events) == 1
+    assert run_end_events[0]["data"]["stage"] == "max_tool_iterations"
 
 
 def test_tool_parameter_validation_missing_required_and_wrong_type():

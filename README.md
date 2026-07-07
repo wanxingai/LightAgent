@@ -411,6 +411,7 @@ For debugging role drift or cross-agent memory issues, see [Multi-agent failure 
 
 ### 6. Streaming API
 `agent.run(query, stream=True)` returns OpenAI-compatible streaming chunks and remains backward compatible with existing integrations. Use it for chat UIs, long responses, and agent services that should start sending output before the full answer is complete.
+For tool-heavy streaming tasks, `max_tool_iterations` can cap repeated tool-call loops independently from `max_retry`.
 
 ```python
 for chunk in agent.run("Write a short report about AI agents.", stream=True):
