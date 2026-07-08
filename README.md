@@ -118,6 +118,8 @@ For shared long-term memory or graph memory deployments, review the [Memory Secu
 
 For lightweight shared memory experiments, see [SharedMemoryPool](docs/shared_memory_pool.md).
 
+For optional ClawMem long-term memory adapter setup, see [ClawMem Memory Adapter](docs/clawmem_memory_adapter.md).
+
 For memory write admission, expiration-aware retrieval, and low-quality memory write blocking, see [Memory Admission And Mutation Controls](docs/memory_admission.md).
 
 For separating trace, user memory, self-reflection memory, and LightSwarm delegation state, see [Memory, Trace, And Swarm Boundaries](docs/memory_trace_swarm_boundaries.md).
