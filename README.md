@@ -37,7 +37,7 @@ LightAgent is an ultra‑lightweight, open‑source framework that now natively 
 
 ---
 ## News
-- <img src="https://img.alicdn.com/imgextra/i3/O1CN01SFL0Gu26nrQBFKXFR_!!6000000007707-2-tps-500-500.png" alt="new" width="30" height="30"/>**[2026-07-08]** LightAgent v0.9.3 Development: Hardens runtime hook lifecycle and streaming tool safety with `max_tool_iterations`, consistent `on_error` / `after_run` closure, and expanded regression coverage.
+- <img src="https://img.alicdn.com/imgextra/i3/O1CN01SFL0Gu26nrQBFKXFR_!!6000000007707-2-tps-500-500.png" alt="new" width="30" height="30"/>**[2026-07-10]** LightAgent v0.9.3 Released: Completes runtime hook lifecycle coverage and hardens streaming tool safety with `max_tool_iterations`, consistent `on_error` / `after_run` closure, and expanded regression coverage.
 - **[2026-06-24]** LightAgent v0.9.0 Development: Adds checkpointed LightFlow workflows with resume/rerun support, approval nodes, richer step status and trace metadata, reusable Guardrails templates, stronger MemoryPolicy controls, and the first SharedMemoryPool prototype.
 - **[2026-06-14]** LightAgent v0.8.1 Development: Adds MemoryScope metadata conventions, stricter MemoryPolicy provenance filters, and guidance for separating trace, user memory, self-reflection memory, and LightSwarm delegation state.
 - **[2026-06-02]** LightAgent v0.8.0 Development: Adds initial LightFlow workflow orchestration for deterministic multi-step agent execution with DAG dependencies, step output passing, retries, and flow trace events.
@@ -528,7 +528,7 @@ Use default guardrail templates for privacy-sensitive input, sensitive tool conf
 Runtime hooks are ordered middleware for production policies that need to observe, replace, or block lifecycle payloads without changing the default `agent.run()` behavior.
 
 ```python
-from LightAgent import HookDecision, LightAgent
+from LightAgent import HookDecision, LightAgent, PolicyHook
 
 
 def redact_before_model(ctx):
@@ -555,7 +555,10 @@ agent = LightAgent(
     model="gpt-4.1",
     api_key="your_api_key",
     base_url="your_base_url",
-    hooks=[redact_before_model, block_dangerous_tool],
+    hooks=[
+        redact_before_model,
+        PolicyHook(block_dangerous_tool, phases={"before_tool_call"}, timeout=2.0),
+    ],
 )
 
 result = agent.run("Summarize this secret-token safely.", result_format="object", trace=True)
@@ -563,7 +566,7 @@ print(result.content)
 print(result.trace)
 ```
 
-Hooks can target `before_run`, `after_run`, `on_error`, `before_model_request`, `after_model_response`, `before_tool_call`, `after_tool_result`, `before_memory_retrieve`, `after_memory_retrieve`, `before_memory_write`, and `after_memory_write`. `LightFlow(hooks=[...])` also supports step lifecycle hooks such as `before_flow_step`, `after_flow_step`, `on_approval_required`, `on_resume`, and `on_rerun`. See [Runtime Hooks](docs/runtime_hooks.md) and [Runtime Hook Recipes](docs/runtime_hook_recipes.md).
+Hooks can target `before_run`, `after_run`, `on_error`, `before_model_request`, `after_model_response`, `before_tool_call`, `after_tool_result`, `before_memory_retrieve`, `after_memory_retrieve`, `before_memory_write`, `after_memory_write`, and `on_handoff`. Wrap security-sensitive callbacks with `PolicyHook(...)` to fail closed on exceptions or timeouts while ordinary observability hooks remain failure-isolated. `LightFlow(hooks=[...])` also supports step lifecycle hooks such as `before_flow_step`, `after_flow_step`, `on_approval_required`, `on_resume`, and `on_rerun`. See [Runtime Hooks](docs/runtime_hooks.md) and [Runtime Hook Recipes](docs/runtime_hook_recipes.md).
 
 ### 13. SharedMemoryPool
 `SharedMemoryPool` is an in-memory shared memory prototype for multi-agent experiments. It is append-first and keeps provenance metadata, making it useful for testing how multiple agents share information before adopting a durable vector or graph memory backend.

@@ -31,7 +31,7 @@ from .tools import ToolRegistry, ToolLoader, AsyncToolDispatcher
 from .errors import format_error_code, format_lightagent_error
 from .result import RunResult, StreamEvent
 from .tracing import TraceRecorder
-from .hooks import HOOK_BLOCK, HookContext, HookDecision, HookManager
+from .hooks import HOOK_BLOCK, HookContext, HookDecision, HookManager, PolicyHook
 from .guardrails import GuardrailManager
 from .mcp_client_manager import MCPClientManager
 from .skills import SkillManager
@@ -111,7 +111,7 @@ class LightAgent:
             input_guardrails: List[Callable[..., Any]] | None = None,  # 输入安全策略
             tool_guardrails: List[Callable[..., Any]] | None = None,  # 工具调用安全策略
             output_guardrails: List[Callable[..., Any]] | None = None,  # 输出安全策略
-            hooks: List[Callable[..., Any]] | None = None,  # 运行期 hook / middleware
+            hooks: List[Callable[..., Any] | PolicyHook] | None = None,  # 运行期 hook / middleware
             debug: bool = False,  # 是否启用调试模式
             log_level: str = "INFO",  # 日志级别（INFO, DEBUG, ERROR）
             log_file: Optional[str] = None,  # 日志文件路径
@@ -326,6 +326,10 @@ class LightAgent:
         获取所有工具的描述（OpenAI 格式）
         """
         return deepcopy(self.tool_registry.get_tools())
+
+    def validate_tools(self) -> List[Dict[str, str]]:
+        """Return diagnostics for the currently registered tool schemas."""
+        return self.tool_registry.validate_tools()
 
     def get_tool(self, tool_name: str) -> Callable:
         """
@@ -1713,10 +1717,68 @@ class LightAgent:
             if target_agent_name == self.name:
                 self.log("INFO", "self_transfer_detected", {"target_agent": target_agent_name})
                 return None  # 如果是自身，直接返回 None
+
+            target_agent = light_swarm.agents.get(target_agent_name)
+            handoff_data = {
+                "source_agent": self.name,
+                "target_agent": target_agent_name,
+                "query": query,
+                "stream": stream,
+            }
+            if target_agent is None or not hasattr(target_agent, "run"):
+                error_msg = "Failed to transfer task: invalid target agent"
+                self._record_trace("handoff", {**handoff_data, "status": "failed", "error": error_msg})
+                self._finish_run(
+                    success=False,
+                    error=error_msg,
+                    stage="handoff",
+                    extra={"source_agent": self.name, "target_agent": target_agent_name},
+                )
+                return self._error_stream(error_msg) if stream else error_msg
+
+            decision = self._run_hooks("on_handoff", handoff_data)
+            if decision.action == HOOK_BLOCK:
+                error_msg = self._format_hook_error("on_handoff", decision.reason)
+                self._record_trace("handoff", {
+                    **handoff_data,
+                    "status": "blocked",
+                    "reason": decision.reason,
+                })
+                self._finish_run(
+                    success=False,
+                    error=error_msg,
+                    stage="on_handoff",
+                    extra={"source_agent": self.name, "target_agent": target_agent_name},
+                )
+                return self._error_stream(error_msg) if stream else error_msg
+
+            self._record_trace("handoff", {**handoff_data, "status": "allowed"})
             if stream:
-                return self._handle_task_transfer_stream(light_swarm.agents[target_agent_name], query, light_swarm)
-            else:
-                return self._handle_task_transfer_non_stream(light_swarm.agents[target_agent_name], query, light_swarm)
+                return self._handle_task_transfer_stream(target_agent, query, light_swarm)
+
+            try:
+                result = self._handle_task_transfer_non_stream(target_agent, query, light_swarm)
+            except Exception as exc:
+                error_msg = format_lightagent_error(exc, "handoff to agent")
+                self._record_trace("error", {
+                    "stage": "handoff",
+                    "target_agent": target_agent_name,
+                    "error": error_msg,
+                })
+                self._finish_run(
+                    success=False,
+                    error=error_msg,
+                    stage="handoff",
+                    extra={"source_agent": self.name, "target_agent": target_agent_name},
+                )
+                raise
+            self._finish_run(
+                success=True,
+                content=result,
+                stage="handoff",
+                extra={"source_agent": self.name, "target_agent": target_agent_name},
+            )
+            return result
         return None
 
     def _handle_task_transfer_stream(
@@ -1742,10 +1804,33 @@ class LightAgent:
             return
 
         try:
-            yield from target_agent.run(context, light_swarm=light_swarm, stream=True)
+            yield from target_agent.run(
+                context,
+                light_swarm=light_swarm,
+                stream=True,
+                parent_trace_id=self.traceid or None,
+                run_group_id=self._run_group_id or self._current_run_id,
+            )
         except Exception as e:
             self.log("ERROR", "run_failed", {"error": str(e)})
+            error_msg = format_lightagent_error(e, "handoff to agent")
+            self._record_trace("error", {
+                "stage": "handoff",
+                "target_agent": target_agent.name,
+                "error": error_msg,
+            })
+            self._finish_run(
+                success=False,
+                error=error_msg,
+                stage="handoff",
+                extra={"source_agent": self.name, "target_agent": target_agent.name},
+            )
             raise  # 重新抛出异常以便调试
+        self._finish_run(
+            success=True,
+            stage="handoff",
+            extra={"source_agent": self.name, "target_agent": target_agent.name},
+        )
 
     def _handle_task_transfer_non_stream(
             self,
@@ -1769,7 +1854,13 @@ class LightAgent:
             return "Failed to transfer task: invalid target agent"
 
         try:
-            result = target_agent.run(context, light_swarm=light_swarm, stream=False)
+            result = target_agent.run(
+                context,
+                light_swarm=light_swarm,
+                stream=False,
+                parent_trace_id=self.traceid or None,
+                run_group_id=self._run_group_id or self._current_run_id,
+            )
             if isinstance(result, Generator):
                 return "".join(result)  # 将生成器转换为字符串
             return result
