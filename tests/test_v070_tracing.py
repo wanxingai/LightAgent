@@ -236,6 +236,46 @@ def test_async_hook_can_run_inside_existing_event_loop():
     asyncio.run(run_agent_inside_loop())
 
 
+def test_hook_failure_is_isolated_and_traced():
+    called = []
+
+    def broken_hook(ctx):
+        if ctx.phase == "before_model_request":
+            raise RuntimeError("audit sink unavailable")
+        return None
+
+    def rewrite_after_failure(ctx):
+        if ctx.phase != "before_model_request":
+            return None
+        called.append(ctx.phase)
+        params = dict(ctx.payload["params"])
+        messages = list(params["messages"])
+        messages[-1] = {**messages[-1], "content": "rewritten after failure"}
+        params["messages"] = messages
+        return HookDecision.replace({"params": params})
+
+    agent = LightAgent(
+        model="gpt-4o-mini",
+        api_key="test-key",
+        base_url="http://127.0.0.1:9/v1",
+        auto_discover_skills=False,
+        hooks=[broken_hook, rewrite_after_failure],
+    )
+    completions = attach_client(agent, StaticCompletions("hello"))
+
+    result = agent.run("hello", result_format="object", trace=True)
+
+    assert result.content == "hello"
+    assert called == ["before_model_request"]
+    assert completions.calls[0]["messages"][-1]["content"] == "rewritten after failure"
+    hook_events = [event for event in result.trace if event["type"] == "hook_decision"]
+    assert any(event["data"]["hook"] == "broken_hook" and event["data"]["action"] == "error" for event in hook_events)
+    assert any(
+        event["data"]["hook"] == "rewrite_after_failure" and event["data"]["action"] == "replace"
+        for event in hook_events
+    )
+
+
 def test_hook_can_block_run_before_model_request():
     def block_model(ctx):
         if ctx.phase == "before_model_request":
@@ -337,3 +377,29 @@ def test_on_error_hook_runs_for_hook_block():
     assert errors[0]["stage"] == "before_model_request"
     assert errors[0]["success"] is False
     assert "budget exceeded" in errors[0]["error"]
+
+
+def test_after_run_hook_closes_model_error():
+    lifecycle = []
+
+    def collect_after_run(ctx):
+        if ctx.phase in {"on_error", "after_run"}:
+            lifecycle.append((ctx.phase, dict(ctx.payload)))
+        return None
+
+    agent = LightAgent(
+        model="gpt-4o-mini",
+        api_key="test-key",
+        base_url="http://127.0.0.1:9/v1",
+        auto_discover_skills=False,
+        hooks=[collect_after_run],
+    )
+    attach_client(agent, ErrorCompletions())
+
+    result = agent.run("hello", result_format="object", trace=True)
+
+    assert result.error.startswith("[LA-503]")
+    assert [phase for phase, _ in lifecycle] == ["on_error", "after_run"]
+    assert lifecycle[0][1]["stage"] == "model_request"
+    assert lifecycle[1][1]["success"] is False
+    assert lifecycle[1][1]["error"].startswith("[LA-503]")

@@ -72,6 +72,42 @@ Supported first-slice phases:
 | `on_resume` | Inspect a checkpoint before resume. |
 | `on_rerun` | Inspect a checkpoint before rerunning one step and downstream steps. |
 
+### Streaming Tool Loop Errors
+
+Streaming tool-call loops are bounded by `max_tool_iterations`. When the limit
+is reached, LightAgent closes the run through the normal lifecycle, so
+`on_error`, `after_run`, and `run_end` trace events stay consistent.
+
+```python
+def alert_tool_loop(ctx):
+    if ctx.phase != "on_error":
+        return None
+    if ctx.payload.get("stage") == "max_tool_iterations":
+        alert({
+            "trace_id": ctx.trace_id,
+            "run_id": ctx.run_id,
+            "error": ctx.payload.get("error"),
+            "message": ctx.payload.get("message"),
+        })
+    return None
+
+
+agent = LightAgent(
+    model="gpt-4.1",
+    api_key="your_api_key",
+    base_url="your_base_url",
+    hooks=[alert_tool_loop],
+)
+
+stream = agent.run(
+    "run a tool-heavy task",
+    tools=[some_tool],
+    stream=True,
+    max_retry=3,
+    max_tool_iterations=2,
+)
+```
+
 ### Trace Integration
 
 When tracing is enabled, hook replacements, blocks, metadata events, and hook

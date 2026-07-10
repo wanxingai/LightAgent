@@ -381,6 +381,7 @@ class LightAgent:
             light_swarm=None,
             stream: bool = False,
             max_retry: int = 10,
+            max_tool_iterations: Optional[int] = None,
             user_id: str = "default_user",
             history: list = None,
             metadata: Optional[Dict] = None,
@@ -398,6 +399,7 @@ class LightAgent:
         :param light_swarm: LightSwarm 实例，用于任务转移。
         :param stream: 是否启用流式输出。
         :param max_retry: 最大重试次数。
+        :param max_tool_iterations: 流式工具调用的最大循环轮次；默认沿用 max_retry 保持兼容。
         :param user_id: 用户 ID。
         :param history: 历史对话 。
         :param metadata: 元数据。
@@ -414,6 +416,9 @@ class LightAgent:
             raise ValueError("result_format='event' requires stream=True")
         if stream and result_format in ("object", "dict"):
             raise ValueError("stream=True supports result_format='str' or result_format='event'")
+        if max_tool_iterations is not None and max_tool_iterations < 1:
+            raise ValueError("max_tool_iterations must be at least 1")
+        effective_max_tool_iterations = max_tool_iterations if max_tool_iterations is not None else max_retry
 
         # 设置跟踪ID
         traceid = uuid4().hex
@@ -593,7 +598,7 @@ class LightAgent:
                 return stream_result
             return self._format_run_result(error_msg, result_format, traceid, error_msg)
 
-        result = self._core_run_logic(response, stream, max_retry)
+        result = self._core_run_logic(response, stream, max_retry, effective_max_tool_iterations)
         if stream:
             if result_format == "event":
                 return self._stream_as_events(result, traceid)
@@ -1143,10 +1148,10 @@ class LightAgent:
         filtered["results"] = filtered_results
         return filtered
 
-    def _core_run_logic(self, response, stream, max_retry) -> Union[Generator[str, None, None], str]:
+    def _core_run_logic(self, response, stream, max_retry, max_tool_iterations) -> Union[Generator[str, None, None], str]:
         """核心运行逻辑"""
         if stream:
-            return self._run_stream_logic(response, max_retry)
+            return self._run_stream_logic(response, max_retry, max_tool_iterations)
         else:
             return self._run_non_stream_logic(response, max_retry)
 
@@ -1338,7 +1343,7 @@ class LightAgent:
         self._finish_run(success=False, error="max_retry_reached", stage="max_retry")
         return "Failed to generate a valid response."
 
-    def _run_stream_logic(self, response, max_retry) -> Generator[str, None, None]:
+    def _run_stream_logic(self, response, max_retry, max_tool_iterations) -> Generator[str, None, None]:
         """流式处理逻辑"""
         for _ in range(max_retry):
             try:
@@ -1599,17 +1604,22 @@ class LightAgent:
                                 return
 
                             tool_iterations += 1
-                            if tool_iterations >= max_retry:
-                                error_msg = f"Max tool iterations({max_retry}) reached."
+                            if tool_iterations >= max_tool_iterations:
+                                error_msg = f"Max tool iterations({max_tool_iterations}) reached."
                                 self.log("ERROR", "max_tool_iterations_reached", {"message": error_msg})
                                 self._record_trace("error", {
                                     "stage": "max_tool_iterations",
                                     "error": error_msg,
                                 })
-                                self._record_trace("run_end", {
-                                    "success": False,
-                                    "error": "max_tool_iterations_reached",
-                                })
+                                self._finish_run(
+                                    success=False,
+                                    error="max_tool_iterations_reached",
+                                    stage="max_tool_iterations",
+                                    extra={
+                                        "message": error_msg,
+                                        "max_tool_iterations": max_tool_iterations,
+                                    },
+                                )
                                 yield error_msg
                                 return
 
