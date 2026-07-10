@@ -37,5 +37,5 @@ jobs:
       - name: Compile package
         run: python -m compileall -q LightAgent
 
-      - name: Run focused tests
-        run: PYTHONPATH=. python -m pytest -q tests/test_v065_core.py tests/test_v070_tracing.py tests/test_memory_policy.py
+      - name: Run full test suite
+        run: PYTHONPATH=. python -m pytest -q
