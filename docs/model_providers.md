@@ -26,6 +26,34 @@ OpenRouter model names are provider-routed strings such as
 `openai/gpt-4.1`, `anthropic/claude-sonnet-4`, or another model listed in your
 OpenRouter account.
 
+### Atlas Cloud
+
+Atlas Cloud exposes an OpenAI-compatible `/v1` endpoint, so it works with the
+standard `LightAgent` client configuration. Keep the API key outside source
+control and pass it through `ATLASCLOUD_API_KEY`:
+
+```bash
+export ATLASCLOUD_API_KEY="your_atlascloud_api_key"
+```
+
+```python
+import os
+
+from LightAgent import LightAgent
+
+agent = LightAgent(
+    model="deepseek-ai/deepseek-v4-pro",
+    api_key=os.environ["ATLASCLOUD_API_KEY"],
+    base_url="https://api.atlascloud.ai/v1",
+)
+
+print(agent.run("Summarize LightAgent in one sentence."))
+```
+
+Use the exact model name from your Atlas Cloud account. If you choose a
+reasoning model, set a large enough output budget in your application request
+path so the model has room to return a final answer.
+
 ### vLLM
 
 Start vLLM with its OpenAI-compatible server, then use its `/v1` endpoint:
