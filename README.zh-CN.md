@@ -55,8 +55,9 @@
 
 ---
 ## 新闻
-- <img src="https://img.alicdn.com/imgextra/i3/O1CN01SFL0Gu26nrQBFKXFR_!!6000000007707-2-tps-500-500.png" alt="new" width="30" height="30"/>**[2026-06-24]** LightAgent v0.9.0 开发版：新增可持久化 LightFlow checkpoint、resume/rerun、审批节点、更清晰的步骤状态和 trace 元数据，同时补充 Guardrails 模板、MemoryPolicy 控制和 SharedMemoryPool 原型。
-- <img src="https://img.alicdn.com/imgextra/i3/O1CN01SFL0Gu26nrQBFKXFR_!!6000000007707-2-tps-500-500.png" alt="new" width="30" height="30"/>**[2026-06-14]** LightAgent v0.8.1 开发版：新增 MemoryScope 元数据约定、MemoryPolicy 来源/范围/可信度过滤，并补充 Trace、用户记忆、自我反思记忆和 LightSwarm 委托状态的边界说明。
+- <img src="https://img.alicdn.com/imgextra/i3/O1CN01SFL0Gu26nrQBFKXFR_!!6000000007707-2-tps-500-500.png" alt="new" width="30" height="30"/>**[2026-07-10]** LightAgent v0.9.3 正式发布：补全 `after_run`、`on_error` 和记忆检索 Hooks 生命周期，新增独立的 `max_tool_iterations` 流式工具循环上限并保持 `max_retry` 向后兼容，同时完善错误收尾、Trace 和回归测试。
+- **[2026-06-24]** LightAgent v0.9.0 开发版：新增可持久化 LightFlow checkpoint、resume/rerun、审批节点、更清晰的步骤状态和 trace 元数据，同时补充 Guardrails 模板、MemoryPolicy 控制和 SharedMemoryPool 原型。
+- **[2026-06-14]** LightAgent v0.8.1 开发版：新增 MemoryScope 元数据约定、MemoryPolicy 来源/范围/可信度过滤，并补充 Trace、用户记忆、自我反思记忆和 LightSwarm 委托状态的边界说明。
 - **[2026-06-02]** LightAgent v0.8.0 开发版：新增 LightFlow 工作流编排能力，支持确定性多步骤 Agent 执行、DAG 依赖、步骤输出传递、重试和 flow trace 事件。
 - **[2026-05-29]** LightAgent v0.7.0 开发版：新增可选的结构化 Trace 可观测能力，支持记录运行生命周期、模型请求摘要、工具调用、工具结果和错误事件，并提供 `agent.export_trace()` 便于生产调试。
 - **[2026-05-28]** LightAgent v0.6.5 正式发布：新增可选结构化运行结果、结构化流式事件、可捕获的 LightAgent 错误和工具参数校验，同时保持默认 `agent.run()` 与 `stream=True` 行为兼容。
