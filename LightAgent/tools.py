@@ -19,6 +19,10 @@ from typing import List, Dict, Any, Callable, Union, Generator, AsyncGenerator
 from .errors import format_error_code, format_lightagent_error
 
 
+_TOOL_NAME_PATTERN = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+_SUPPORTED_TOOL_PARAM_TYPES = {"string", "integer", "number", "boolean", "array", "object"}
+
+
 class ToolRegistry:
     """集中管理工具注册表，避免全局变量"""
 
@@ -26,6 +30,7 @@ class ToolRegistry:
         self.function_mappings = {}  # 工具名称 -> 工具函数
         self.function_info = {}  # 工具名称 -> 工具info信息
         self.openai_function_schemas = []  # OpenAI 格式的工具描述
+        self._registration_counts: Dict[str, int] = {}
 
     def register_tool(self, func: Callable) -> bool:
         """注册单个工具"""
@@ -34,6 +39,11 @@ class ToolRegistry:
 
         tool_info = func.tool_info
         tool_name = tool_info["tool_name"]
+        existing_func = self.function_mappings.get(tool_name)
+        if tool_name not in self._registration_counts:
+            self._registration_counts[tool_name] = 1
+        elif existing_func is not func:
+            self._registration_counts[tool_name] += 1
 
         # 注册到字典
         self.function_info[tool_name] = tool_info
@@ -75,6 +85,88 @@ class ToolRegistry:
             if not self.register_tool(func):
                 success = False
         return success
+
+    @staticmethod
+    def validate_tool_info(tool_info: Any) -> List[Dict[str, str]]:
+        """Return structured diagnostics for one ``tool_info`` definition."""
+        diagnostics: List[Dict[str, str]] = []
+
+        if not isinstance(tool_info, dict):
+            return [{
+                "tool": "<unknown>",
+                "level": "error",
+                "field": "tool_info",
+                "message": "tool_info must be a dictionary",
+            }]
+
+        raw_tool_name = tool_info.get("tool_name")
+        tool_name = raw_tool_name if isinstance(raw_tool_name, str) and raw_tool_name else "<unknown>"
+
+        def add(level: str, field: str, message: str) -> None:
+            diagnostics.append({
+                "tool": tool_name,
+                "level": level,
+                "field": field,
+                "message": message,
+            })
+
+        if not isinstance(raw_tool_name, str) or not raw_tool_name.strip():
+            add("error", "tool_name", "tool_name must be a non-empty string")
+        elif not _TOOL_NAME_PATTERN.fullmatch(raw_tool_name):
+            add("error", "tool_name", "tool_name must match [A-Za-z_][A-Za-z0-9_]*")
+
+        description = tool_info.get("tool_description")
+        if not isinstance(description, str) or not description.strip():
+            add("warning", "tool_description", "tool_description should not be empty")
+
+        params = tool_info.get("tool_params")
+        if not isinstance(params, list):
+            add("error", "tool_params", "tool_params must be a list")
+            return diagnostics
+
+        param_names: set[str] = set()
+        for index, param in enumerate(params):
+            field_prefix = f"tool_params[{index}]"
+            if not isinstance(param, dict):
+                add("error", field_prefix, "tool parameter must be a dictionary")
+                continue
+
+            param_name = param.get("name")
+            if not isinstance(param_name, str) or not param_name.strip():
+                add("error", f"{field_prefix}.name", "parameter name must be a non-empty string")
+            elif param_name in param_names:
+                add("error", f"{field_prefix}.name", f"duplicate parameter name `{param_name}`")
+            else:
+                param_names.add(param_name)
+
+            param_type = param.get("type")
+            if not isinstance(param_type, str) or param_type not in _SUPPORTED_TOOL_PARAM_TYPES:
+                supported = ", ".join(sorted(_SUPPORTED_TOOL_PARAM_TYPES))
+                add("error", f"{field_prefix}.type", f"parameter type must be one of: {supported}")
+
+            param_description = param.get("description")
+            if not isinstance(param_description, str) or not param_description.strip():
+                add("warning", f"{field_prefix}.description", "parameter description should not be empty")
+
+            if "required" in param and not isinstance(param["required"], bool):
+                add("error", f"{field_prefix}.required", "required must be a boolean")
+
+        return diagnostics
+
+    def validate_tools(self) -> List[Dict[str, str]]:
+        """Validate all registered tools without changing registration behavior."""
+        diagnostics: List[Dict[str, str]] = []
+        for tool_name, tool_info in self.function_info.items():
+            diagnostics.extend(self.validate_tool_info(tool_info))
+            count = self._registration_counts.get(tool_name, 0)
+            if count > 1:
+                diagnostics.append({
+                    "tool": tool_name,
+                    "level": "error",
+                    "field": "tool_name",
+                    "message": f"tool name `{tool_name}` was registered {count} times",
+                })
+        return diagnostics
 
     def get_tools(self) -> List[Dict[str, Any]]:
         """获取所有工具的描述（OpenAI 格式）"""
@@ -142,7 +234,7 @@ class ToolLoader:
 
     @staticmethod
     def _is_safe_tool_name(tool_name: str) -> bool:
-        return bool(re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", str(tool_name)))
+        return bool(_TOOL_NAME_PATTERN.fullmatch(str(tool_name)))
 
     def load_tools(self, tool_names: List[str]) -> Dict[str, Callable]:
         """批量加载工具"""

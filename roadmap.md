@@ -257,25 +257,25 @@ Implemented in the first slice:
 - Kept existing `agent.run("hello")` and
   `agent.run(query, stream=True, user_id=user_id)` behavior compatible.
 
-Remaining work:
+Remaining work after v0.9.3:
 
-- Add remaining handoff hook support after the LightSwarm handoff contract is
-  stabilized.
+- Add explicit fail-closed behavior for security policy hooks without changing
+  the default failure isolation of observability hooks.
+- Add handoff hook support around the stabilized LightSwarm delegation path.
 - Continue hardening guardrail and memory policy adapter traces while preserving
   the current public APIs.
 - Expand production recipes as new integration targets appear.
-- Add tests for hook ordering, no-op compatibility, payload replacement,
-  blocking, retry/fallback signaling, sync/async behavior, error isolation,
-  trace integration, and LightFlow step hook behavior.
+- Add pre-registration tool schema diagnostics so malformed tools can be found
+  without changing runtime registration behavior.
 
 ### v0.9.3: Runtime Hook Hardening And Stream Safety
 
-Status: in development.
+Status: completed in v0.9.3.
 
 Goal: stabilize the runtime hook lifecycle and stream safety behavior before
 adding larger workflow or observability features.
 
-Planned work:
+Completed work:
 
 - Close streaming tool-loop limit failures through `_finish_run(...)` so
   `on_error`, `after_run`, and `run_end` stay consistent.
@@ -360,6 +360,45 @@ Expected outcome:
 Developers should be able to extend LightAgent execution in production without
 forking the runtime or adding new framework-level parameters for every policy,
 observability, evaluation, routing, or enterprise integration requirement.
+
+### v0.9.4: Tool Contracts And Policy Safety
+
+Status: in development.
+
+Goal: make tool schemas inspectable before runtime and let security-sensitive
+hooks fail closed explicitly, while keeping existing hooks and tool
+registration behavior compatible.
+
+Implemented in the current development slice:
+
+- Added `ToolRegistry.validate_tool_info(tool_info)` and registry-level
+  `validate_tools()` diagnostics for names, descriptions, parameter lists,
+  duplicate parameters, canonical types, and `required` flags.
+- Added `LightAgent.validate_tools()` as a convenience API.
+- Kept schema validation opt-in and read-only; invalid legacy schemas are not
+  rejected by default.
+- Added `PolicyHook` with phase scoping, explicit failure mode, and optional
+  sync/async timeout handling.
+- Kept plain hook failures isolated while allowing explicitly wrapped policy
+  hooks to block on exceptions or timeouts.
+- Added `on_handoff` before LightSwarm delegation with block and metadata
+  support, structured handoff trace events, parent trace propagation, and
+  consistent source `run_end` closure.
+- Added focused tests with no model, network, MCP server, or external policy
+  dependency.
+
+Compatibility requirements:
+
+- Existing callable hooks continue after exceptions by default.
+- Existing `register_tool()` overwrite behavior remains unchanged.
+- Existing `agent.run()` and streaming return types remain unchanged.
+- No CCS or other policy engine is added to the core dependency set.
+
+Expected outcome:
+
+Applications can detect bad tool contracts before model execution and can mark
+specific authorization hooks as fail closed without making audit, metrics, or
+other observability hooks a new source of downtime.
 
 ### v0.9.5: Observability, Evaluation, And Human Review
 
@@ -759,9 +798,9 @@ building lightweight production agents.
 
 ### Next P1
 
-- Runtime hook hardening and stream safety for v0.9.3.
-- Remaining lifecycle work for handoff hooks after the LightSwarm handoff
-  contract is stable.
+- Tool contract diagnostics and explicit policy-hook failure behavior for
+  v0.9.4.
+- Complete the `on_handoff` lifecycle around LightSwarm delegation.
 - Backward-compatible adapters for guardrails and memory write admission on top
   of hook lifecycle concepts.
 - More examples for redaction, model routing, audit logging, and cost budgets.
@@ -784,31 +823,28 @@ building lightweight production agents.
 
 ## Next Development Recommendation
 
-After v0.9.2, the current development target is **v0.9.3 Runtime Hook
-Hardening And Stream Safety**. Database-backed run stores and richer
-observability should follow after the hook layer is stable, because hooks
-provide the cleanest integration point for policy, audit, metrics, evaluation,
-model routing, and human review.
+After v0.9.3, the current development target is **v0.9.4 Tool Contracts And
+Policy Safety**. This closes the remaining schema-validation, policy-failure,
+and LightSwarm handoff gaps before v0.9.5 adds richer observability,
+evaluation, and human review.
 
 Reasoning:
 
-- v0.9.0 now covers checkpointed LightFlow runs, resume/rerun, approval nodes,
+- v0.9.0 covers checkpointed LightFlow runs, resume/rerun, approval nodes,
   memory-safety controls, guardrail templates, and the shared-memory prototype.
-- The current code already has several specialized extension points:
-  guardrails, trace events, memory write admission, and LightFlow approval
-  handlers. A common hook model can unify these without breaking compatibility.
-- The next pressure points are production policy and measurement: evaluations,
-  richer traces, cost limits, redaction, approval decisions, model routing,
-  database-backed run stores, and idempotency.
+- v0.9.3 completes stream tool-loop safety and consistent runtime hook closure.
+- Tool reliability now depends on finding malformed schemas before they reach
+  model-side tool selection or runtime dispatch.
+- Policy hooks need explicit fail-closed semantics, while observability hooks
+  must remain isolated by default.
 - Database-backed durability should stay optional so the core package remains
   lightweight.
 
 Suggested first implementation slice:
 
-1. Add handoff hooks after the LightSwarm handoff contract is stable.
-2. Add more production recipes for scope, tenant, confidence, and expiration
-   enforcement before prompt injection.
-3. Adapt guardrails and memory write admission into the hook lifecycle while
-   preserving current public constructor parameters.
-4. Add practical recipes for PII redaction, model routing, tool audit logging,
-   and cost-budget enforcement.
+1. Add explicit, read-only tool schema diagnostics for #75.
+2. Add phase-scoped `PolicyHook` failure and timeout behavior without changing
+   plain hooks.
+3. Add `on_handoff` policy and trace coverage around LightSwarm delegation.
+4. Update tools/runtime hook docs and protect compatibility with focused and
+   full-suite tests.

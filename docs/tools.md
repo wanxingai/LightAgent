@@ -135,6 +135,33 @@ schemas = agent.get_tools()          # same as agent.tool_registry.get_tools()
 tool_func = agent.get_tool("get_weather")  # retrieve a loaded tool function
 ```
 
+### Validating Tool Schemas
+
+Use the explicit diagnostics API to catch malformed `tool_info` before it
+causes model-side tool selection or runtime argument failures:
+
+```python
+issues = ToolRegistry.validate_tool_info(get_weather.tool_info)
+
+registry.register_tool(get_weather)
+issues.extend(registry.validate_tools())
+
+# LightAgent exposes the same registry-level validation.
+issues = agent.validate_tools()
+```
+
+Each diagnostic contains `tool`, `level`, `field`, and `message`. Missing or
+invalid names, parameter lists, parameter types, duplicate parameter names,
+and non-boolean `required` values are errors. Empty descriptions are warnings.
+Registry validation also reports names registered more than once.
+
+Validation is read-only and opt-in. It does not mutate `tool_info`, reject
+registration, or change the existing overwrite behavior for duplicate names.
+Use canonical JSON Schema parameter types (`string`, `integer`, `number`,
+`boolean`, `array`, and `object`) for schemas that pass validation. Runtime
+argument validation continues accepting legacy Python-style aliases for
+backward compatibility.
+
 #### Tool Filtering
 
 When `filter_tools=True` (the default) and Tree-of-Thought is enabled, the
@@ -484,6 +511,9 @@ class ToolRegistry:
     def __init__(self) -> None
     def register_tool(self, func: Callable) -> bool
     def register_tools(self, tools: List[Callable]) -> bool
+    @staticmethod
+    def validate_tool_info(tool_info: Any) -> List[Dict[str, str]]
+    def validate_tools(self) -> List[Dict[str, str]]
     def get_tools(self) -> List[Dict[str, Any]]
     def get_tools_str(self) -> str
     def filter_tools(self, tool_reflection_result: str) -> List[Dict]
@@ -493,6 +523,8 @@ class ToolRegistry:
 | --- | --- |
 | `register_tool(func)` | Register a single tool. Returns `False` if the function lacks `tool_info`. |
 | `register_tools(tools)` | Register multiple tools. Returns `True` only if all succeed. |
+| `validate_tool_info(tool_info)` | Return structured diagnostics for one schema without registering or mutating it. |
+| `validate_tools()` | Validate registered schemas and report duplicate registrations. |
 | `get_tools()` | Return a deep copy of all OpenAI-format tool schemas. |
 | `get_tools_str()` | Return a formatted JSON string of all tool schemas. |
 | `filter_tools(json_str)` | Return only the schemas matching tool names in the JSON string. Raises `ValueError` on parse failure. |
@@ -536,6 +568,7 @@ class AsyncToolDispatcher:
 ```python
 agent.load_tools(tool_names: List[Union[str, Callable]], tools_directory: str = "tools") -> None
 agent.get_tools() -> List[Dict[str, Any]]
+agent.validate_tools() -> List[Dict[str, str]]
 agent.get_tool(tool_name: str) -> Callable
 agent.create_tool(user_input: str, tools_directory: str = "tools") -> None
 async agent.setup_mcp(mcp_setting: dict) -> None
@@ -545,6 +578,7 @@ async agent.setup_mcp(mcp_setting: dict) -> None
 | --- | --- |
 | `load_tools(tool_names, tools_directory)` | Load and register tools by name (string) or pass callables directly. |
 | `get_tools()` | Return all registered tool schemas in OpenAI format. |
+| `validate_tools()` | Return structured diagnostics for all registered tool schemas. |
 | `get_tool(tool_name)` | Return the loaded function for a named tool. Raises `ValueError` if not found. |
 | `create_tool(user_input, tools_directory)` | Generate a tool from a natural language description using the model, save it, and load it. |
 | `setup_mcp(mcp_setting)` | Initialize MCP connections and register remote tools (async). |

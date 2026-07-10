@@ -70,10 +70,32 @@ class HookDecision:
         return cls(action=HOOK_FALLBACK, reason=reason, metadata=metadata or {})
 
 
+@dataclass(frozen=True)
+class PolicyHook:
+    """Explicit hook policy for failures that must block protected operations."""
+
+    handler: Callable[..., Any] | Any
+    phases: set[str] | frozenset[str] | None = None
+    failure_mode: str = "block"
+    timeout: float | None = None
+    name: str | None = None
+
+    def __post_init__(self) -> None:
+        if self.handler is None:
+            raise ValueError("PolicyHook handler is required")
+        if self.failure_mode not in {"block", "continue"}:
+            raise ValueError("PolicyHook failure_mode must be 'block' or 'continue'")
+        if self.timeout is not None:
+            if isinstance(self.timeout, bool) or not isinstance(self.timeout, (int, float)) or self.timeout <= 0:
+                raise ValueError("PolicyHook timeout must be a number greater than 0")
+        if self.phases is not None:
+            object.__setattr__(self, "phases", frozenset(str(phase) for phase in self.phases))
+
+
 class HookManager:
     """Run hooks in list order while isolating observability hook failures."""
 
-    def __init__(self, hooks: list[Callable[..., Any] | Any] | None = None):
+    def __init__(self, hooks: list[Callable[..., Any] | Any | PolicyHook] | None = None):
         self.hooks = list(hooks or [])
 
     def run(self, context: HookContext) -> HookDecision:
@@ -82,19 +104,39 @@ class HookManager:
         metadata: dict[str, Any] = {}
 
         for hook in self.hooks:
-            hook_name = getattr(hook, "__name__", hook.__class__.__name__)
+            policy = hook if isinstance(hook, PolicyHook) else None
+            handler = policy.handler if policy else hook
+            if policy and policy.phases is not None and context.phase not in policy.phases:
+                continue
+            hook_name = (policy.name if policy else None) or getattr(
+                handler,
+                "__name__",
+                handler.__class__.__name__,
+            )
             try:
-                raw = self._call_hook(hook, context)
-                if inspect.isawaitable(raw):
-                    raw = self._run_awaitable(raw)
+                raw = self._invoke_hook(handler, context, policy.timeout if policy else None)
                 decision = self._normalize(raw)
             except Exception as exc:
-                hook_events.append({
+                failure_mode = policy.failure_mode if policy else "continue"
+                error_event = {
                     "phase": context.phase,
                     "hook": hook_name,
                     "action": "error",
                     "error": str(exc),
-                })
+                    "error_type": "timeout" if isinstance(exc, TimeoutError) else "exception",
+                    "failure_mode": failure_mode,
+                }
+                hook_events.append(error_event)
+                if failure_mode == "block":
+                    return HookDecision.block(
+                        f"Policy hook `{hook_name}` failed closed: {exc}",
+                        metadata={
+                            **metadata,
+                            "policy_hook": hook_name,
+                            "failure_mode": failure_mode,
+                            "hook_events": hook_events,
+                        },
+                    )
                 continue
 
             if decision.metadata:
@@ -144,6 +186,46 @@ class HookManager:
         if callable(hook):
             return hook(context)
         return None
+
+    @classmethod
+    def _invoke_hook(
+            cls,
+            hook: Callable[..., Any] | Any,
+            context: HookContext,
+            timeout: float | None,
+    ) -> Any:
+        if timeout is None:
+            return cls._call_and_resolve(hook, context)
+
+        isolated_context = HookContext(
+            phase=context.phase,
+            payload=dict(context.payload),
+            trace_id=context.trace_id,
+            parent_trace_id=context.parent_trace_id,
+            run_id=context.run_id,
+            run_group_id=context.run_group_id,
+            user_id=context.user_id,
+            agent_name=context.agent_name,
+            flow_id=context.flow_id,
+            step_name=context.step_name,
+            metadata=dict(context.metadata),
+        )
+        executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+        future = executor.submit(cls._call_and_resolve, hook, isolated_context)
+        try:
+            return future.result(timeout=timeout)
+        except concurrent.futures.TimeoutError as exc:
+            future.cancel()
+            raise TimeoutError(f"hook timed out after {timeout:g}s") from exc
+        finally:
+            executor.shutdown(wait=False, cancel_futures=True)
+
+    @classmethod
+    def _call_and_resolve(cls, hook: Callable[..., Any] | Any, context: HookContext) -> Any:
+        raw = cls._call_hook(hook, context)
+        if inspect.isawaitable(raw):
+            return cls._run_awaitable(raw)
+        return raw
 
     @staticmethod
     def _run_awaitable(awaitable: Awaitable[Any]) -> Any:

@@ -3,7 +3,8 @@
 LightAgent v0.9.1 introduced a small ordered hook layer for policy, audit,
 redaction, routing, and payload mutation without changing the default
 `agent.run()` behavior. LightAgent v0.9.2 completes the core agent lifecycle
-with run-end, error, and memory-read hooks.
+with run-end, error, and memory-read hooks. LightAgent v0.9.4 adds explicit
+fail-closed policy hooks and the LightSwarm `on_handoff` phase.
 
 Hooks can be plain callables or objects with methods named after a lifecycle
 phase. A hook receives a `HookContext` and may return:
@@ -44,7 +45,7 @@ agent = LightAgent(
 )
 ```
 
-Supported first-slice phases:
+Supported phases:
 
 | Phase | Payload |
 | --- | --- |
@@ -59,6 +60,52 @@ Supported first-slice phases:
 | `after_memory_retrieve` | Retrieved memory payload before final `MemoryPolicy` filtering. |
 | `before_memory_write` | Memory data, source, scope, and target user id. |
 | `after_memory_write` | Stored data, metadata, source, scope, and target user id. |
+| `on_handoff` | Source agent, target agent, query, and stream mode before delegation. |
+
+### Fail-Closed Policy Hooks
+
+Plain hooks remain failure-isolated by default. Wrap security-sensitive hooks
+with `PolicyHook` when an exception or timeout must block the protected phase:
+
+```python
+from LightAgent import LightAgent, PolicyHook
+
+
+def authorize_tool_or_handoff(ctx):
+    if ctx.phase == "before_tool_call":
+        policy_engine.require_tool_access(
+            user_id=ctx.user_id,
+            tool_name=ctx.payload["tool_name"],
+            arguments=ctx.payload["arguments"],
+        )
+    elif ctx.phase == "on_handoff":
+        policy_engine.require_delegation_access(
+            user_id=ctx.user_id,
+            target_agent=ctx.payload["target_agent"],
+        )
+
+
+agent = LightAgent(
+    model="gpt-4.1",
+    api_key="your_api_key",
+    hooks=[PolicyHook(
+        authorize_tool_or_handoff,
+        phases={"before_tool_call", "on_handoff"},
+        failure_mode="block",
+        timeout=2.0,
+    )],
+)
+```
+
+`failure_mode="block"` is the default for `PolicyHook`. A policy exception or
+timeout produces an `LA-HOOK` block and records an error decision in trace.
+Only explicitly wrapped hooks fail closed; existing callables keep their
+failure-isolated behavior. Timed hooks receive an isolated context copy so a
+late callback cannot mutate the active phase payload.
+
+For `on_handoff`, `continue`, `block`, and metadata decisions are supported.
+The source run records an allowed or blocked `handoff` trace and closes its
+`run_end` lifecycle. The delegated run receives the source trace as its parent.
 
 ### LightFlow Hooks
 
@@ -112,7 +159,8 @@ stream = agent.run(
 
 When tracing is enabled, hook replacements, blocks, metadata events, and hook
 failures are recorded as `hook_decision` or `hook_block` events. Hook failures
-are isolated by default so observability hooks do not crash an agent run.
+are isolated by default so observability hooks do not crash an agent run;
+explicit `PolicyHook` failures block the protected operation instead.
 
 Use `parent_trace_id` and `run_group_id` to connect sibling runs:
 
