@@ -31,13 +31,12 @@ classifiers = [
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
 packages = [
-    { include = "LightAgent"},
+    { include = "LightAgent"}
 ]
 
 
-
 [tool.poetry.dependencies]
-python = ">=3.10,<4.0"
+python = ">=3.10"
 loguru = "0.7.3"
 requests = "2.32.3"
 openai = ">=1.60.0,<2.0.0"
@@ -84,5 +83,5 @@ name = "PyPI"
 priority="primary"
 
 [build-system]
-requires = ["setuptools>=42"]
-build-backend = "setuptools.build_meta"
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
