@@ -39,4 +39,4 @@ jobs:
         run: python -m poetry build --format wheel
 
       - name: Run full test suite
-        run: PYTHONPATH=. python -m pytest -q
+        run: PYTHONPATH=. python -m poetry run pytest -q
