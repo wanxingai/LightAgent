@@ -9,12 +9,12 @@ check-tools: ## Check tools are installed
 
 setup: check-tools  ## Set up local environment
 	uv tool install poetry
-	uv tool run poetry install 
+	uv tool run poetry install --with dev
 
 update: check-tools ## Update local dependencies
 	uv tool update poetry
 	uv tool run poetry lock
-	uv tool run poetry install
+	uv tool run poetry install --with dev
 
 build: check-tools ## Build Wheel
 	uv tool run poetry build --format wheel

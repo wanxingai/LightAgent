@@ -54,6 +54,9 @@ litellm = {version = ">=1.80.0,<1.87.0", optional = true}
 [tool.poetry.extras]
 litellm = ["litellm"]
 
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.0.0"
+
 
 [tool.ruff]
 extend-include = ["*.ipynb"]
