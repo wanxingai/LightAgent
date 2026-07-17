@@ -36,7 +36,7 @@ packages = [
 
 
 [tool.poetry.dependencies]
-python = ">=3.10"
+python = ">=3.10,<4.0"
 loguru = "0.7.3"
 requests = "2.32.3"
 openai = ">=1.60.0,<2.0.0"
