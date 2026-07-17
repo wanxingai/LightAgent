@@ -33,10 +33,10 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install poetry
           python -m pip install pytest
-          python -m poetry install
+          poetry install
 
       - name: Compile package
-        run: python -m poetry build --format wheel
+        run: poetry build --format wheel
 
       - name: Run full test suite
-        run: PYTHONPATH=. python -m poetry run pytest -q
+        run: poetry run pytest -q
