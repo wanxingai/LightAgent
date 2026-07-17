@@ -507,7 +507,15 @@ class LightAgent:
 
         # 0. 判断是否需要转移任务
         if light_swarm:
-            result = self._handle_task_transfer(query, light_swarm, stream)
+            handoff_run_options = {
+                "user_id": user_id,
+                "metadata": metadata,
+                "trace": trace,
+                "result_format": result_format,
+                "max_retry": max_retry,
+                "max_tool_iterations": max_tool_iterations,
+            }
+            result = self._handle_task_transfer(query, light_swarm, stream, handoff_run_options)
             if result is not None:
                 return result
 
@@ -1701,6 +1709,7 @@ class LightAgent:
             query: str,
             light_swarm: 'LightSwarm',
             stream: bool = False,
+            run_options: Optional[Dict[str, Any]] = None,
     ) -> Union[Generator[str, None, None], str, None]:
         """
         处理任务转移逻辑。
@@ -1708,6 +1717,7 @@ class LightAgent:
         :param query: 用户输入。
         :param light_swarm: LightSwarm 实例。
         :param stream: 是否启用流式输出。
+        :param run_options: 需要透传给目标代理的运行上下文。
         :return: 如果任务需要转移，返回生成器或字符串；否则返回 None。
         """
         intent = self._detect_intent(query, light_swarm)
@@ -1754,10 +1764,10 @@ class LightAgent:
 
             self._record_trace("handoff", {**handoff_data, "status": "allowed"})
             if stream:
-                return self._handle_task_transfer_stream(target_agent, query, light_swarm)
+                return self._handle_task_transfer_stream(target_agent, query, light_swarm, run_options)
 
             try:
-                result = self._handle_task_transfer_non_stream(target_agent, query, light_swarm)
+                result = self._handle_task_transfer_non_stream(target_agent, query, light_swarm, run_options)
             except Exception as exc:
                 error_msg = format_lightagent_error(exc, "handoff to agent")
                 self._record_trace("error", {
@@ -1786,6 +1796,7 @@ class LightAgent:
             target_agent: 'LightAgent',
             context: str,
             light_swarm: 'LightSwarm',
+            run_options: Optional[Dict[str, Any]] = None,
     ) -> Generator[str, None, None]:
         """
         处理任务转移逻辑（流式输出）。
@@ -1793,6 +1804,7 @@ class LightAgent:
         :param target_agent: 目标代理。
         :param context: 共享的上下文信息。
         :param light_swarm: LightSwarm 实例。
+        :param run_options: 需要透传给目标代理的运行上下文。
         :return: 生成器，用于流式输出。
         """
         self.log("INFO", "transfer_to_agent", {"from": self.name, "to": target_agent.name, "context": context})
@@ -1804,12 +1816,16 @@ class LightAgent:
             return
 
         try:
+            target_run_options = dict(run_options or {})
+            target_run_options.update({
+                "light_swarm": light_swarm,
+                "stream": True,
+                "parent_trace_id": self.traceid or None,
+                "run_group_id": self._run_group_id or self._current_run_id,
+            })
             yield from target_agent.run(
                 context,
-                light_swarm=light_swarm,
-                stream=True,
-                parent_trace_id=self.traceid or None,
-                run_group_id=self._run_group_id or self._current_run_id,
+                **target_run_options,
             )
         except Exception as e:
             self.log("ERROR", "run_failed", {"error": str(e)})
@@ -1837,6 +1853,7 @@ class LightAgent:
             target_agent: 'LightAgent',
             context: str,
             light_swarm: 'LightSwarm',
+            run_options: Optional[Dict[str, Any]] = None,
     ) -> str:
         """
         处理任务转移逻辑（非流式输出）。
@@ -1844,6 +1861,7 @@ class LightAgent:
         :param target_agent: 目标代理。
         :param context: 共享的上下文信息。
         :param light_swarm: LightSwarm 实例。
+        :param run_options: 需要透传给目标代理的运行上下文。
         :return: 字符串，表示非流式输出结果。
         """
         self.log("INFO", "transfer_to_agent", {"from": self.name, "to": target_agent.name, "context": context})
@@ -1854,12 +1872,16 @@ class LightAgent:
             return "Failed to transfer task: invalid target agent"
 
         try:
+            target_run_options = dict(run_options or {})
+            target_run_options.update({
+                "light_swarm": light_swarm,
+                "stream": False,
+                "parent_trace_id": self.traceid or None,
+                "run_group_id": self._run_group_id or self._current_run_id,
+            })
             result = target_agent.run(
                 context,
-                light_swarm=light_swarm,
-                stream=False,
-                parent_trace_id=self.traceid or None,
-                run_group_id=self._run_group_id or self._current_run_id,
+                **target_run_options,
             )
             if isinstance(result, Generator):
                 return "".join(result)  # 将生成器转换为字符串
@@ -2350,17 +2372,18 @@ class LightSwarm:
                 # print(f"Agent '{agent.name}' registered.")
                 agent.log("INFO", "register_agent", {"agent_name": agent.name, "status": "registered"})
 
-    def run(self, agent: LightAgent, query: str, stream=False):
+    def run(self, agent: LightAgent, query: str, stream=False, **run_kwargs):
         """
         运行指定代理。
 
         :param agent_name: 代理名称。
         :param query: 用户输入。
+        :param run_kwargs: 透传给 LightAgent.run 的运行参数，例如 user_id、metadata、trace。
         :return: 代理的回复。
         """
         if agent.name not in self.agents:
             raise ValueError(f"Agent '{agent.name}' not found.")
-        return agent.run(query, light_swarm=self, stream=stream)
+        return agent.run(query, light_swarm=self, stream=stream, **run_kwargs)
 
 
 if __name__ == "__main__":

@@ -114,3 +114,63 @@ def test_stream_handoff_finishes_source_run_after_consumption():
     assert target.calls[0][1]["stream"] is True
     assert source.export_trace()[-1]["type"] == "run_end"
     assert source.export_trace()[-1]["data"]["success"] is True
+
+
+def test_lightswarm_run_forwards_runtime_options_to_entry_agent():
+    entry = FakeTargetAgent()
+    swarm = make_swarm(entry)
+    metadata = {"tenant": "acme", "request_id": "run-123"}
+
+    result = swarm.run(
+        entry,
+        "delegate this",
+        user_id="alice",
+        metadata=metadata,
+        trace=True,
+        result_format="object",
+        max_retry=3,
+        max_tool_iterations=2,
+    )
+
+    assert result == "delegated result"
+    query, kwargs = entry.calls[0]
+    assert query == "delegate this"
+    assert kwargs["light_swarm"] is swarm
+    assert kwargs["stream"] is False
+    assert kwargs["user_id"] == "alice"
+    assert kwargs["metadata"] == metadata
+    assert kwargs["trace"] is True
+    assert kwargs["result_format"] == "object"
+    assert kwargs["max_retry"] == 3
+    assert kwargs["max_tool_iterations"] == 2
+
+
+def test_handoff_preserves_runtime_context_for_target_agent():
+    source = make_source_agent()
+    target = FakeTargetAgent()
+    metadata = {"tenant": "acme", "request_id": "handoff-123"}
+
+    result = source.run(
+        "delegate this",
+        light_swarm=make_swarm(target),
+        user_id="alice",
+        metadata=metadata,
+        trace=True,
+        result_format="object",
+        max_retry=3,
+        max_tool_iterations=2,
+    )
+
+    assert result == "delegated result"
+    query, kwargs = target.calls[0]
+    assert query == "delegate this"
+    assert kwargs["light_swarm"] is not None
+    assert kwargs["stream"] is False
+    assert kwargs["user_id"] == "alice"
+    assert kwargs["metadata"] == metadata
+    assert kwargs["trace"] is True
+    assert kwargs["result_format"] == "object"
+    assert kwargs["max_retry"] == 3
+    assert kwargs["max_tool_iterations"] == 2
+    assert kwargs["parent_trace_id"] == source.traceid
+    assert kwargs["run_group_id"]
