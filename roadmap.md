@@ -1,6 +1,6 @@
 # LightAgent Roadmap
 
-Last updated: 2026-07-08
+Last updated: 2026-07-21
 
 LightAgent should continue to evolve as a lightweight, low-dependency agent
 framework rather than a broad replacement for LangChain, LangGraph, CrewAI, or
@@ -39,6 +39,22 @@ ecosystem.**
   workflow runs, resume/rerun support, approval nodes, reusable guardrail
   templates, stronger memory admission controls, and the first lightweight
   `SharedMemoryPool` prototype.
+- **v0.9.1**: Added the first runtime hook layer through `HookContext`,
+  `HookDecision`, `HookManager`, `LightAgent(..., hooks=[...])`, and
+  `LightFlow(hooks=[...])`.
+- **v0.9.2**: Completed core agent lifecycle hooks with `after_run`,
+  `on_error`, memory-retrieval hooks, and async-compatible hook execution.
+- **v0.9.3**: Hardened streaming tool-loop safety with `max_tool_iterations`
+  and consistent `on_error`, `after_run`, and `run_end` closure.
+- **v0.9.4**: Released tool schema diagnostics, `PolicyHook` fail-closed
+  policy behavior, `on_handoff`, LightSwarm runtime-context propagation, and
+  complete Python 3.10/3.11/3.12 CI coverage.
+- **v0.9.5**: Added explicit memory promotion boundaries for internal
+  reflection, delegation, self-learning, tool, trace, swarm, and shared-memory
+  evidence; added non-injectable `MemoryCandidate` records, approve/reject/
+  rewrite/keep `MemoryPromotionDecision` handling, `before_memory_promote` and
+  `after_memory_promote` hooks, promotion trace events, fail-closed promotion
+  policy behavior, and optional OSS/NOS `boto3` dependencies.
 
 ### Completed Milestone Details
 
@@ -89,17 +105,21 @@ result = flow.run("Analyze this company")
 
 ### Open Pull Requests
 
-- No open PRs as of 2026-06-05.
+- **#81 fix for broken build pipeline**: external PR proposing Poetry/build
+  pipeline changes in `pyproject.toml`, `poetry.lock`, `.github/workflows`,
+  `.gitignore`, and a new `Makefile`. Review separately as release hygiene;
+  do not mix it with the v0.9.5 memory-safety feature line.
 
 ### Active Issues
 
 P1 issues that should shape the next releases:
 
-- **#57 Trace observability vs mem0 auto-memory vs LightSwarm reflection**:
-  clarify and harden the boundary between trace events, persistent memory, and
-  multi-agent reflection/self-learning.
-- **#39 Shared graph memory security disclosure**: continue adapter-level memory
-  safeguards beyond the initial `MemoryPolicy` and guardrails.
+- **#82 Explicit memory promotion workflow**: v0.9.5 implements the first
+  explicit, auditable promotion path; keep follow-up work focused on external
+  review queues and UI integration.
+- **#39 Shared graph memory security disclosure**: v0.9.5 blocks unreviewed
+  internal/shared evidence from prompt injection by default; continue
+  adapter-level hardening for durable graph/vector backends.
 - **#1 Enhanced memory management for multi-agent systems**: design a lightweight
   shared memory model with per-agent boundaries, provenance, and conflict rules.
 - **#33 Optional ClawMem memory backend**: keep as an optional adapter that
@@ -109,21 +129,22 @@ P1 issues that should shape the next releases:
 
 P2 issues:
 
+- **#76 CCS fail-closed protocol proposal**: evaluate as an optional policy
+  integration or documentation pattern; keep the core dependency-free because
+  `PolicyHook` already provides first-party fail-closed behavior.
 - **#50 Nautilus A2A registry/discovery proposal**: evaluate as optional
   connector or docs-only integration.
 - **#26 External API tool integrations**: accept one API/tool family per PR, no
   secrets, no required core dependencies.
-- **#4 Existing vector database integration**: add focused docs/examples or
-  optional adapters instead of core dependencies.
 
 ## Near-Term Version Plan
 
 This section records the planned direction for the next several LightAgent
-versions after `v0.9.0`. Exact scope can still change as issues, pull requests,
+versions after `v0.9.5`. Exact scope can still change as issues, pull requests,
 and user feedback evolve, but the intended product direction is:
 
-**safer memory + stronger LightFlow + better observability + stable APIs +
-enterprise-friendly integration.**
+**explicit memory promotion + safer shared memory + reliable hooks + better
+observability + stable APIs + enterprise-friendly integration.**
 
 ### v0.8.3 Goals: LightFlow Execution Controls
 
@@ -363,13 +384,13 @@ observability, evaluation, routing, or enterprise integration requirement.
 
 ### v0.9.4: Tool Contracts And Policy Safety
 
-Status: in development.
+Status: completed in v0.9.4 and released on 2026-07-17.
 
 Goal: make tool schemas inspectable before runtime and let security-sensitive
 hooks fail closed explicitly, while keeping existing hooks and tool
 registration behavior compatible.
 
-Implemented in the current development slice:
+Completed work:
 
 - Added `ToolRegistry.validate_tool_info(tool_info)` and registry-level
   `validate_tools()` diagnostics for names, descriptions, parameter lists,
@@ -386,6 +407,11 @@ Implemented in the current development slice:
   consistent source `run_end` closure.
 - Added focused tests with no model, network, MCP server, or external policy
   dependency.
+- Expanded GitHub CI to run the complete tracked test suite on Python 3.10,
+  3.11, and 3.12.
+- Preserved LightSwarm `user_id`, `metadata`, tracing options, result format,
+  retry limits, and tool-iteration limits across entry runs and delegated
+  handoffs.
 
 Compatibility requirements:
 
@@ -400,29 +426,133 @@ Applications can detect bad tool contracts before model execution and can mark
 specific authorization hooks as fail closed without making audit, metrics, or
 other observability hooks a new source of downtime.
 
-### v0.9.5: Observability, Evaluation, And Human Review
+### v0.9.5: Memory Promotion And Shared Memory Safety
+
+Status: implemented in v0.9.5.
+
+Fix target: v0.9.5 is the first release line for closing the #39 shared graph
+memory security risk and the #82 explicit memory promotion workflow.
+
+Goal: make reflection, self-learning, delegation summaries, and shared-memory
+evidence safe by default before they can affect future user-facing prompts, and
+add the first human-review slice around memory promotion only.
+
+Completed work:
+
+- Add an explicit memory promotion workflow for internal reflection and
+  delegation summaries.
+- Treat reflection and delegation outputs as non-injectable memory candidates by
+  default.
+- Add a promotion decision model that can approve, reject, rewrite, or keep a
+  candidate non-injectable.
+- Add lifecycle hooks such as `before_memory_promote` and
+  `after_memory_promote`, or an equivalent promotion callback API, for policy
+  and human review.
+- Add a lightweight memory-candidate shape that carries `run_id`, `trace_id`,
+  candidate ID, memory scope, source agent, trust level, confidence, reviewer
+  metadata, and rejection or rewrite reason.
+- Support optional policy review for memory promotion with approve, reject,
+  rewrite, and keep-non-injectable outcomes.
+- Keep memory-review hooks compatible with sync and async hook execution,
+  including fail-closed handling for security-sensitive promotion policies.
+- Preserve provenance through `source`, `scope`, `trust_level`, `confidence`,
+  `agent_name`, `trace_id`, `parent_trace_id`, `run_id`, and derived-memory
+  lineage.
+- Record promotion candidates, decisions, rewrites, and blocks in trace or
+  audit output without exposing raw sensitive memory text by default.
+- Record memory-review events such as `memory_promotion_required`,
+  `memory_promotion_approved`, `memory_promotion_rejected`,
+  `memory_promotion_rewritten`, and `memory_promotion_blocked` as the first
+  Human-in-the-loop and Human-on-the-loop audit vocabulary.
+- Add fail-closed defaults for unattributed, unreviewed, cross-user, or
+  cross-scope internal memory before prompt injection.
+- Add tests proving reflection, delegation, and shared-memory candidates cannot
+  become prompt-injectable without explicit promotion.
+- Treat #39 and #82 as release gates: v0.9.5 includes deterministic tests for
+  memory poisoning, cross-user contamination, and unreviewed internal-memory
+  promotion paths.
+- Document safe patterns for `SharedMemoryPool`, mem0-style graph memory,
+  vector memory adapters, and optional external memory backends such as ClawMem.
+- Document how external approval queues or review UIs can integrate with memory
+  promotion through hooks without becoming core dependencies.
+
+Deferred to v0.9.6:
+
+- Broader human-review surfaces for high-risk tools, handoffs, and LightFlow
+  steps.
+- Durable external review queues and admin UI examples.
+
+Expected outcome:
+
+LightAgent should give applications a clear and auditable path from internal
+agent evidence to durable prompt context, reducing memory poisoning and
+cross-user contamination risks while keeping existing memory backends
+compatible. v0.9.5 introduces human review as a narrow memory-promotion
+control, not as a general tool or workflow approval system.
+
+### v0.9.6: Observability, Evaluation, And Human Review
 
 Goal: improve production debugging, measurement, and human control over
-high-risk actions.
+high-risk actions after the memory-promotion boundary and memory-scoped review
+path are explicit.
 
 Planned work:
 
 - Add richer trace metadata for model latency, tool latency, token usage,
-  retry counts, error categories, and flow-step timing.
+  retry counts, error categories, flow-step timing, and memory-promotion
+  decisions.
 - Provide a lightweight evaluation harness for tool-call success rate,
-  task-completion rate, latency, cost, and recovery behavior.
+  task-completion rate, latency, cost, recovery behavior, and memory-safety
+  policy behavior.
 - Improve Langfuse and external observability integration on top of structured
   trace events.
 - Add a `HumanApprovalTool` or equivalent approval primitive.
 - Allow selected tools or LightFlow steps to require human approval before
   continuing.
 - Support approval, rejection, argument editing, timeout, and rejection handling.
+- Add durable approval state for long-running or delayed reviews.
+- Support multi-action approval batches when one model turn proposes several
+  sensitive tool calls.
+- Add human feedback capture on traces for Human-on-the-loop review and
+  evaluation sampling.
+- Extend the v0.9.5 memory-review event model into general tool, handoff, and
+  workflow review events.
+- Document how external approval UIs, ticketing systems, and audit stores can
+  integrate through hooks without becoming core dependencies.
+
+Human-control expansion checklist planned for v0.9.6:
+
+- Formalize LightFlow `requires_approval`, `approval_handler`, and
+  `waiting_approval` as the first Human-in-the-loop checkpoint model for
+  deterministic workflows.
+- Use `on_approval_required` to notify external approval systems when a
+  LightFlow step cannot continue without review.
+- Add a small approval request/result shape that can carry `run_id`,
+  `trace_id`, action name, tool name, argument summary, source agent, target
+  agent, allowed decisions, reviewer metadata, and rejection reason.
+- Support approve, reject, edit, and respond decision types for reviewed
+  actions, while preserving simpler approve/reject behavior for existing
+  LightFlow approvals.
+- Use `PolicyHook` on `before_tool_call` for fail-closed checks before
+  sensitive tools such as file deletion, payments, database writes, shell
+  execution, external API mutation, or customer-impacting actions.
+- Use `PolicyHook` on `on_handoff` to review or block delegation to another
+  agent before LightSwarm transfers control.
+- Use tool schema diagnostics so reviewers and policies can inspect stable tool
+  names, descriptions, required arguments, and duplicate or malformed
+  parameters before approval.
+- Record `hook_decision`, `hook_block`, `handoff`, `guardrail_block`,
+  approval, rejection, edit, feedback, and `run_end` events as the audit
+  substrate for Human-on-the-loop monitoring.
+- Keep first-class human feedback queues, annotation workflows, online/offline
+  evaluation dashboards, and web approval UIs optional rather than core
+  dependencies.
 
 Expected outcome:
 
 LightAgent should support production environments where teams need to measure
-agent quality, inspect failures, and keep humans in control of high-impact
-external side effects.
+agent quality, inspect failures, review memory-promotion decisions, and keep
+humans in control of high-impact external side effects.
 
 ### v1.0.0: Stable API And Production Documentation
 
@@ -499,6 +629,41 @@ capabilities:
 - **LlamaIndex**: data-oriented agents, workflows, RAG, document pipelines, and
   knowledge retrieval.
 
+### Human Control Patterns From External Frameworks
+
+External HITL/HOTL designs suggest a clear split between the lightweight
+runtime foundation that belongs in LightAgent core and the heavier product
+surfaces that should remain optional. These patterns should inform the v0.9.5
+memory-review slice and the broader v0.9.6 human-review work, not change the
+already released v0.9.4 scope:
+
+- **Pause and resume**: OpenAI Agents SDK and LangGraph both model HITL as an
+  interruption/pause point that returns pending actions and resumes from saved
+  state after review. LightAgent should keep LightFlow approval checkpoints as
+  the lightweight core version of this pattern.
+- **Decision vocabulary**: LangGraph exposes approve, reject, edit, and respond
+  decision types. LightAgent v0.9.5 applies approve, reject, and rewrite
+  to memory promotion first; v0.9.6 should extend richer approve, reject, edit,
+  and respond behavior to tools and workflow checkpoints.
+- **Tool-level approval**: OpenAI Agents SDK applies approvals to sensitive
+  tool calls, nested agent tools, shell/apply-patch tools, and MCP tools.
+  LightAgent should map this to `before_tool_call`, `PolicyHook`, Guardrails,
+  and tool schema diagnostics rather than adding a separate heavy approval
+  runtime.
+- **Handoff review**: OpenAI approval surfaces work across handoffs and nested
+  agent-as-tool calls. LightAgent should keep `on_handoff` as the core
+  LightSwarm review point.
+- **Fail-closed policy**: Semantic Kernel filters and OpenAI guardrail/tool
+  approval patterns emphasize policy checks before execution. LightAgent should
+  keep plain hooks failure-isolated, but use `PolicyHook` for fail-closed
+  security decisions.
+- **Human-on-the-loop monitoring**: LangSmith and Microsoft Responsible AI
+  guidance emphasize trace review, feedback capture, annotation queues,
+  telemetry, audit logs, and escalation paths. LightAgent v0.9.5 begins
+  with memory-promotion review events; v0.9.6 should build broader monitoring
+  on the same trace/audit substrate while keeping review queues, dashboards,
+  and evaluators optional integrations.
+
 LightAgent should borrow the strongest production ideas from these frameworks
 while preserving its own identity: small, direct, Python-native, Skills-first,
 and OpenAI-compatible.
@@ -525,7 +690,9 @@ workflow composition, and memory boundaries while keeping the core simple.
 Goal: prevent trace observability, persistent memory, and LightSwarm
 self-reflection from collapsing into one uncontrolled feedback loop.
 
-This should directly address issues #57, #39, and #1.
+This was the first partial response to issues #57, #39, and #1. The first
+#39 and #82 release-gate slice shipped in v0.9.5 through explicit memory
+promotion.
 
 ### Completed Work
 
@@ -639,13 +806,26 @@ modify, block, retry, or route execution at well-defined points.
 - Add run-end, error, memory-read, and async-compatible hook execution in the
   v0.9.2 line.
 
-### Remaining Work
+### Completed Follow-up
 
-- Add handoff hooks after the LightSwarm handoff contract is stabilized.
-- Convert or adapt existing guardrails and memory write admission into the new
-  lifecycle model without breaking current public APIs.
 - Harden stream failure paths so hook lifecycles stay consistent when tool-call
   loops hit safety limits.
+- Add `PolicyHook` so security-sensitive hooks can fail closed while ordinary
+  observability hooks remain failure-isolated.
+- Add `on_handoff` after the LightSwarm handoff contract stabilized.
+- Add production recipes for redaction, budgets, routing, tool policy, memory
+  filtering, export, and evaluation sampling.
+- Add compatibility tests so `agent.run()`, streaming, structured results,
+  guardrails, memory policy, LightSwarm, and LightFlow behavior remain
+  compatible when no hooks are configured.
+
+### Remaining Work
+
+- Convert or adapt existing guardrails and memory write admission into the new
+  lifecycle model where it simplifies implementation, without breaking current
+  public APIs.
+- Reuse the hook layer for v0.9.5 memory promotion, especially policy review,
+  human review, and trace/audit export.
 - Document common hook recipes:
   - PII redaction before model calls;
   - budget enforcement before model/tool execution;
@@ -653,10 +833,8 @@ modify, block, retry, or route execution at well-defined points.
   - OpenTelemetry or Langfuse export;
   - model routing and A/B experiments;
   - prompt enrichment from application context;
-  - evaluation sampling after runs.
-- Add compatibility tests so `agent.run()`, streaming, structured results,
-  guardrails, memory policy, and LightFlow behavior remain unchanged when no
-  hooks are configured.
+  - evaluation sampling after runs;
+  - memory promotion approval and rejection.
 
 ### Draft API Contract
 
@@ -683,22 +861,70 @@ LightAgent should gain an extension mechanism that is powerful enough for
 production policy and observability work, but small enough to keep the framework
 direct, Python-native, and easy to inspect.
 
-### v0.9.5 Workstream: Human-In-The-Loop
+### v0.9.5 Workstream: Memory Promotion And Shared Memory Safety
 
-Goal: support high-risk tasks that need explicit human review before continuing.
+Status: completed as the v0.9.5 release line.
+
+Goal: close the gap between internal agent evidence and future prompt context.
+Reflection, self-learning, delegation summaries, and shared-memory evidence
+should not become prompt-injectable memory unless an explicit policy or
+memory-scoped human review promotes them.
+
+### Completed Work
+
+- Add a memory-candidate representation for reflection and delegation outputs.
+- Mark internal candidates as non-injectable by default.
+- Add an explicit promotion API or lifecycle hook that can approve, reject,
+  rewrite, or keep candidates non-injectable.
+- Add a memory-candidate and promotion-decision shape for optional policy or
+  human approval of memory promotion.
+- Support sync and async memory-review hooks with fail-closed behavior for
+  security-sensitive promotion decisions.
+- Preserve full provenance and lineage across promotion decisions.
+- Add trace/audit events for promotion candidates, approvals, rejections,
+  rewrites, blocks, and final decisions.
+- Add fail-closed tests for unattributed, unreviewed, cross-user, cross-agent,
+  and cross-scope memory candidates.
+- Make those tests the v0.9.5 release gate for #39 shared graph memory
+  security and #82 memory promotion safety.
+- Update memory security docs for SharedMemoryPool, mem0-style graph memory,
+  vector memory adapters, and optional ClawMem-style adapters.
+- Document memory-review integration patterns for external approval queues,
+  ticketing systems, or lightweight admin UIs without adding those systems as
+  core dependencies.
+
+### Expected Outcome
+
+LightAgent should reduce shared-memory poisoning risk and provide a clear,
+auditable path from internal reflection or delegation evidence to durable user
+memory. This release should also provide the first narrow Human-in-the-loop
+surface, limited to memory promotion decisions.
+
+### v0.9.6 Workstream: Observability, Evaluation, And Human Review
+
+Goal: support production teams that need measurement, review, and control over
+agent behavior after the memory-promotion boundary and memory-review slice are
+explicit.
 
 ### Planned Work
 
+- Add richer trace metadata for latency, usage, retry counts, error categories,
+  flow-step timing, and memory-promotion decisions.
+- Provide a lightweight evaluation harness for tool success, task completion,
+  latency, cost, recovery, and memory-safety policy behavior.
+- Improve Langfuse and external observability integration.
 - Add a `HumanApprovalTool`.
-- Support approval requirements for selected tools or flow steps.
-- Allow humans to approve, reject, or edit tool arguments.
-- Add timeout and rejection handling.
-- Allow an agent or flow to continue after approval.
+- Support approval requirements for selected tools and flow steps.
+- Allow humans to approve, reject, edit tool arguments, handle timeouts, and
+  continue after approval.
+- Extend memory-review events from v0.9.5 into broader Human-on-the-loop trace
+  review, feedback capture, and evaluation sampling.
 
 ### Expected Outcome
 
 LightAgent should support workflows where a model can plan and prepare actions,
-but humans retain control over important external side effects.
+but humans retain control over important external side effects and memory
+promotion decisions.
 
 ### v1.0.0 Workstream: Stable API And Ecosystem
 
@@ -794,57 +1020,72 @@ building lightweight production agents.
 
 ### Immediate P0
 
-- No active P0 item as of 2026-06-26.
+- No active P0 item as of 2026-07-21.
 
 ### Next P1
 
-- Tool contract diagnostics and explicit policy-hook failure behavior for
-  v0.9.4.
-- Complete the `on_handoff` lifecycle around LightSwarm delegation.
-- Backward-compatible adapters for guardrails and memory write admission on top
-  of hook lifecycle concepts.
-- More examples for redaction, model routing, audit logging, and cost budgets.
+- v0.9.6 evaluation harness, richer production observability, and broader
+  Human-in-the-loop / Human-on-the-loop surfaces for tools, handoffs, and
+  LightFlow steps.
+- Durable memory-review queue examples that build on v0.9.5 promotion
+  candidates without becoming required core dependencies.
+- Shared-memory adapter hardening for #1 and follow-up #39 work, especially
+  durable graph/vector backends, tenant boundaries, provenance checks, and
+  conflict handling.
+- Trace and audit export improvements for promotion decisions, tool decisions,
+  handoff decisions, and flow approval decisions.
 
 ### P2
 
+- Review #81 build-pipeline PR separately as packaging/release hygiene.
 - Database-backed workflow and shared-memory adapters.
 - Stronger idempotency and distributed execution controls for persistent
   workflows.
-- Evaluation harness and richer production observability.
 - Optional ClawMem adapter shape for #33.
 - Lightweight plugin/connector contract for #5.
-- Vector database and external API examples for #4 and #26.
+- CCS optional policy-integration documentation for #76.
+- Nautilus/A2A optional connector evaluation for #50.
+- External API examples for #26.
 
 ### P3
 
-- Nautilus/A2A optional connector evaluation for #50.
 - Visual trace UI.
 - Durable execution and resume.
 
 ## Next Development Recommendation
 
-After v0.9.3, the current development target is **v0.9.4 Tool Contracts And
-Policy Safety**. This closes the remaining schema-validation, policy-failure,
-and LightSwarm handoff gaps before v0.9.5 adds richer observability,
-evaluation, and human review.
+After v0.9.5, the next development target should be **v0.9.6 Observability,
+Evaluation, And Human Review**. The memory-promotion boundary is now explicit;
+the next risk is operating high-impact tools, handoffs, and workflow steps
+without enough measurement, review, and audit context.
 
 Reasoning:
 
 - v0.9.0 covers checkpointed LightFlow runs, resume/rerun, approval nodes,
   memory-safety controls, guardrail templates, and the shared-memory prototype.
 - v0.9.3 completes stream tool-loop safety and consistent runtime hook closure.
-- Tool reliability now depends on finding malformed schemas before they reach
-  model-side tool selection or runtime dispatch.
-- Policy hooks need explicit fail-closed semantics, while observability hooks
-  must remain isolated by default.
+- v0.9.4 completes tool schema diagnostics, `PolicyHook`, `on_handoff`,
+  LightSwarm runtime-context propagation, and full tracked-test CI.
+- v0.9.5 adds explicit promotion candidates, promotion decisions,
+  `before_memory_promote` / `after_memory_promote`, promotion trace events, and
+  fail-closed tests for internal/shared memory safety.
+- #1 and follow-up #39 work keep durable shared-memory poisoning, provenance,
+  and multi-agent memory boundaries as active P1 concerns.
+- Broader observability, evaluation, and human review should now build on the
+  v0.9.5 memory-review slice.
 - Database-backed durability should stay optional so the core package remains
   lightweight.
 
 Suggested first implementation slice:
 
-1. Add explicit, read-only tool schema diagnostics for #75.
-2. Add phase-scoped `PolicyHook` failure and timeout behavior without changing
-   plain hooks.
-3. Add `on_handoff` policy and trace coverage around LightSwarm delegation.
-4. Update tools/runtime hook docs and protect compatibility with focused and
-   full-suite tests.
+1. Add a small evaluation harness for fixed prompts, expected tool choices,
+   expected memory behavior, and regression scoring.
+2. Extend trace export with richer latency, usage, retry, decision, and
+   promotion metadata.
+3. Add Human-on-the-loop audit views or examples for memory, tool, handoff, and
+   LightFlow approval decisions.
+4. Add Human-in-the-loop examples for selected high-risk tools and workflow
+   steps using existing hooks and LightFlow approval nodes.
+5. Continue hardening shared-memory adapters against cross-user, cross-agent,
+   and cross-tenant retrieval.
+6. Review #81 independently as packaging hygiene before the next release cut.

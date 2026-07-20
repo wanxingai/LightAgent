@@ -566,12 +566,13 @@ print(result.content)
 print(result.trace)
 ```
 
-Hooks can target `before_run`, `after_run`, `on_error`, `before_model_request`, `after_model_response`, `before_tool_call`, `after_tool_result`, `before_memory_retrieve`, `after_memory_retrieve`, `before_memory_write`, `after_memory_write`, and `on_handoff`. Wrap security-sensitive callbacks with `PolicyHook(...)` to fail closed on exceptions or timeouts while ordinary observability hooks remain failure-isolated. `LightFlow(hooks=[...])` also supports step lifecycle hooks such as `before_flow_step`, `after_flow_step`, `on_approval_required`, `on_resume`, and `on_rerun`. See [Runtime Hooks](docs/runtime_hooks.md) and [Runtime Hook Recipes](docs/runtime_hook_recipes.md).
+Hooks can target `before_run`, `after_run`, `on_error`, `before_model_request`, `after_model_response`, `before_tool_call`, `after_tool_result`, `before_memory_retrieve`, `after_memory_retrieve`, `before_memory_write`, `after_memory_write`, `before_memory_promote`, `after_memory_promote`, and `on_handoff`. Wrap security-sensitive callbacks with `PolicyHook(...)` to fail closed on exceptions or timeouts while ordinary observability hooks remain failure-isolated. `LightFlow(hooks=[...])` also supports step lifecycle hooks such as `before_flow_step`, `after_flow_step`, `on_approval_required`, `on_resume`, and `on_rerun`. See [Runtime Hooks](docs/runtime_hooks.md) and [Runtime Hook Recipes](docs/runtime_hook_recipes.md).
 
 ### 13. SharedMemoryPool
 `SharedMemoryPool` is an in-memory shared memory prototype for multi-agent experiments. It is append-first and keeps provenance metadata, making it useful for testing how multiple agents share information before adopting a durable vector or graph memory backend.
 
 Use it with `MemoryPolicy` so each agent retrieves only memory that matches the expected namespace, source, scope, trust, confidence, or agent name.
+Self-learning and delegation evidence become non-injectable memory candidates first; promote them with `MemoryPolicy(memory_promotion_admission=...)` or `agent.promote_memory_candidate(candidate_id)` before they can enter future prompts.
 
 ## Mainstream Agent Model Support
 

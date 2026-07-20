@@ -8,7 +8,14 @@
 
 from .version import __version__
 from .core import LightAgent, LightSwarm
-from .protocol import MemoryAdmissionDecision, MemoryPolicy, MemoryProtocol, MemoryScope
+from .protocol import (
+    MemoryAdmissionDecision,
+    MemoryCandidate,
+    MemoryPolicy,
+    MemoryProtocol,
+    MemoryPromotionDecision,
+    MemoryScope,
+)
 from .tools import ToolRegistry, ToolLoader, AsyncToolDispatcher
 from .errors import (
     LightAgentError,
@@ -49,6 +56,8 @@ __all__ = [
     "LightSwarm",
     "MemoryProtocol",
     "MemoryAdmissionDecision",
+    "MemoryCandidate",
+    "MemoryPromotionDecision",
     "MemoryPolicy",
     "MemoryScope",
     "ToolRegistry",

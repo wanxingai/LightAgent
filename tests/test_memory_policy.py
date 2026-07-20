@@ -3,7 +3,16 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from LightAgent import HookDecision, LightAgent, MemoryAdmissionDecision, MemoryPolicy, MemoryScope, ToolLoader
+from LightAgent import (
+    HookDecision,
+    LightAgent,
+    MemoryAdmissionDecision,
+    MemoryPolicy,
+    MemoryPromotionDecision,
+    MemoryScope,
+    PolicyHook,
+    ToolLoader,
+)
 
 
 class StaticCompletions:
@@ -220,6 +229,205 @@ def test_memory_write_admission_can_block_reflection_memory_writes():
     block_events = [event for event in result.trace if event["type"] == "memory_write_block"]
     assert block_events[0]["data"]["source"] == "reflection"
     assert "require review" in block_events[0]["data"]["reason"]
+
+
+def test_internal_reflection_memory_becomes_non_injectable_candidate_by_default():
+    memory = MetadataRecordingMemory([])
+    agent, _ = make_agent(memory)
+    agent.self_learning = True
+
+    result = agent.run("hello", user_id="alice", result_format="object", trace=True)
+
+    assert result.content == "done"
+    assert len(memory.store_calls) == 1
+    assert memory.store_calls[0]["user_id"] == "alice"
+    candidates = agent.list_memory_candidates()
+    assert len(candidates) == 1
+    assert candidates[0]["source"] == "reflection"
+    assert candidates[0]["scope"] == "agent"
+    assert candidates[0]["status"] == "kept"
+    assert candidates[0]["injectable"] is False
+    required_event = next(event for event in result.trace if event["type"] == "memory_promotion_required")
+    assert "data" not in required_event["data"]
+    assert any(event["type"] == "memory_promotion_blocked" for event in result.trace)
+
+
+def test_memory_promotion_policy_approves_reflection_before_persisting():
+    def approve_reflection(candidate, context):
+        assert candidate.source == "reflection"
+        assert context["candidate_id"] == candidate.candidate_id
+        return MemoryPromotionDecision.approve(metadata={"reviewed_by": "policy"})
+
+    memory = MetadataRecordingMemory([])
+    policy = MemoryPolicy(memory_promotion_admission=approve_reflection)
+    agent, _ = make_agent(memory, memory_policy=policy)
+    agent.self_learning = True
+
+    result = agent.run("hello", user_id="alice", result_format="object", trace=True)
+
+    assert result.content == "done"
+    assert len(memory.store_calls) == 2
+    promoted = memory.store_calls[1]
+    assert promoted["user_id"] == agent.name
+    assert promoted["metadata"]["source"] == "reflection"
+    assert promoted["metadata"]["scope"] == "agent"
+    assert promoted["metadata"]["promotion_status"] == "promoted"
+    assert promoted["metadata"]["injectable"] is True
+    assert promoted["metadata"]["reviewed_by"] == "policy"
+    assert agent.list_memory_candidates()[0]["status"] == "promoted"
+    assert any(event["type"] == "memory_promotion_approved" for event in result.trace)
+
+
+def test_memory_promotion_policy_can_rewrite_internal_memory():
+    def rewrite_reflection(candidate, context):
+        return MemoryPromotionDecision.rewrite(f"reviewed::{candidate.data}")
+
+    memory = MetadataRecordingMemory([])
+    policy = MemoryPolicy(memory_promotion_admission=rewrite_reflection)
+    agent, _ = make_agent(memory, memory_policy=policy)
+    agent.self_learning = True
+
+    result = agent.run("hello", user_id="alice", result_format="object", trace=True)
+
+    assert memory.store_calls[1]["data"] == "reviewed::hello"
+    assert memory.store_calls[1]["metadata"]["promotion_decision"] == "rewrite"
+    assert any(event["type"] == "memory_promotion_rewritten" for event in result.trace)
+
+
+def test_before_memory_promote_hook_can_approve_and_rewrite_candidate():
+    def approve_with_hook(ctx):
+        if ctx.phase == "before_memory_promote":
+            return HookDecision.replace({
+                **ctx.payload,
+                "decision": MemoryPromotionDecision.rewrite(f"hooked::{ctx.payload['data']}"),
+            })
+        return None
+
+    memory = MetadataRecordingMemory([])
+    agent = LightAgent(
+        model="gpt-4o-mini",
+        api_key="test-key",
+        base_url="http://127.0.0.1:9/v1",
+        memory=memory,
+        self_learning=True,
+        auto_discover_skills=False,
+        hooks=[approve_with_hook],
+    )
+    agent.client = SimpleNamespace(chat=SimpleNamespace(completions=StaticCompletions()))
+
+    result = agent.run("hello", user_id="alice", result_format="object", trace=True)
+
+    assert memory.store_calls[1]["data"] == "hooked::hello"
+    assert memory.store_calls[1]["metadata"]["promotion_status"] == "promoted"
+    assert any(event["type"] == "memory_promotion_rewritten" for event in result.trace)
+
+
+def test_memory_promotion_closes_promotion_and_write_hook_lifecycles():
+    phases = []
+
+    def capture_lifecycle(ctx):
+        if ctx.phase in {
+            "before_memory_write",
+            "before_memory_promote",
+            "after_memory_promote",
+            "after_memory_write",
+        }:
+            phases.append(ctx.phase)
+
+    memory = MetadataRecordingMemory([])
+    policy = MemoryPolicy(
+        memory_promotion_admission=lambda candidate, context: MemoryPromotionDecision.approve()
+    )
+    agent = LightAgent(
+        model="gpt-4o-mini",
+        api_key="test-key",
+        base_url="http://127.0.0.1:9/v1",
+        memory=memory,
+        memory_policy=policy,
+        self_learning=True,
+        auto_discover_skills=False,
+        hooks=[capture_lifecycle],
+    )
+    agent.client = SimpleNamespace(chat=SimpleNamespace(completions=StaticCompletions()))
+
+    agent.run("hello", user_id="alice", result_format="object", trace=True)
+
+    reflection_phases = phases[phases.index("before_memory_promote") - 1:]
+    assert reflection_phases == [
+        "before_memory_write",
+        "before_memory_promote",
+        "after_memory_promote",
+        "after_memory_write",
+    ]
+
+
+def test_memory_policy_filters_unpromoted_internal_results_before_prompt_injection():
+    policy = MemoryPolicy(allow_unattributed_results=True)
+
+    unpromoted_reflection = {
+        "memory": "private reflection",
+        "metadata": {"user_id": "agent", "source": "reflection", "scope": "agent"},
+    }
+    explicit_candidate = {
+        "memory": "candidate text",
+        "metadata": {"user_id": "alice", "source": "user", "scope": "user", "promotion_status": "candidate"},
+    }
+    promoted_reflection = {
+        "memory": "approved reflection",
+        "metadata": {
+            "user_id": "agent",
+            "source": "reflection",
+            "scope": "agent",
+            "promotion_status": "promoted",
+            "injectable": True,
+        },
+    }
+
+    assert policy.allows_result(unpromoted_reflection, "agent", "agent") is False
+    assert policy.allows_result(explicit_candidate, "alice", "alice") is False
+    assert policy.allows_result(promoted_reflection, "agent", "agent") is True
+
+
+def test_before_memory_promote_policy_hook_can_fail_closed():
+    def broken_policy(ctx):
+        raise RuntimeError("review service unavailable")
+
+    memory = MetadataRecordingMemory([])
+    agent = LightAgent(
+        model="gpt-4o-mini",
+        api_key="test-key",
+        base_url="http://127.0.0.1:9/v1",
+        memory=memory,
+        self_learning=True,
+        auto_discover_skills=False,
+        hooks=[PolicyHook(broken_policy, phases={"before_memory_promote"})],
+    )
+    agent.client = SimpleNamespace(chat=SimpleNamespace(completions=StaticCompletions()))
+
+    result = agent.run("hello", user_id="alice", result_format="object", trace=True)
+
+    assert result.content == "done"
+    assert len(memory.store_calls) == 1
+    assert agent.list_memory_candidates()[0]["status"] == "blocked"
+    assert any(event["type"] == "hook_block" and event["data"]["phase"] == "before_memory_promote" for event in result.trace)
+    assert any(event["type"] == "memory_promotion_blocked" for event in result.trace)
+
+
+def test_memory_candidate_can_be_promoted_explicitly_after_run():
+    memory = MetadataRecordingMemory([])
+    agent, _ = make_agent(memory)
+    agent.self_learning = True
+
+    agent.run("hello", user_id="alice", result_format="object", trace=True)
+    candidate_id = agent.list_memory_candidates()[0]["candidate_id"]
+
+    promoted = agent.promote_memory_candidate(candidate_id)
+
+    assert promoted is True
+    assert len(memory.store_calls) == 2
+    assert memory.store_calls[1]["metadata"]["candidate_id"] == candidate_id
+    assert memory.store_calls[1]["metadata"]["promotion_status"] == "promoted"
+    assert memory.store_calls[1]["metadata"]["injectable"] is True
 
 
 def test_memory_policy_limits_writes_per_run():

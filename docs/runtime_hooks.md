@@ -60,6 +60,8 @@ Supported phases:
 | `after_memory_retrieve` | Retrieved memory payload before final `MemoryPolicy` filtering. |
 | `before_memory_write` | Memory data, source, scope, and target user id. |
 | `after_memory_write` | Stored data, metadata, source, scope, and target user id. |
+| `before_memory_promote` | Non-injectable memory candidate before internal memory can be persisted. |
+| `after_memory_promote` | Promoted memory candidate after explicit approval and persistence. |
 | `on_handoff` | Source agent, target agent, query, and stream mode before delegation. |
 
 ### Fail-Closed Policy Hooks

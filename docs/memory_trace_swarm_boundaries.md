@@ -7,11 +7,13 @@ interact in long-lived agents:
 | --- | --- | --- |
 | Trace | One run | Trace recorder or external observability backend |
 | User memory | Cross-session | Memory backend scoped by user or tenant |
-| Agent reflection memory | Cross-run or cross-session | Separate agent/reflection scope |
+| Agent reflection memory | Candidate until promoted | Separate agent/reflection scope after review |
 | LightSwarm delegation state | One task or workflow | Caller-managed task state or trace metadata |
 
 Do not store trace summaries, tool logs, or self-reflection outputs as ordinary
-user memories unless your application intentionally promotes them.
+user memories. LightAgent converts built-in reflection writes into
+non-injectable `MemoryCandidate` records unless your application intentionally
+promotes them.
 
 ### MemoryScope Metadata
 
@@ -102,13 +104,15 @@ fold delegated LightSwarm traces into the parent agent trace automatically.
 For LightSwarm or self-learning deployments:
 
 - Keep user conversation memory and reflection memory in different scopes.
-- Treat delegated agent outputs as task state until intentionally promoted.
+- Treat delegated agent outputs and self-reflection as task state or
+  `MemoryCandidate` evidence until intentionally promoted.
 - Use `agent_name`, `source`, and `scope` filters before injecting memories into
   a future prompt.
 - Prefer append-only memory writes with provenance over overwriting shared
   records.
-- Do not let trace-derived summaries write directly into user memory without an
-  admission check.
+- Do not let trace-derived summaries write directly into user memory without a
+  promotion decision.
 
 Use [Memory Admission And Mutation Controls](memory_admission.md) to add
-write-time admission hooks, per-run write limits, and duplicate write blocking.
+write-time admission hooks, memory-promotion review, per-run write limits, and
+duplicate write blocking.

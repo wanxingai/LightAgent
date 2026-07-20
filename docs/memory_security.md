@@ -23,6 +23,9 @@ finance, legal, enterprise automation, and policy support.
   requirement and a reviewable access policy.
 - Treat retrieved memories as untrusted context unless the memory backend can
   provide provenance and trust metadata.
+- Treat reflection, delegation summaries, and self-learning output as
+  non-injectable evidence until a promotion policy or reviewer explicitly
+  approves or rewrites it.
 - Disable memory writes for high-impact workflows until source trust,
   consistency checks, and rollback behavior are defined.
 - Log memory writes at the metadata level: user id, agent id, source, timestamp,
@@ -41,6 +44,22 @@ Memory adapters should validate candidate memories before persistence:
   tenant, and relation neighborhood in entity resolution.
 - Preserve conflicting facts with provenance instead of silently deleting older
   trusted facts.
+
+### Promotion Boundary For Internal Memory
+
+LightAgent keeps built-in user memory compatible, but internal memory is safer
+by default. When `self_learning=True` or another internal path writes
+`source=reflection`, `source=delegation`, or `scope=agent`, LightAgent creates a
+`MemoryCandidate` instead of immediately calling `memory.store()`. The candidate
+can be promoted only through `MemoryPolicy(memory_promotion_admission=...)`,
+`before_memory_promote` hooks, or the explicit
+`agent.promote_memory_candidate(candidate_id)` API.
+
+Promoted internal memory is persisted with metadata such as
+`candidate_id`, `promotion_status="promoted"`, and `injectable=True`. Retrieved
+memory with `injectable=False`, a candidate/rejected/blocked promotion status,
+or unpromoted internal `source`/`scope` metadata is filtered before prompt
+injection.
 
 ### Retrieval Checks Before Using Memory
 
