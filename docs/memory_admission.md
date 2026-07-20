@@ -135,6 +135,28 @@ Promotion decisions can:
 Use `agent.list_memory_candidates()` after a run to inspect candidates, or
 `agent.promote_memory_candidate(candidate_id)` to explicitly promote one later.
 
+### Upgrading From v0.9.4
+
+v0.9.5 changes the default handling of internal memory. With
+`require_promotion_for_internal_memory=True` (the default), new reflection,
+self-learning, delegation, and other internal evidence is not persisted until it
+is explicitly promoted. Existing internal records without `promotion_status`
+and `injectable` metadata are also excluded from prompt injection.
+
+For a temporary compatibility window, applications can restore the previous
+retrieval and write behavior while they audit existing records:
+
+```python
+policy = MemoryPolicy(require_promotion_for_internal_memory=False)
+```
+
+The safer migration is to review legacy internal records and backfill only
+approved entries with `promotion_status="promoted"` and `injectable=True`.
+Records explicitly marked `injectable=False` or with a candidate, rejected, or
+blocked `promotion_status` remain non-injectable even when the compatibility
+option is enabled. The exact backfill operation belongs in the memory adapter
+because storage APIs differ between vector, graph, and custom backends.
+
 ### Expiration-Aware Retrieval
 
 Memory records can include `expires_at` metadata. When
