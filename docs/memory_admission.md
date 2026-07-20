@@ -92,6 +92,49 @@ policy = MemoryPolicy(
 These checks run before `memory_write_admission`, so application-specific
 classifiers can still perform deeper review after basic filtering.
 
+### Memory Promotion For Internal Evidence
+
+Reflection, self-learning, delegation summaries, and other internal agent
+evidence are treated as non-injectable memory candidates by default. They are
+not written to the configured memory backend unless an explicit promotion
+decision approves or rewrites them.
+
+```python
+from LightAgent import LightAgent, MemoryPolicy, MemoryPromotionDecision
+
+def review_memory_candidate(candidate, context):
+    if candidate.source == "reflection":
+        return MemoryPromotionDecision.rewrite(
+            f"Reviewed note: {candidate.data.strip()}",
+            metadata={"reviewed_by": "memory-policy"},
+        )
+    return MemoryPromotionDecision.keep("Only reflection promotion is enabled.")
+
+agent = LightAgent(
+    model="gpt-4.1",
+    api_key="your_api_key",
+    base_url="your_base_url",
+    memory=memory_backend,
+    self_learning=True,
+    memory_policy=MemoryPolicy(memory_promotion_admission=review_memory_candidate),
+)
+```
+
+The promotion callback receives a `MemoryCandidate` with `candidate_id`,
+`source`, `scope`, `memory_user_id`, `original_user_id`, `agent_name`,
+`trace_id`, `run_id`, and raw `data`. The trace events emitted for promotion do
+not include raw memory text.
+
+Promotion decisions can:
+
+- approve the candidate as prompt-injectable memory;
+- reject it;
+- rewrite it before persistence;
+- keep it non-injectable for audit or later review.
+
+Use `agent.list_memory_candidates()` after a run to inspect candidates, or
+`agent.promote_memory_candidate(candidate_id)` to explicitly promote one later.
+
 ### Expiration-Aware Retrieval
 
 Memory records can include `expires_at` metadata. When
@@ -117,6 +160,11 @@ When tracing is enabled, memory write controls emit:
 | --- | --- |
 | `memory_write` | A memory write was allowed and persisted. |
 | `memory_write_block` | A memory write was blocked by policy. |
+| `memory_promotion_required` | Internal memory was converted to a non-injectable candidate. |
+| `memory_promotion_approved` | A candidate was approved and persisted. |
+| `memory_promotion_rewritten` | A candidate was rewritten before persistence. |
+| `memory_promotion_rejected` | A candidate was rejected. |
+| `memory_promotion_blocked` | A candidate stayed non-injectable or was blocked by policy. |
 
 These events do not include raw memory text.
 
@@ -124,6 +172,8 @@ These events do not include raw memory text.
 
 - Keep default behavior for simple single-agent demos.
 - Configure `memory_write_admission` for shared or graph-backed memory.
+- Configure `memory_promotion_admission` before enabling self-learning or
+  shared internal memory in production.
 - Use `max_writes_per_run` for self-learning agents to reduce write
   amplification.
 - Use `reject_duplicate_writes=True` for reflection-heavy workflows.

@@ -106,7 +106,7 @@ def test_lightagent_writes_memory_scope_metadata_to_shared_memory_pool():
     assert [event["type"] for event in result.trace if event["type"] == "memory_write"] == ["memory_write"]
 
 
-def test_lightagent_keeps_reflection_memory_separate_in_shared_pool():
+def test_lightagent_keeps_reflection_memory_as_candidate_until_promoted():
     pool = SharedMemoryPool()
     policy = MemoryPolicy(namespace="tenant", allow_unattributed_results=False)
     agent, _ = make_agent(pool, self_learning=True, memory_policy=policy)
@@ -118,5 +118,8 @@ def test_lightagent_keeps_reflection_memory_separate_in_shared_pool():
 
     assert user_records[0]["metadata"]["source"] == "user"
     assert user_records[0]["metadata"]["scope"] == "user"
-    assert agent_records[0]["metadata"]["source"] == "reflection"
-    assert agent_records[0]["metadata"]["scope"] == "agent"
+    assert agent_records == []
+    candidates = agent.list_memory_candidates()
+    assert candidates[0]["source"] == "reflection"
+    assert candidates[0]["scope"] == "agent"
+    assert candidates[0]["status"] == "kept"

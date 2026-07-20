@@ -2,9 +2,6 @@ import hashlib
 import json
 import os
 import traceback
-from typing import Optional
-import boto3
-from botocore.client import Config
 
 # 阿里云OSS配置（建议从环境变量读取，避免硬编码）
 # 您可以在环境变量中设置以下值，或在创建Agent时传入
@@ -36,6 +33,9 @@ def _get_oss_client(access_key_id: str = None, access_key_secret: str = None, en
     if not ak or not sk:
         raise ValueError(
             "未设置阿里云AccessKey，请通过参数传入或设置环境变量ALIYUN_OSS_ACCESS_KEY_ID和ALIYUN_OSS_ACCESS_KEY_SECRET")
+
+    import boto3
+    from botocore.client import Config
 
     # 创建OSS客户端（兼容S3协议）
     client = boto3.client(
@@ -157,7 +157,11 @@ def upload_file_to_oss(
         return json.dumps(result, ensure_ascii=False, indent=2)
 
     except ImportError as e:
-        return f"错误：缺少必要的依赖库，请安装：pip install boto3\n详细信息：{str(e)}"
+        return (
+            "错误：缺少可选依赖库，请安装：pip install boto3 "
+            "或 pip install 'LightAgent[oss]'\n"
+            f"详细信息：{str(e)}"
+        )
     except Exception as e:
         return f"上传文件到OSS失败：{str(e)}\n{traceback.format_exc()}"
 

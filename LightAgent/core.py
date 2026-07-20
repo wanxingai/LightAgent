@@ -25,7 +25,13 @@ from openai.types.chat import ChatCompletionChunk
 
 # 从各子模块导入
 from .version import __version__
-from .protocol import MemoryPolicy, MemoryProtocol, MemoryScope
+from .protocol import (
+    MemoryCandidate,
+    MemoryPolicy,
+    MemoryProtocol,
+    MemoryPromotionDecision,
+    MemoryScope,
+)
 from .logger import LoggerManager
 from .tools import ToolRegistry, ToolLoader, AsyncToolDispatcher
 from .errors import format_error_code, format_lightagent_error
@@ -191,6 +197,7 @@ class LightAgent:
         self._current_run_metadata: dict[str, Any] = {}
         self._parent_trace_id: str | None = None
         self._run_group_id: str | None = None
+        self._memory_promotion_candidates: list[MemoryCandidate] = []
         # 确保 log 目录存在
         log_dir = 'logs'
         if not os.path.exists(log_dir):
@@ -331,6 +338,33 @@ class LightAgent:
         """Return diagnostics for the currently registered tool schemas."""
         return self.tool_registry.validate_tools()
 
+    def list_memory_candidates(self, *, include_data: bool = True) -> List[Dict[str, Any]]:
+        """Return non-injectable memory candidates from the most recent run."""
+        return [
+            candidate.to_dict(include_data=include_data)
+            for candidate in getattr(self, "_memory_promotion_candidates", [])
+        ]
+
+    def promote_memory_candidate(
+            self,
+            candidate_id: str,
+            decision: MemoryPromotionDecision | Dict[str, Any] | bool | None = None,
+    ) -> bool:
+        """Explicitly promote, reject, rewrite, or keep a pending memory candidate."""
+        candidate = self._find_memory_candidate(candidate_id)
+        if candidate is None:
+            raise ValueError(f"Memory candidate `{candidate_id}` was not found.")
+
+        if decision is None:
+            promotion_decision = MemoryPromotionDecision.approve(candidate.data)
+        elif isinstance(decision, MemoryPromotionDecision):
+            promotion_decision = decision
+        else:
+            promotion_decision = self.memory_policy._coerce_promotion_decision(decision, candidate.data)
+
+        context = self._memory_promotion_context(candidate)
+        return self._apply_memory_promotion_decision(candidate, promotion_decision, context, manual=True)
+
     def get_tool(self, tool_name: str) -> Callable:
         """
         用于外部可以获取已加载的工具函数
@@ -443,6 +477,7 @@ class LightAgent:
         self._current_reasoning_content = ""
         self._memory_write_count = 0
         self._memory_write_fingerprints = set()
+        self._memory_promotion_candidates = []
         if self.debug and hasattr(self, 'logger'):  # 仅在 debug=True 且 logger 存在时记录日志
             self.logger.set_traceid(traceid)
         self.log("INFO", "run_start", {"query": query, "user_id": user_id, "stream": stream})
@@ -1111,6 +1146,17 @@ class LightAgent:
                 "run_group_id": getattr(self, "_run_group_id", None),
             },
         ).to_metadata()
+        if self._requires_memory_promotion(source=source, scope=scope):
+            return self._handle_memory_promotion_candidate(
+                data=stored_data,
+                memory_user_id=memory_user_id,
+                original_user_id=original_user_id,
+                source=source,
+                scope=scope,
+                metadata=metadata,
+                context=context,
+            )
+
         self._store_memory_record(stored_data, memory_user_id, metadata)
         self._run_hooks("after_memory_write", {
             "data": stored_data,
@@ -1130,6 +1176,220 @@ class LightAgent:
             "user_id": str(original_user_id),
         })
         return True
+
+    def _requires_memory_promotion(self, *, source: str, scope: str) -> bool:
+        """Return whether a memory write must pass explicit promotion first."""
+        if not self.memory_policy.require_promotion_for_internal_memory:
+            return False
+        internal_sources = {
+            "reflection",
+            "delegation",
+            "self_learning",
+            "agent",
+            "derived",
+            "swarm",
+            "trace",
+            "tool",
+        }
+        internal_scopes = {"agent", "delegation", "shared", "internal", "swarm", "flow"}
+        return str(source).lower() in internal_sources or str(scope).lower() in internal_scopes
+
+    def _handle_memory_promotion_candidate(
+            self,
+            *,
+            data: str,
+            memory_user_id: str,
+            original_user_id: str,
+            source: str,
+            scope: str,
+            metadata: dict[str, Any],
+            context: dict[str, Any],
+    ) -> bool:
+        """Review an internal memory candidate before it can be persisted."""
+        candidate = MemoryCandidate(
+            data=str(data),
+            memory_user_id=str(memory_user_id),
+            original_user_id=str(original_user_id),
+            source=source,
+            scope=scope,
+            agent_name=self.name,
+            trace_id=self.traceid,
+            parent_trace_id=getattr(self, "_parent_trace_id", None),
+            run_id=getattr(self, "_current_run_id", None),
+            run_group_id=getattr(self, "_run_group_id", None),
+            metadata=dict(metadata),
+        )
+        self._upsert_memory_candidate(candidate)
+        self._record_trace("memory_promotion_required", self._memory_candidate_trace(candidate))
+        promotion_context = {**context, "candidate_id": candidate.candidate_id}
+
+        hook_decision = self._run_hooks("before_memory_promote", {
+            "candidate": candidate.to_dict(include_data=True),
+            "data": candidate.data,
+            "memory_user_id": candidate.memory_user_id,
+            "original_user_id": candidate.original_user_id,
+            "source": candidate.source,
+            "scope": candidate.scope,
+        })
+        if hook_decision.action == HOOK_BLOCK:
+            blocked = candidate.with_updates(status="blocked")
+            self._upsert_memory_candidate(blocked)
+            self._record_trace("memory_promotion_blocked", {
+                **self._memory_candidate_trace(blocked),
+                "reason": hook_decision.reason,
+            })
+            return False
+        if hook_decision.payload:
+            candidate = self._candidate_from_hook_payload(candidate, hook_decision.payload)
+            self._upsert_memory_candidate(candidate)
+            payload_decision = hook_decision.payload.get("decision")
+            if payload_decision is not None:
+                promotion_decision = (
+                    payload_decision
+                    if isinstance(payload_decision, MemoryPromotionDecision)
+                    else self.memory_policy._coerce_promotion_decision(payload_decision, candidate.data)
+                )
+                return self._apply_memory_promotion_decision(candidate, promotion_decision, promotion_context)
+
+        promotion_decision = self.memory_policy.allows_promotion(candidate, promotion_context)
+        return self._apply_memory_promotion_decision(candidate, promotion_decision, promotion_context)
+
+    def _candidate_from_hook_payload(
+            self,
+            candidate: MemoryCandidate,
+            payload: dict[str, Any],
+    ) -> MemoryCandidate:
+        data = str(payload.get("data", candidate.data))
+        metadata = dict(candidate.metadata)
+        if isinstance(payload.get("metadata"), dict):
+            metadata.update(payload["metadata"])
+        if isinstance(payload.get("candidate"), dict):
+            candidate_payload = payload["candidate"]
+            data = str(candidate_payload.get("data", data))
+            if isinstance(candidate_payload.get("metadata"), dict):
+                metadata.update(candidate_payload["metadata"])
+        return candidate.with_updates(data=data, metadata=metadata)
+
+    def _apply_memory_promotion_decision(
+            self,
+            candidate: MemoryCandidate,
+            decision: MemoryPromotionDecision,
+            context: dict[str, Any],
+            *,
+            manual: bool = False,
+    ) -> bool:
+        """Apply a promotion decision and persist only explicitly promoted memory."""
+        if not decision.promotes:
+            status = "rejected" if decision.action == "reject" else "kept"
+            updated = candidate.with_updates(status=status, injectable=False)
+            self._upsert_memory_candidate(updated)
+            event_type = "memory_promotion_rejected" if decision.action == "reject" else "memory_promotion_blocked"
+            self._record_trace(event_type, {
+                **self._memory_candidate_trace(updated),
+                "decision": decision.action,
+                "reason": decision.reason,
+                "manual": manual,
+            })
+            return False
+
+        promoted_data = decision.value if decision.value is not None else candidate.data
+        promoted_metadata = candidate.to_metadata()
+        promoted_metadata.update(decision.metadata or {})
+        promoted_metadata.update({
+            "promotion_status": "promoted",
+            "promotion_decision": decision.action,
+            "injectable": True,
+            "promoted_at": datetime.utcnow().isoformat() + "Z",
+        })
+        promoted = candidate.with_updates(
+            data=str(promoted_data),
+            status="promoted",
+            injectable=True,
+            metadata=promoted_metadata,
+        )
+        self._store_memory_record(str(promoted_data), candidate.memory_user_id, promoted_metadata)
+        self._upsert_memory_candidate(promoted)
+
+        event_type = "memory_promotion_rewritten" if decision.action == "rewrite" else "memory_promotion_approved"
+        self._record_trace(event_type, {
+            **self._memory_candidate_trace(promoted),
+            "decision": decision.action,
+            "reason": decision.reason,
+            "manual": manual,
+        })
+        self._run_hooks("after_memory_promote", {
+            "candidate": promoted.to_dict(include_data=True),
+            "data": str(promoted_data),
+            "metadata": promoted_metadata,
+            "memory_user_id": candidate.memory_user_id,
+            "original_user_id": candidate.original_user_id,
+            "source": candidate.source,
+            "scope": candidate.scope,
+        })
+        self._run_hooks("after_memory_write", {
+            "data": str(promoted_data),
+            "metadata": promoted_metadata,
+            "memory_user_id": candidate.memory_user_id,
+            "original_user_id": candidate.original_user_id,
+            "source": candidate.source,
+            "scope": candidate.scope,
+        })
+
+        self._memory_write_count = getattr(self, "_memory_write_count", 0) + 1
+        fingerprints = getattr(self, "_memory_write_fingerprints", set())
+        fingerprints.add(self.memory_policy.write_fingerprint(str(promoted_data), context))
+        self._memory_write_fingerprints = fingerprints
+        self._record_trace("memory_write", {
+            "source": candidate.source,
+            "scope": candidate.scope,
+            "user_id": candidate.original_user_id,
+            "candidate_id": candidate.candidate_id,
+            "promotion_status": "promoted",
+        })
+        return True
+
+    def _memory_promotion_context(self, candidate: MemoryCandidate) -> dict[str, Any]:
+        return {
+            "agent_name": candidate.agent_name,
+            "trace_id": candidate.trace_id,
+            "parent_trace_id": candidate.parent_trace_id,
+            "run_id": candidate.run_id,
+            "run_group_id": candidate.run_group_id,
+            "user_id": candidate.original_user_id,
+            "memory_user_id": candidate.memory_user_id,
+            "source": candidate.source,
+            "scope": candidate.scope,
+            "candidate_id": candidate.candidate_id,
+        }
+
+    def _upsert_memory_candidate(self, candidate: MemoryCandidate) -> None:
+        candidates = list(getattr(self, "_memory_promotion_candidates", []))
+        for index, existing in enumerate(candidates):
+            if existing.candidate_id == candidate.candidate_id:
+                candidates[index] = candidate
+                self._memory_promotion_candidates = candidates
+                return
+        candidates.append(candidate)
+        self._memory_promotion_candidates = candidates
+
+    def _find_memory_candidate(self, candidate_id: str) -> MemoryCandidate | None:
+        for candidate in getattr(self, "_memory_promotion_candidates", []):
+            if candidate.candidate_id == str(candidate_id):
+                return candidate
+        return None
+
+    @staticmethod
+    def _memory_candidate_trace(candidate: MemoryCandidate) -> dict[str, Any]:
+        return {
+            "candidate_id": candidate.candidate_id,
+            "source": candidate.source,
+            "scope": candidate.scope,
+            "user_id": candidate.original_user_id,
+            "memory_user_id": candidate.memory_user_id,
+            "agent_name": candidate.agent_name,
+            "status": candidate.status,
+            "injectable": candidate.injectable,
+        }
 
     def _store_memory_record(self, data: str, memory_user_id: str, metadata: dict[str, Any]) -> Any:
         """Store memory metadata when the backend supports it."""

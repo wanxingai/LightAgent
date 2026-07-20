@@ -79,17 +79,19 @@ The returned shape follows the memory retrieval convention:
 ## Self-Learning Boundary
 
 When `LightAgent` writes to a memory backend that supports `metadata`, it now
-passes MemoryScope-compatible provenance metadata. With `SharedMemoryPool`, user
-conversation memory and self-learning reflection memory are written into
-separate scoped user ids:
+passes MemoryScope-compatible provenance metadata. User conversation memory can
+still be written directly to `SharedMemoryPool`, but self-learning reflection
+memory is now converted into a non-injectable `MemoryCandidate` first:
 
 ```text
-tenant-a:alice   -> source=user, scope=user
-tenant-a:writer  -> source=reflection, scope=agent
+tenant-a:alice   -> source=user, scope=user, persisted
+tenant-a:writer  -> source=reflection, scope=agent, candidate until promoted
 ```
 
-This keeps reflection useful for inspection while preventing it from collapsing
-into ordinary user memory.
+This prevents reflection or delegated evidence from collapsing into ordinary
+user memory. Use `MemoryPolicy(memory_promotion_admission=...)` or
+`agent.promote_memory_candidate(candidate_id)` when a reviewed candidate should
+become prompt-injectable memory.
 
 ## Inspection
 

@@ -275,7 +275,7 @@ LightAgent 接受任何提供 `store(data, user_id)` 和 `retrieve(query, user_i
 `agent.run(query, stream=True)` 返回 OpenAI 兼容流式 chunk，适合聊天 UI 和长输出。
 
 ### 7. Agent 自我学习
-自我学习应与记忆后端和 `MemoryPolicy` 配合使用，避免低质量、隐私、过期或无关内容进入长期记忆。
+自我学习应与记忆后端和 `MemoryPolicy` 配合使用，避免低质量、隐私、过期或无关内容进入长期记忆。反思、委托摘要等内部证据默认先生成不可注入的记忆候选，需要通过 `memory_promotion_admission` 或 `agent.promote_memory_candidate(candidate_id)` 显式提升后，才会进入未来 prompt。
 
 ### 8. Trace 与 Langfuse
 LightAgent 可通过内置 trace 或 Langfuse 配置观察运行过程。
@@ -321,7 +321,7 @@ agent = LightAgent(
 请查看 [Guardrails](docs/guardrails.md)。
 
 ### 12. SharedMemoryPool
-`SharedMemoryPool` 是多 Agent 共享记忆实验的内存原型，建议与 `MemoryPolicy` 配合控制 namespace、source、scope、trust、confidence 和 agent name。
+`SharedMemoryPool` 是多 Agent 共享记忆实验的内存原型，建议与 `MemoryPolicy` 配合控制 namespace、source、scope、trust、confidence、promotion status 和 agent name。
 
 ## 主流Agent模型支持
 

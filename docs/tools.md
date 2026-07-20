@@ -381,10 +381,14 @@ LightAgent automatically registers a set of built-in tools at startup:
 | `execute_python_code` | Execute a Python code snippet in a sandboxed subprocess. |
 | `execute_python_file` | Execute a Python script file and return the output. |
 | `execute_python_code_stream` | Execute Python code and stream the output line by line. |
-| `upload_file_to_oss` | Upload a file to object storage (OSS). |
+| `upload_file_to_oss` | Upload a file to object storage (OSS); requires optional `boto3`. |
 
 These are always available unless the agent's tool registry is explicitly
 overridden.
+
+`upload_file_to_oss` is registered without importing `boto3`. Install
+`LightAgent[oss]`, `LightAgent[nos]`, or `boto3>=1.34.0` only when you use this
+object-storage tool.
 
 ### MCP Integration
 
