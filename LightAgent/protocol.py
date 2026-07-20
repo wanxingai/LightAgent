@@ -241,12 +241,12 @@ class MemoryPolicy:
     min_confidence: float | None = None
     enforce_expires_at: bool = False
     memory_write_admission: Callable[[str, dict[str, Any]], Any] | None = None
-    memory_promotion_admission: Callable[[MemoryCandidate, dict[str, Any]], Any] | None = None
-    require_promotion_for_internal_memory: bool = True
     max_writes_per_run: int | None = None
     reject_duplicate_writes: bool = False
     min_write_length: int | None = None
     reject_write_patterns: Iterable[str] | None = None
+    memory_promotion_admission: Callable[[MemoryCandidate, dict[str, Any]], Any] | None = None
+    require_promotion_for_internal_memory: bool = True
 
     def __post_init__(self):
         for field_name in ("allowed_sources", "allowed_scopes", "allowed_agent_names", "allowed_trust_levels"):
@@ -353,7 +353,7 @@ class MemoryPolicy:
         if injectable is not None and not self._truthy(injectable):
             return True
 
-        status = self._get_value(item, metadata, ("promotion_status", "memory_status", "status"))
+        status = self._get_value(item, metadata, ("promotion_status",))
         normalized_status = str(status).lower() if status is not None else None
         if normalized_status in {
             "candidate",
@@ -451,7 +451,13 @@ class MemoryPolicy:
         """Return whether a non-injectable candidate can be promoted."""
         if self.memory_promotion_admission is None:
             return MemoryPromotionDecision.keep("Memory promotion requires explicit approval.")
-        raw_decision = self.memory_promotion_admission(candidate, context or {})
+        try:
+            raw_decision = self.memory_promotion_admission(candidate, context or {})
+        except Exception as exc:
+            return MemoryPromotionDecision.keep(
+                f"Memory promotion admission failed: {type(exc).__name__}",
+                metadata={"admission_error_type": type(exc).__name__},
+            )
         return self._coerce_promotion_decision(raw_decision, candidate.data)
 
     @staticmethod

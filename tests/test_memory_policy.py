@@ -60,6 +60,31 @@ def make_agent(memory, memory_policy=None, memory_namespace=None):
     return agent, completions
 
 
+def test_memory_policy_preserves_legacy_positional_arguments():
+    policy = MemoryPolicy(
+        "tenant-a",
+        False,
+        ("user",),
+        ("user",),
+        ("writer",),
+        ("verified",),
+        0.8,
+        True,
+        None,
+        7,
+        True,
+        4,
+        (r"ignore previous instructions",),
+    )
+
+    assert policy.max_writes_per_run == 7
+    assert policy.reject_duplicate_writes is True
+    assert policy.min_write_length == 4
+    assert policy.reject_write_patterns == (r"ignore previous instructions",)
+    assert policy.memory_promotion_admission is None
+    assert policy.require_promotion_for_internal_memory is True
+
+
 def test_memory_policy_namespaces_user_id_and_filters_cross_user_results():
     memory = RecordingMemory([
         {"memory": "safe memory", "metadata": {"user_id": "tenant-a:alice"}},
@@ -388,6 +413,36 @@ def test_memory_policy_filters_unpromoted_internal_results_before_prompt_injecti
     assert policy.allows_result(promoted_reflection, "agent", "agent") is True
 
 
+def test_business_status_does_not_block_user_memory():
+    policy = MemoryPolicy(require_promotion_for_internal_memory=False)
+    order_memory = {
+        "memory": "Customer order is pending",
+        "metadata": {
+            "user_id": "alice",
+            "source": "user",
+            "scope": "user",
+            "status": "pending",
+        },
+    }
+
+    assert policy.allows_result(order_memory, "alice", "alice") is True
+
+
+def test_legacy_internal_memory_can_use_compatibility_opt_out():
+    legacy_reflection = {
+        "memory": "Legacy reflection",
+        "metadata": {
+            "user_id": "writer",
+            "source": "reflection",
+            "scope": "agent",
+        },
+    }
+
+    assert MemoryPolicy().allows_result(legacy_reflection, "writer", "writer") is False
+    compatibility_policy = MemoryPolicy(require_promotion_for_internal_memory=False)
+    assert compatibility_policy.allows_result(legacy_reflection, "writer", "writer") is True
+
+
 def test_before_memory_promote_policy_hook_can_fail_closed():
     def broken_policy(ctx):
         raise RuntimeError("review service unavailable")
@@ -413,6 +468,25 @@ def test_before_memory_promote_policy_hook_can_fail_closed():
     assert any(event["type"] == "memory_promotion_blocked" for event in result.trace)
 
 
+def test_memory_promotion_admission_exception_fails_closed():
+    def broken_admission(candidate, context):
+        raise RuntimeError("review service unavailable")
+
+    memory = MetadataRecordingMemory([])
+    policy = MemoryPolicy(memory_promotion_admission=broken_admission)
+    agent, _ = make_agent(memory, memory_policy=policy)
+    agent.self_learning = True
+
+    result = agent.run("hello", user_id="alice", result_format="object", trace=True)
+
+    assert result.content == "done"
+    assert len(memory.store_calls) == 1
+    assert agent.list_memory_candidates()[0]["status"] == "kept"
+    blocked_event = next(event for event in result.trace if event["type"] == "memory_promotion_blocked")
+    assert blocked_event["data"]["reason"] == "Memory promotion admission failed: RuntimeError"
+    assert "review service unavailable" not in blocked_event["data"]["reason"]
+
+
 def test_memory_candidate_can_be_promoted_explicitly_after_run():
     memory = MetadataRecordingMemory([])
     agent, _ = make_agent(memory)
@@ -428,6 +502,20 @@ def test_memory_candidate_can_be_promoted_explicitly_after_run():
     assert memory.store_calls[1]["metadata"]["candidate_id"] == candidate_id
     assert memory.store_calls[1]["metadata"]["promotion_status"] == "promoted"
     assert memory.store_calls[1]["metadata"]["injectable"] is True
+
+
+def test_memory_candidate_promotion_is_idempotent():
+    memory = MetadataRecordingMemory([])
+    agent, _ = make_agent(memory)
+    agent.self_learning = True
+
+    agent.run("hello", user_id="alice")
+    candidate_id = agent.list_memory_candidates()[0]["candidate_id"]
+
+    assert agent.promote_memory_candidate(candidate_id) is True
+    assert agent.promote_memory_candidate(candidate_id) is True
+    assert len(memory.store_calls) == 2
+    assert agent.list_memory_candidates()[0]["status"] == "promoted"
 
 
 def test_memory_policy_limits_writes_per_run():

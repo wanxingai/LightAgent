@@ -276,6 +276,7 @@ LightAgent 接受任何提供 `store(data, user_id)` 和 `retrieve(query, user_i
 
 ### 7. Agent 自我学习
 自我学习应与记忆后端和 `MemoryPolicy` 配合使用，避免低质量、隐私、过期或无关内容进入长期记忆。反思、委托摘要等内部证据默认先生成不可注入的记忆候选，需要通过 `memory_promotion_admission` 或 `agent.promote_memory_candidate(candidate_id)` 显式提升后，才会进入未来 prompt。
+从 v0.9.4 升级时，应先审查旧的内部记忆，再为通过审查的记录回填 `promotion_status="promoted"` 和 `injectable=True`；`require_promotion_for_internal_memory=False` 仅用于临时兼容。具体迁移说明请查看 [Memory Admission](docs/memory_admission.md#upgrading-from-v094)。
 
 ### 8. Trace 与 Langfuse
 LightAgent 可通过内置 trace 或 Langfuse 配置观察运行过程。

@@ -354,6 +354,12 @@ class LightAgent:
         candidate = self._find_memory_candidate(candidate_id)
         if candidate is None:
             raise ValueError(f"Memory candidate `{candidate_id}` was not found.")
+        if candidate.status == "promoted":
+            self._record_trace("memory_promotion_idempotent", {
+                **self._memory_candidate_trace(candidate),
+                "manual": True,
+            })
+            return True
 
         if decision is None:
             promotion_decision = MemoryPromotionDecision.approve(candidate.data)

@@ -573,6 +573,7 @@ Hooks can target `before_run`, `after_run`, `on_error`, `before_model_request`, 
 
 Use it with `MemoryPolicy` so each agent retrieves only memory that matches the expected namespace, source, scope, trust, confidence, or agent name.
 Self-learning and delegation evidence become non-injectable memory candidates first; promote them with `MemoryPolicy(memory_promotion_admission=...)` or `agent.promote_memory_candidate(candidate_id)` before they can enter future prompts.
+When upgrading from v0.9.4, audit legacy internal memory before backfilling `promotion_status="promoted"` and `injectable=True`; use `require_promotion_for_internal_memory=False` only as a temporary compatibility option. See [Memory Admission](docs/memory_admission.md#upgrading-from-v094).
 
 ## Mainstream Agent Model Support
 
