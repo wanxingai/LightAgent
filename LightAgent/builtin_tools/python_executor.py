@@ -197,8 +197,8 @@ def _safe_import_check(code: str) -> tuple[bool, str]:
                     if node.func.id in ['eval', 'exec', 'compile', '__import__']:
                         return False, f"禁止使用 '{node.func.id}' 函数"
                 elif isinstance(node.func, ast.Attribute):
-                    if node.func.attr in ['system', 'popen', 'call', 'run']:
-                        return False, f"禁止使用子进程函数 '{node.func.attr}'"
+                    if node.func.attr in ['system', 'popen', 'call', 'run', 'eval', 'exec', 'compile']:
+                        return False, f"禁止使用危险函数 '{node.func.attr}'"
     except SyntaxError as e:
         return False, f"语法错误：{str(e)}"
 
