@@ -91,6 +91,54 @@ class TestSafeImportCheckBlocklist:
         # The system() call should be caught
         assert "system" in msg or "子进程" in msg or "危险" in msg
 
+    # --- Dynamic dispatch patterns (getattr / subscript) ---
+
+    def test_blocks_getattr_eval(self):
+        """getattr(obj, 'eval') pattern must be blocked."""
+        safe, msg = _safe_import_check(
+            'getattr(__builtins__, "eval")("__import__(\'os\').system(\'id\')")'
+        )
+        assert not safe
+        assert "getattr" in msg and "eval" in msg
+
+    def test_blocks_getattr_exec(self):
+        """getattr(obj, 'exec') pattern must be blocked."""
+        safe, msg = _safe_import_check(
+            'getattr(__builtins__, "exec")("import os")'
+        )
+        assert not safe
+        assert "getattr" in msg and "exec" in msg
+
+    def test_blocks_getattr_system(self):
+        """getattr(obj, 'system') pattern must be blocked."""
+        safe, msg = _safe_import_check(
+            'getattr(obj, "system")("id")'
+        )
+        assert not safe
+        assert "getattr" in msg
+
+    def test_blocks_subscript_eval(self):
+        """obj.__dict__['eval'] or similar subscript pattern."""
+        safe, msg = _safe_import_check(
+            'builtins.__dict__["eval"]("__import__(\'os\').system(\'id\')")'
+        )
+        assert not safe
+        assert "eval" in msg or "下标" in msg
+
+    def test_allows_getattr_safe_attribute(self):
+        """getattr with a harmless attribute name must still pass."""
+        safe, msg = _safe_import_check(
+            'result = getattr(obj, "normal_attribute")'
+        )
+        assert safe, f"getattr safe attribute should pass: {msg}"
+
+    def test_allows_dict_subscript(self):
+        """Dict subscript with a normal key must still pass."""
+        safe, msg = _safe_import_check(
+            "d = {'key': 'value'}\nx = d['key']"
+        )
+        assert safe, f"dict subscript should pass: {msg}"
+
     # --- Safe operations that MUST still pass ---
 
     def test_allows_harmless_computation(self):
