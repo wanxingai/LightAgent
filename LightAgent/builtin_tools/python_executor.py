@@ -196,9 +196,20 @@ def _safe_import_check(code: str) -> tuple[bool, str]:
                 if isinstance(node.func, ast.Name):
                     if node.func.id in ['eval', 'exec', 'compile', '__import__']:
                         return False, f"禁止使用 '{node.func.id}' 函数"
+                    # Block getattr with constant dangerous attribute name
+                    if node.func.id == 'getattr' and len(node.args) >= 2:
+                        second_arg = node.args[1]
+                        if isinstance(second_arg, ast.Constant) and isinstance(second_arg.value, str):
+                            if second_arg.value in ['eval', 'exec', 'compile', '__import__', 'system', 'popen', 'call', 'run']:
+                                return False, f"禁止通过 getattr 访问危险函数 '{second_arg.value}'"
                 elif isinstance(node.func, ast.Attribute):
-                    if node.func.attr in ['system', 'popen', 'call', 'run']:
-                        return False, f"禁止使用子进程函数 '{node.func.attr}'"
+                    if node.func.attr in ['system', 'popen', 'call', 'run', 'eval', 'exec', 'compile']:
+                        return False, f"禁止使用危险函数 '{node.func.attr}'"
+                # Block subscript access to dangerous functions: obj['eval'](...)
+                elif isinstance(node.func, ast.Subscript):
+                    if isinstance(node.func.slice, ast.Constant) and isinstance(node.func.slice.value, str):
+                        if node.func.slice.value in ['eval', 'exec', 'compile', '__import__']:
+                            return False, f"禁止通过下标访问危险函数 '{node.func.slice.value}'"
     except SyntaxError as e:
         return False, f"语法错误：{str(e)}"
 
