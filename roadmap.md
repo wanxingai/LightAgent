@@ -476,10 +476,13 @@ Completed work:
 - Document how external approval queues or review UIs can integrate with memory
   promotion through hooks without becoming core dependencies.
 
-Deferred to v0.9.6:
+Delivered in v0.9.6:
 
 - Broader human-review surfaces for high-risk tools, handoffs, and LightFlow
   steps.
+
+Still deferred:
+
 - Durable external review queues and admin UI examples.
 
 Expected outcome:
@@ -492,35 +495,33 @@ control, not as a general tool or workflow approval system.
 
 ### v0.9.6: Observability, Evaluation, And Human Review
 
+Status: implemented in v0.9.6; pending review and release.
+
 Goal: improve production debugging, measurement, and human control over
 high-risk actions after the memory-promotion boundary and memory-scoped review
 path are explicit.
 
-Planned work:
+Completed work:
 
-- Add richer trace metadata for model latency, tool latency, token usage,
-  retry counts, error categories, flow-step timing, and memory-promotion
-  decisions.
-- Provide a lightweight evaluation harness for tool-call success rate,
-  task-completion rate, latency, cost, recovery behavior, and memory-safety
-  policy behavior.
-- Improve Langfuse and external observability integration on top of structured
-  trace events.
-- Add a `HumanApprovalTool` or equivalent approval primitive.
-- Allow selected tools or LightFlow steps to require human approval before
-  continuing.
-- Support approval, rejection, argument editing, timeout, and rejection handling.
-- Add durable approval state for long-running or delayed reviews.
-- Support multi-action approval batches when one model turn proposes several
-  sensitive tool calls.
-- Add human feedback capture on traces for Human-on-the-loop review and
-  evaluation sampling.
-- Extend the v0.9.5 memory-review event model into general tool, handoff, and
-  workflow review events.
-- Document how external approval UIs, ticketing systems, and audit stores can
-  integrate through hooks without becoming core dependencies.
+- Added `TraceSummary`, normalized usage and cost estimates, model/tool latency,
+  retry and error categories, review counters, generic exporters, and a JSONL
+  audit exporter.
+- Added `LightEvaluator` and `EvaluationCase` for output, tool, policy-event,
+  recovery, latency, usage, cost, and custom domain checks.
+- Added `HumanApprovalHook`, `ApprovalRequest`, `ApprovalDecision`,
+  `InMemoryReviewStore`, and `JsonReviewStore` without adding a queue, UI, or
+  database dependency.
+- Added fail-closed approval, rejection, argument editing, reviewer timeout,
+  exact-context approval reuse, multi-action store batches, and trace feedback.
+- Added durable LightFlow request IDs and decisions with
+  `flow.approve(...); flow.resume(...)`, including approve, reject, edit, and
+  respond behavior.
+- Extended structured traces with approval and feedback events while preserving
+  existing `agent.run()` defaults and result formats.
+- Documented evaluation, external trace export, tool/handoff review, durable
+  LightFlow approval, batches, and feedback integration.
 
-Human-control expansion checklist planned for v0.9.6:
+Human-control expansion checklist completed in v0.9.6:
 
 - Formalize LightFlow `requires_approval`, `approval_handler`, and
   `waiting_approval` as the first Human-in-the-loop checkpoint model for
@@ -633,34 +634,34 @@ capabilities:
 
 External HITL/HOTL designs suggest a clear split between the lightweight
 runtime foundation that belongs in LightAgent core and the heavier product
-surfaces that should remain optional. These patterns should inform the v0.9.5
-memory-review slice and the broader v0.9.6 human-review work, not change the
-already released v0.9.4 scope:
+surfaces that should remain optional. These patterns informed the v0.9.5
+memory-review slice and the v0.9.6 human-review implementation:
 
 - **Pause and resume**: OpenAI Agents SDK and LangGraph both model HITL as an
   interruption/pause point that returns pending actions and resumes from saved
-  state after review. LightAgent should keep LightFlow approval checkpoints as
-  the lightweight core version of this pattern.
+  state after review. LightAgent keeps durable LightFlow approval checkpoints
+  as the lightweight core version of this pattern.
 - **Decision vocabulary**: LangGraph exposes approve, reject, edit, and respond
   decision types. LightAgent v0.9.5 applies approve, reject, and rewrite
-  to memory promotion first; v0.9.6 should extend richer approve, reject, edit,
-  and respond behavior to tools and workflow checkpoints.
+  to memory promotion first; v0.9.6 extends approve, reject, edit, and respond
+  behavior to tools and workflow checkpoints.
 - **Tool-level approval**: OpenAI Agents SDK applies approvals to sensitive
   tool calls, nested agent tools, shell/apply-patch tools, and MCP tools.
-  LightAgent should map this to `before_tool_call`, `PolicyHook`, Guardrails,
+  LightAgent maps this to `before_tool_call`, `HumanApprovalHook`, `PolicyHook`,
+  Guardrails,
   and tool schema diagnostics rather than adding a separate heavy approval
   runtime.
 - **Handoff review**: OpenAI approval surfaces work across handoffs and nested
-  agent-as-tool calls. LightAgent should keep `on_handoff` as the core
+  agent-as-tool calls. LightAgent keeps `on_handoff` as the core
   LightSwarm review point.
 - **Fail-closed policy**: Semantic Kernel filters and OpenAI guardrail/tool
-  approval patterns emphasize policy checks before execution. LightAgent should
+  approval patterns emphasize policy checks before execution. LightAgent
   keep plain hooks failure-isolated, but use `PolicyHook` for fail-closed
   security decisions.
 - **Human-on-the-loop monitoring**: LangSmith and Microsoft Responsible AI
   guidance emphasize trace review, feedback capture, annotation queues,
   telemetry, audit logs, and escalation paths. LightAgent v0.9.5 begins
-  with memory-promotion review events; v0.9.6 should build broader monitoring
+  with memory-promotion review events; v0.9.6 adds broader monitoring
   on the same trace/audit substrate while keeping review queues, dashboards,
   and evaluators optional integrations.
 
@@ -902,23 +903,23 @@ surface, limited to memory promotion decisions.
 
 ### v0.9.6 Workstream: Observability, Evaluation, And Human Review
 
+Status: implemented in v0.9.6; pending review and release.
+
 Goal: support production teams that need measurement, review, and control over
 agent behavior after the memory-promotion boundary and memory-review slice are
 explicit.
 
-### Planned Work
+### Completed Work
 
-- Add richer trace metadata for latency, usage, retry counts, error categories,
-  flow-step timing, and memory-promotion decisions.
-- Provide a lightweight evaluation harness for tool success, task completion,
-  latency, cost, recovery, and memory-safety policy behavior.
-- Improve Langfuse and external observability integration.
-- Add a `HumanApprovalTool`.
-- Support approval requirements for selected tools and flow steps.
-- Allow humans to approve, reject, edit tool arguments, handle timeouts, and
-  continue after approval.
-- Extend memory-review events from v0.9.5 into broader Human-on-the-loop trace
-  review, feedback capture, and evaluation sampling.
+- Rich trace summaries, latency/usage/retry/error metadata, generic export, and
+  local JSONL audit envelopes.
+- Dependency-free deterministic evaluation with custom checks and aggregate
+  reports.
+- Fail-closed tool and handoff review through `HumanApprovalHook`.
+- Durable LightFlow approval checkpoints with approve, reject, edit, respond,
+  and resume behavior.
+- Multi-action review-store batches and human feedback records.
+- Approval and feedback trace events for Human-on-the-loop monitoring.
 
 ### Expected Outcome
 
@@ -1024,16 +1025,15 @@ building lightweight production agents.
 
 ### Next P1
 
-- v0.9.6 evaluation harness, richer production observability, and broader
-  Human-in-the-loop / Human-on-the-loop surfaces for tools, handoffs, and
-  LightFlow steps.
+- v1.0.0 public API stabilization, compatibility contracts, deprecation policy,
+  and production documentation.
 - Durable memory-review queue examples that build on v0.9.5 promotion
   candidates without becoming required core dependencies.
 - Shared-memory adapter hardening for #1 and follow-up #39 work, especially
   durable graph/vector backends, tenant boundaries, provenance checks, and
   conflict handling.
-- Trace and audit export improvements for promotion decisions, tool decisions,
-  handoff decisions, and flow approval decisions.
+- External trace/audit adapters and production review-queue examples built on
+  the v0.9.6 exporter and approval contracts.
 
 ### P2
 
@@ -1050,14 +1050,14 @@ building lightweight production agents.
 ### P3
 
 - Visual trace UI.
-- Durable execution and resume.
+- Distributed execution and durable worker coordination.
 
 ## Next Development Recommendation
 
-After v0.9.5, the next development target should be **v0.9.6 Observability,
-Evaluation, And Human Review**. The memory-promotion boundary is now explicit;
-the next risk is operating high-impact tools, handoffs, and workflow steps
-without enough measurement, review, and audit context.
+After v0.9.6, the next development target should be **v1.0.0 Stable API And
+Production Documentation**. The main runtime, workflow, memory-safety,
+observability, evaluation, and human-review primitives now exist; the next
+priority is making their contracts stable and consistently documented.
 
 Reasoning:
 
@@ -1069,23 +1069,20 @@ Reasoning:
 - v0.9.5 adds explicit promotion candidates, promotion decisions,
   `before_memory_promote` / `after_memory_promote`, promotion trace events, and
   fail-closed tests for internal/shared memory safety.
+- v0.9.6 adds trace summaries/exporters, deterministic evaluation, tool and
+  handoff review, durable LightFlow approvals, and human feedback.
 - #1 and follow-up #39 work keep durable shared-memory poisoning, provenance,
   and multi-agent memory boundaries as active P1 concerns.
-- Broader observability, evaluation, and human review should now build on the
-  v0.9.5 memory-review slice.
 - Database-backed durability should stay optional so the core package remains
   lightweight.
 
 Suggested first implementation slice:
 
-1. Add a small evaluation harness for fixed prompts, expected tool choices,
-   expected memory behavior, and regression scoring.
-2. Extend trace export with richer latency, usage, retry, decision, and
-   promotion metadata.
-3. Add Human-on-the-loop audit views or examples for memory, tool, handoff, and
-   LightFlow approval decisions.
-4. Add Human-in-the-loop examples for selected high-risk tools and workflow
-   steps using existing hooks and LightFlow approval nodes.
-5. Continue hardening shared-memory adapters against cross-user, cross-agent,
-   and cross-tenant retrieval.
-6. Review #81 independently as packaging hygiene before the next release cut.
+1. Publish a supported public API inventory and compatibility matrix.
+2. Add a deprecation policy and warnings for any API that must change.
+3. Tighten type hints and protocol contracts for run results, memory, tracing,
+   evaluation, review stores, and workflow stores.
+4. Build a production documentation and example matrix for single-agent,
+   streaming, tools, memory, LightSwarm, LightFlow, evaluation, and review.
+5. Validate packaging, installation, and examples across Python 3.10-3.13.
+6. Continue #39 backend-level security validation as a focused parallel track.

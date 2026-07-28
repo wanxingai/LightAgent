@@ -64,6 +64,7 @@
 - **Shared-Memory-Prototyp** 🧠: SharedMemoryPool bietet gemeinsam genutzten In-Memory-Speicher mit Herkunftsmetadaten, bereichsbezogener Suche und MemoryPolicy-kompatiblen Ergebnissen.
 - **Guardrails-Vorlagen** 🛡️: Wiederverwendbare Eingabe-, Werkzeug- und Ausgabe-Regeln blockieren private Daten, bestätigen sensible Tools, prüfen riskante Parameter und redigieren Ausgaben.
 - **Runtime Hooks** 🧩: Geordnetes `hooks=[...]`-Middleware-System zum Beobachten, Ersetzen oder Blockieren von Run-, Modell-, Tool-, Memory- und LightFlow-Schrittphasen.
+- **Evaluation und menschliche Freigabe** 📊: `LightEvaluator` führt deterministische Regressionen aus; `HumanApprovalHook`, persistente Review-Stores und LightFlow-Checkpoints unterstützen Freigabe, Ablehnung, Argumentänderung und Feedback.
 
 ## 🧭 Architektur auf einen Blick
 
@@ -107,11 +108,12 @@ LightAgent hält den Standardaufruf einfach und erlaubt Produktionskontrollen sc
 - Für Runtime-Middleware zum Beobachten, Ersetzen oder Blockieren von Payloads siehe [Runtime Hooks](docs/runtime_hooks.md).
 - Für OpenRouter, lokale Modelle und OpenAI-kompatible Anbieter siehe [Model Provider Configuration](docs/model_providers.md).
 - Für strukturierte Traces siehe [Trace Observability](docs/tracing.md).
+- Für deterministische Regressionen siehe [Evaluation Harness](docs/evaluation.md).
+- Für Tool/Handoff-Freigaben, persistente Reviews und Feedback siehe [Human Review](docs/human_review.md).
 
 ## 🚧 Bald verfügbar
 
 - **Agent-Kooperation Kommunikation** 🛠️: Agenten können Informationen austauschen und Nachrichten übermitteln, um komplexe Informationskommunikation und Aufgabenkoordination zu realisieren.
-- **Agentenbewertung** 📊: Integriertes Agentenbewertungstool zur einfachen Bewertung und Optimierung Ihrer erstellten Agenten, um sie an Geschäftsszenarien anzupassen und das Intelligenzniveau kontinuierlich zu verbessern.  
 
 
 ## 🌟 Warum LightAgent wählen?
@@ -307,7 +309,7 @@ Selbstlernen sollte mit `MemoryPolicy` kombiniert werden, um private, abgelaufen
 LightAgent macht Ausführung über integrierte Traces oder Langfuse sichtbar.
 
 ### 9. Agentenbewertung
-Agentenbewertung wird Verhalten anhand von Geschäftsszenarien messen.
+`LightEvaluator` misst Verhalten anhand von Ausgabe, Tools, Policy-Ereignissen, Recovery, Latenz und Kosten.
 
 ### 10. LightFlow-Workflows
 `LightFlow` ist die deterministische Workflow-Schicht für bekannte Ausführungsschritte.

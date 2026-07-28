@@ -65,6 +65,8 @@ Older release notes are available on [GitHub Releases](https://github.com/wanxin
 - **Multi-Model Support** 🔄: Compatible with OpenAI-style providers such as OpenAI, OpenRouter, Zhipu ChatGLM, Baichuan, StepFun, DeepSeek, Qwen, vLLM, llama.cpp, and other OpenAI-compatible endpoints.  
 - **Streaming API** 🌊: Supports OpenAI streaming format API service output, seamlessly integrates with mainstream chat frameworks, enhancing user experience.  
 - **Trace Observability** 🔎: Opt-in `trace=True` run traces record structured run lifecycle, model request summaries, tool calls, tool results, and errors without changing the default string return value.  
+- **Evaluation Harness** 📊: `LightEvaluator` runs deterministic agent or LightFlow regression cases for output, tool choice, policy events, recovery, latency, usage, and estimated cost.
+- **Human Review** 👤: `HumanApprovalHook`, durable review stores, and LightFlow approval checkpoints support approve, reject, argument editing, human responses, batches, and trace feedback for high-impact actions.
 - **Runtime Hooks** 🧩: Ordered `hooks=[...]` middleware can observe, replace, or block run, model, tool, memory, and LightFlow step phases while recording hook decisions in trace events.
 - **Guardrails Templates** 🛡️: Reusable input/tool/output guardrail templates help block private data, require confirmation for sensitive tools, validate high-risk parameters, and redact sensitive output.
 - **Tool Generator** 🚀: Just provide your API documentation to the [Tool Generator], which will automatically create exclusive tools for you, allowing you to quickly build hundreds of personalized custom tools in just 1 hour to improve efficiency and unleash your creative potential.
@@ -77,13 +79,15 @@ Older release notes are available on [GitHub Releases](https://github.com/wanxin
 | --- | --- | --- |
 | Single agent runtime | `LightAgent` | One agent with model calls, tools, memory, streaming, trace, and guardrails. |
 | Multi-agent routing | `LightSwarm` | Role-based delegation across specialized agents. |
-| Deterministic workflow | `LightFlow` | Ordered DAG workflows, retries, checkpoints, approvals, resume, and rerun. |
+| Deterministic workflow | `LightFlow` | Ordered DAG workflows, retries, checkpoints, durable approvals, resume, and rerun. |
 | Tools and integrations | `tools`, `ToolRegistry`, MCP | Python tools, generated tools, runtime tool loading, or MCP tool servers. |
 | Memory boundary | `MemoryPolicy`, `MemoryScope` | Tenant isolation, provenance, trust, expiration, and write admission controls. |
 | Shared memory prototype | `SharedMemoryPool` | In-memory shared memory experiments across agents. |
 | Safety controls | `input_guardrails`, `tool_guardrails`, `output_guardrails` | Privacy blocking, sensitive tool confirmation, high-risk parameter checks, and output redaction. |
 | Runtime hooks | `hooks`, `HookContext`, `HookDecision` | Policy, audit, redaction, routing, and payload mutation at lifecycle boundaries. |
-| Observability | `trace=True`, `agent.export_trace()` | Structured run, model, tool, error, and workflow trace events. |
+| Observability | `trace=True`, `summarize_trace`, trace exporters | Structured events, latency, usage, retry/error metrics, JSONL or external export. |
+| Evaluation | `LightEvaluator`, `EvaluationCase` | Fixed regression cases for output, tools, policy events, recovery, latency, and cost. |
+| Human review | `HumanApprovalHook`, `ApprovalDecision`, review stores | Fail-closed tool/handoff review, argument editing, durable decisions, and feedback. |
 
 ## Core Usage Patterns
 
@@ -99,7 +103,31 @@ LightAgent keeps the default call path simple while allowing production controls
 | Tools | `LightAgent(..., tools=[fn])` | Functions should expose `tool_info` metadata. |
 | Guardrails | `LightAgent(..., input_guardrails=[...])` | Add input, tool, and output policies per agent. |
 | Runtime hooks | `LightAgent(..., hooks=[fn])` | Observe, replace, or block lifecycle payloads. |
+| Evaluation | `LightEvaluator().run(agent, cases)` | Run deterministic behavioral checks from structured traces. |
+| Tool approval | `LightAgent(..., hooks=[HumanApprovalHook(...)])` | Require review before selected tools or handoffs. |
 | Workflow | `LightFlow().step(...).run(query)` | Use for deterministic multi-step execution. |
+
+### Evaluate And Review High-Risk Actions
+
+```python
+from LightAgent import EvaluationCase, HumanApprovalHook, LightEvaluator
+
+agent.hooks.hooks.append(HumanApprovalHook(tools={"send_payment"}))
+
+report = LightEvaluator().run(agent, [
+    EvaluationCase(
+        name="payment policy",
+        query="Pay invoice 42",
+        expected_trace_events=("approval_required",),
+        forbidden_tools=("delete_account",),
+    ),
+])
+print(report.to_dict())
+```
+
+Pending approvals can be stored in `JsonReviewStore`; resolve them with an
+`ApprovalDecision`, then rerun with `approval_id=request.request_id`. LightFlow
+also persists step approvals through `flow.approve(...); flow.resume(...)`.
 
 ## 🧩 Multi-agent troubleshooting (failure map)
 
@@ -133,7 +161,11 @@ For OpenRouter, local LLM, and OpenAI-compatible provider setup, see [Model Prov
 
 For structured error codes and troubleshooting hints, see [Error Handling](docs/error_handling.md).
 
-For v0.7.0 trace observability, see [Trace Observability](docs/tracing.md).
+For trace observability, summaries, and external export, see [Trace Observability](docs/tracing.md).
+
+For deterministic regression cases, metrics, and CI guidance, see [Evaluation Harness](docs/evaluation.md).
+
+For tool/handoff approval, durable LightFlow review, batches, and feedback, see [Human Review](docs/human_review.md).
 
 For browser-use integration with recent `browser-use` versions, see [browser-use Integration](docs/browser_use.md).
 
@@ -142,7 +174,6 @@ For browser-use integration with recent `browser-use` versions, see [browser-use
 ## 🚧 Coming Soon
 
 - **Agent Collaborative Communication** 🛠️: Agents can also share information and transmit messages, achieving complex information communication and task collaboration.
-- **Agent Assessment** 📊: Built-in agent assessment tool for conveniently evaluating and optimizing the agents you build, aligning with business scenarios, and continuously improving intelligence levels.  
 
 
 ---
@@ -443,7 +474,7 @@ print(agent.export_trace())
 See [Trace Observability](docs/tracing.md) for event shapes and production debugging guidance.
 
 ### 9. Agent Assessment
-Agent assessment is planned for future versions and will focus on evaluating agent behavior against business scenarios.
+`LightEvaluator` measures output, tool selection, policy events, recovery, latency, usage, and estimated cost against deterministic business cases.
 
 ### 10. LightFlow Workflows
 `LightFlow` is the deterministic workflow layer. Use it when a task should run through known steps instead of relying on free-form agent planning.

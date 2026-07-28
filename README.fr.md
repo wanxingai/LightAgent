@@ -65,6 +65,7 @@ Les anciennes notes sont disponibles dans [GitHub Releases](https://github.com/w
 - **Prototype de mémoire partagée** 🧠 : SharedMemoryPool fournit une mémoire partagée en mémoire avec métadonnées de provenance, récupération par portée et résultats compatibles MemoryPolicy.
 - **Modèles Guardrails** 🛡️ : règles réutilisables d'entrée, d'outil et de sortie pour bloquer les données privées, confirmer les outils sensibles, valider les paramètres à risque et masquer les sorties.
 - **Runtime Hooks** 🧩 : middleware ordonné `hooks=[...]` pour observer, remplacer ou bloquer les phases run, modèle, outil, mémoire et étapes LightFlow.
+- **Évaluation et revue humaine** 📊 : `LightEvaluator` exécute des régressions déterministes ; `HumanApprovalHook`, les review stores persistants et les checkpoints LightFlow permettent approbation, rejet, édition des arguments et feedback.
 
 ## 🧭 Vue d'ensemble de l'architecture
 
@@ -108,11 +109,12 @@ LightAgent garde le chemin d’appel par défaut simple et permet d’ajouter pr
 - Pour le middleware runtime qui observe, remplace ou bloque les payloads, consultez [Runtime Hooks](docs/runtime_hooks.md).
 - Pour OpenRouter, modèles locaux et fournisseurs compatibles OpenAI, consultez [Model Provider Configuration](docs/model_providers.md).
 - Pour les traces structurées, consultez [Trace Observability](docs/tracing.md).
+- Pour les régressions déterministes, consultez [Evaluation Harness](docs/evaluation.md).
+- Pour l'approbation outil/handoff, la revue persistante et le feedback, consultez [Human Review](docs/human_review.md).
 
 ## 🚧 Coming Soon
 
 - **Communication collaborative des agents** 🛠️ : Les agents peuvent également partager des informations et transmettre des messages, réalisant ainsi une communication complexe des informations et une collaboration sur les tâches.
-- **Agent Evaluation** 📊: Built-in Agent evaluation tools for assessing and optimizing the agents you build, aligning with business scenarios, and continuously improving intelligence.  
 
 ## 🌟 Why Choose LightAgent?
 
@@ -305,7 +307,7 @@ L’auto-apprentissage doit être combiné à `MemoryPolicy` pour éviter les co
 LightAgent permet d’observer l’exécution via trace intégrée ou Langfuse.
 
 ### 9. Évaluation des agents
-L’évaluation des agents mesurera le comportement face à des scénarios métier.
+`LightEvaluator` mesure sortie, choix d’outils, événements de politique, reprise, latence, usage et coût estimé.
 
 ### 10. Workflows LightFlow
 `LightFlow` est la couche workflow déterministe pour exécuter des étapes connues.

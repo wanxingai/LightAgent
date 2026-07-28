@@ -17,6 +17,14 @@ from uuid import uuid4
 
 from .result import RunResult
 from .hooks import HOOK_BLOCK, HookContext, HookDecision, HookManager
+from .review import (
+    APPROVAL_EDIT,
+    APPROVAL_PENDING,
+    APPROVAL_REJECT,
+    APPROVAL_RESPOND,
+    ApprovalDecision,
+    ApprovalRequest,
+)
 from .tracing import TraceRecorder
 
 
@@ -63,6 +71,8 @@ class LightFlowStepResult:
     output_summary: str | None = None
     retry_count: int = 0
     used_fallback: bool = False
+    approval_request_id: str | None = None
+    approval_decision: str | None = None
 
     def __str__(self) -> str:
         return self.content
@@ -126,6 +136,8 @@ class LightFlow:
         self.store = store
         self.hooks = HookManager(hooks)
         self._records: dict[str, dict[str, Any]] = {}
+        self._approval_decisions: dict[tuple[str, str], ApprovalDecision] = {}
+        self._approval_request_ids: dict[tuple[str, str], str] = {}
         self._cancelled = False
 
     def step(
@@ -260,6 +272,7 @@ class LightFlow:
         record = self.get_run(run_id)
         if not record:
             raise ValueError(f"run `{run_id}` not found")
+        self._restore_approval_decisions(run_id, record)
         self._run_flow_hook("on_resume", {"run_id": run_id, "record": record})
         completed = {
             step["name"]: self._step_result_from_dict(step)
@@ -294,12 +307,16 @@ class LightFlow:
         record = self.get_run(run_id)
         if not record:
             raise ValueError(f"run `{run_id}` not found")
+        self._restore_approval_decisions(run_id, record)
         steps_by_name = {step.name: step for step in self._ordered_steps()}
         if step_name not in steps_by_name:
             raise ValueError(f"step `{step_name}` not found")
 
         self._run_flow_hook("on_rerun", {"run_id": run_id, "step_name": step_name, "record": record})
         downstream = self._downstream_steps(step_name)
+        for approval_step in downstream:
+            self._approval_decisions.pop((run_id, approval_step), None)
+            self._approval_request_ids.pop((run_id, approval_step), None)
         completed = {
             step["name"]: self._step_result_from_dict(step)
             for step in record.get("steps", [])
@@ -331,6 +348,40 @@ class LightFlow:
         if self.store:
             return self.store.list_runs()
         return list(self._records.values())
+
+    def approve(
+            self,
+            run_id: str,
+            step_name: str,
+            decision: ApprovalDecision | bool | str | dict[str, Any] = True,
+    ) -> ApprovalDecision:
+        """Persist a human decision so a waiting flow can resume safely."""
+        record = self.get_run(run_id)
+        if not record:
+            raise ValueError(f"run `{run_id}` not found")
+        step_record = next(
+            (step for step in record.get("steps", []) if step.get("name") == step_name),
+            None,
+        )
+        if step_record is None:
+            raise ValueError(f"step `{step_name}` not found in run `{run_id}`")
+        if step_record.get("status") != FLOW_WAITING_APPROVAL:
+            raise ValueError(f"step `{step_name}` is not waiting for approval")
+        request_id = step_record.get("approval_request_id")
+        if not request_id:
+            raise ValueError(f"step `{step_name}` is not waiting for approval")
+        normalized = self._coerce_approval_decision(decision, request_id=request_id)
+        self._approval_request_ids[(run_id, step_name)] = request_id
+        self._approval_decisions[(run_id, step_name)] = normalized
+        approvals = dict(record.get("approvals") or {})
+        approvals[step_name] = normalized.to_dict()
+        record["approvals"] = approvals
+        step_record["approval_decision"] = normalized.action
+        record["updated_at"] = time.time()
+        self._records[run_id] = record
+        if self.store:
+            self.store.save_run(run_id, record)
+        return normalized
 
     def _execute(
             self,
@@ -394,11 +445,45 @@ class LightFlow:
             if step_hook.payload and "query" in step_hook.payload:
                 step_query = str(step_hook.payload["query"])
 
-            approved, approval_reason = self._check_approval(step, context)
-            if not approved:
+            approval_request = ApprovalRequest(
+                action="flow_step",
+                request_id=self._approval_request_ids.get(
+                    (run_id, step.name),
+                    uuid4().hex,
+                ),
+                run_id=run_id,
+                trace_id=trace_id,
+                action_name=step.name,
+                arguments={"query": step_query},
+                source_agent=getattr(step.agent, "name", None),
+                reviewer_metadata={"user_id": user_id},
+                metadata={"step": step.name, "depends_on": list(step.depends_on)},
+                allowed_decisions=("approve", "reject", "edit", "respond"),
+            )
+            approval_decision = self._check_approval(
+                step,
+                context,
+                approval_request,
+                run_id=run_id,
+            )
+            if step.requires_approval:
+                recorder.record(f"approval_{approval_decision.action}", {
+                    "request_id": approval_request.request_id,
+                    "run_id": run_id,
+                    "step": step.name,
+                    "reason": approval_decision.reason,
+                    "reviewer_id": approval_decision.reviewer_id,
+                })
+            if approval_decision.action == APPROVAL_PENDING:
+                self._approval_request_ids[(run_id, step.name)] = approval_request.request_id
                 self._run_flow_hook(
                     "on_approval_required",
-                    {"run_id": run_id, "step": step.name, "reason": approval_reason},
+                    {
+                        "run_id": run_id,
+                        "step": step.name,
+                        "reason": approval_decision.reason,
+                        "request": approval_request.to_dict(),
+                    },
                     trace_id=trace_id,
                     parent_trace_id=parent_trace_id,
                     run_group_id=run_group,
@@ -407,7 +492,13 @@ class LightFlow:
                     step_name=step.name,
                     recorder=recorder,
                 )
-                result = self._skipped_result(step, approval_reason or "approval rejected", status=FLOW_WAITING_APPROVAL)
+                result = self._skipped_result(
+                    step,
+                    approval_decision.reason or "approval required",
+                    status=FLOW_WAITING_APPROVAL,
+                )
+                result.approval_request_id = approval_request.request_id
+                result.approval_decision = approval_decision.action
                 step_results.append(result)
                 self._checkpoint(
                     run_id,
@@ -420,6 +511,64 @@ class LightFlow:
                 status = FLOW_WAITING_APPROVAL
                 error = result.error
                 break
+            if approval_decision.action == APPROVAL_REJECT:
+                result = self._skipped_result(
+                    step,
+                    approval_decision.reason or "approval rejected",
+                )
+                result.approval_request_id = approval_request.request_id
+                result.approval_decision = approval_decision.action
+                step_results.append(result)
+                status = FLOW_FAILED
+                error = result.error
+                self._checkpoint(
+                    run_id,
+                    query,
+                    status=status,
+                    steps=step_results,
+                    error=error,
+                    all_steps=all_steps,
+                )
+                break
+            if approval_decision.action == APPROVAL_EDIT:
+                step_query = str(
+                    (approval_decision.arguments or {}).get("query", step_query)
+                )
+            if approval_decision.action == APPROVAL_RESPOND:
+                content = approval_decision.response or ""
+                now = time.perf_counter()
+                result = LightFlowStepResult(
+                    name=step.name,
+                    content=content,
+                    status=FLOW_SUCCESS,
+                    started_at=now,
+                    ended_at=now,
+                    duration_ms=0.0,
+                    input_summary=self._summarize(step_query),
+                    output_summary=self._summarize(content),
+                    approval_request_id=approval_request.request_id,
+                    approval_decision=approval_decision.action,
+                )
+                step_results.append(result)
+                context["steps"][step.name] = result
+                context["outputs"][step.name] = result.content
+                final_content = result.content
+                recorder.record("step_end", {
+                    "step": step.name,
+                    "status": FLOW_SUCCESS,
+                    "success": True,
+                    "duration_ms": 0.0,
+                    "human_response": True,
+                })
+                self._checkpoint(
+                    run_id,
+                    query,
+                    status=FLOW_SUCCESS,
+                    steps=step_results,
+                    error=None,
+                    all_steps=all_steps,
+                )
+                continue
 
             recorder.record("step_start", {
                 "step": step.name,
@@ -437,6 +586,9 @@ class LightFlow:
                 parent_trace_id=trace_id,
                 run_group_id=run_group,
             )
+            if step.requires_approval:
+                step_result.approval_request_id = approval_request.request_id
+                step_result.approval_decision = approval_decision.action
             step_results.append(step_result)
             self._run_flow_hook(
                 "after_flow_step",
@@ -641,6 +793,10 @@ class LightFlow:
         if recorder:
             for event in decision.metadata.get("hook_events", []) if decision.metadata else []:
                 recorder.record("hook_decision", event)
+            for event in decision.metadata.get("review_events", []) if decision.metadata else []:
+                event_data = dict(event)
+                event_type = str(event_data.pop("type", "approval_decision"))
+                recorder.record(event_type, event_data)
             if decision.action == HOOK_BLOCK:
                 recorder.record("hook_block", {"phase": phase, "reason": decision.reason, "step": step_name})
         return decision
@@ -731,6 +887,11 @@ class LightFlow:
             "status": status,
             "error": error,
             "steps": [self._step_result_to_dict(step) for step in record_steps],
+            "approvals": {
+                step_name: decision.to_dict()
+                for (decision_run_id, step_name), decision in self._approval_decisions.items()
+                if decision_run_id == run_id
+            },
             "updated_at": time.time(),
         }
         self._records[run_id] = record
@@ -763,22 +924,89 @@ class LightFlow:
             retry_count=0,
         )
 
-    @staticmethod
-    def _check_approval(step: LightFlowStep, context: dict[str, Any]) -> tuple[bool, str | None]:
+    def _check_approval(
+            self,
+            step: LightFlowStep,
+            context: dict[str, Any],
+            request: ApprovalRequest,
+            *,
+            run_id: str,
+    ) -> ApprovalDecision:
         if not step.requires_approval:
-            return True, None
+            return ApprovalDecision.approve(request_id=request.request_id)
+        persisted = self._approval_decisions.get((run_id, step.name))
+        if persisted is not None:
+            persisted.request_id = request.request_id
+            return persisted
         if step.approval_handler is None:
-            return False, "approval required"
-        raw = step.approval_handler(step, context)
-        if raw is True or raw is None:
-            return True, None
+            return ApprovalDecision.pending("approval required", request_id=request.request_id)
+        approval_context = {**context, "approval_request": request}
+        try:
+            raw = step.approval_handler(step, approval_context)
+        except Exception as exc:
+            return ApprovalDecision.reject(
+                f"approval handler failed: {exc}",
+                request_id=request.request_id,
+            )
         if raw is False:
-            return False, "approval rejected"
+            return ApprovalDecision.pending(
+                "approval rejected",
+                request_id=request.request_id,
+            )
         if isinstance(raw, str):
-            return False, raw
+            return ApprovalDecision.pending(raw, request_id=request.request_id)
+        if isinstance(raw, dict) and "action" not in raw:
+            approved = raw.get("approved", raw.get("allowed", False))
+            if not approved:
+                return ApprovalDecision.pending(
+                    raw.get("reason") or "approval required",
+                    request_id=request.request_id,
+                )
+        return self._coerce_approval_decision(raw, request_id=request.request_id)
+
+    @staticmethod
+    def _coerce_approval_decision(
+            raw: ApprovalDecision | bool | str | dict[str, Any] | None,
+            *,
+            request_id: str,
+    ) -> ApprovalDecision:
+        if isinstance(raw, ApprovalDecision):
+            raw.request_id = request_id
+            return raw
+        if raw is True or raw is None:
+            return ApprovalDecision.approve(request_id=request_id)
+        if raw is False:
+            return ApprovalDecision.reject("approval rejected", request_id=request_id)
+        if isinstance(raw, str):
+            return ApprovalDecision.reject(raw, request_id=request_id)
         if isinstance(raw, dict):
-            return bool(raw.get("approved", raw.get("allowed", False))), raw.get("reason")
-        return bool(raw), None
+            action = raw.get("action")
+            if action is None:
+                action = "approve" if raw.get("approved", raw.get("allowed", False)) else "reject"
+            return ApprovalDecision(
+                action=str(action),
+                request_id=request_id,
+                reason=raw.get("reason"),
+                arguments=raw.get("arguments"),
+                response=raw.get("response"),
+                reviewer_id=raw.get("reviewer_id"),
+                metadata=raw.get("metadata") or {},
+            )
+        if raw:
+            return ApprovalDecision.approve(request_id=request_id)
+        return ApprovalDecision.reject("approval rejected", request_id=request_id)
+
+    def _restore_approval_decisions(
+            self,
+            run_id: str,
+            record: dict[str, Any],
+    ) -> None:
+        for step_name, data in (record.get("approvals") or {}).items():
+            self._approval_decisions[(run_id, step_name)] = ApprovalDecision(**data)
+        for step in record.get("steps", []):
+            request_id = step.get("approval_request_id")
+            if request_id:
+                self._approval_request_ids[(run_id, step["name"])] = request_id
 
     def _downstream_steps(self, step_name: str) -> set[str]:
         downstream = {step_name}

@@ -14,6 +14,7 @@ import json
 import os
 import random
 import re
+import time
 import traceback
 from copy import deepcopy
 from datetime import datetime
@@ -36,7 +37,7 @@ from .logger import LoggerManager
 from .tools import ToolRegistry, ToolLoader, AsyncToolDispatcher
 from .errors import format_error_code, format_lightagent_error
 from .result import RunResult, StreamEvent
-from .tracing import TraceRecorder
+from .tracing import TraceRecorder, export_trace, normalize_usage, summarize_trace
 from .hooks import HOOK_BLOCK, HookContext, HookDecision, HookManager, PolicyHook
 from .guardrails import GuardrailManager
 from .mcp_client_manager import MCPClientManager
@@ -434,6 +435,7 @@ class LightAgent:
             trace: bool = False,
             parent_trace_id: str | None = None,
             run_group_id: str | None = None,
+            approval_id: str | None = None,
     ) -> Union[Generator[str, None, None], str, RunResult]:
         """
         运行代理，处理用户输入。
@@ -452,6 +454,7 @@ class LightAgent:
         :param trace: 是否收集结构化运行轨迹。默认 False 保持轻量；配合 result_format="object" 或 export_trace() 使用。
         :param parent_trace_id: 可选父 trace，用于 LightFlow、LightSwarm 或应用层嵌套调用。
         :param run_group_id: 可选运行组 ID，用于把多个 sibling traces 归到同一任务。
+        :param approval_id: 可选人工审批请求 ID，仅传给运行期 hooks，不发送给模型服务。
         :return: 代理的回复。
         """
         if result_format not in ("str", "object", "dict", "event"):
@@ -470,6 +473,8 @@ class LightAgent:
         self._current_run_id = uuid4().hex
         self._current_user_id = str(user_id)
         self._current_run_metadata = dict(metadata or {})
+        if approval_id is not None:
+            self._current_run_metadata["approval_id"] = str(approval_id)
         self._parent_trace_id = parent_trace_id
         self._run_group_id = run_group_id
         self._trace_recorder = TraceRecorder(
@@ -480,7 +485,17 @@ class LightAgent:
         )
         self._current_tool_calls = []
         self._current_usage = None
+        self._usage_totals = {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "total_tokens": 0,
+        }
         self._current_reasoning_content = ""
+        self._run_started_at = time.perf_counter()
+        self._model_request_count = 0
+        self._retry_count = 0
+        self._pending_model_trace_event = None
+        self._pending_model_started_at = None
         self._memory_write_count = 0
         self._memory_write_fingerprints = set()
         self._memory_promotion_candidates = []
@@ -640,6 +655,7 @@ class LightAgent:
         try:
             response = self.client.chat.completions.create(**self.chat_params)
         except Exception as e:
+            self._complete_model_request(error=e)
             error_msg = format_lightagent_error(e, "create chat completion")
             self.log("ERROR", "model_request_failed", {"error": error_msg})
             self._record_trace("error", {"stage": "model_request", "error": error_msg})
@@ -650,6 +666,7 @@ class LightAgent:
                     return self._stream_as_events(stream_result, traceid)
                 return stream_result
             return self._format_run_result(error_msg, result_format, traceid, error_msg)
+        self._complete_model_request(response=response)
 
         result = self._core_run_logic(response, stream, max_retry, effective_max_tool_iterations)
         if stream:
@@ -690,6 +707,10 @@ class LightAgent:
         decision = self.hooks.run(context)
         for event in decision.metadata.get("hook_events", []) if decision.metadata else []:
             self._record_trace("hook_decision", event)
+        for event in decision.metadata.get("review_events", []) if decision.metadata else []:
+            event_data = dict(event)
+            event_type = str(event_data.pop("type", "approval_decision"))
+            self._record_trace(event_type, event_data)
         if decision.action == HOOK_BLOCK:
             self._record_trace("hook_block", {"phase": phase, "reason": decision.reason})
         return decision
@@ -748,6 +769,15 @@ class LightAgent:
             run_end["stage"] = stage
         if extra:
             run_end.update(extra)
+        started_at = getattr(self, "_run_started_at", None)
+        if started_at is not None:
+            run_end["duration_ms"] = round((time.perf_counter() - started_at) * 1000, 3)
+        run_end["model_request_count"] = int(getattr(self, "_model_request_count", 0))
+        run_end["tool_call_count"] = len(getattr(self, "_current_tool_calls", []))
+        run_end["retry_count"] = int(getattr(self, "_retry_count", 0))
+        usage = normalize_usage(getattr(self, "_current_usage", None))
+        if usage:
+            run_end["usage"] = usage
         self._record_trace("run_end", run_end)
         return decision
 
@@ -772,8 +802,54 @@ class LightAgent:
             params = decision.payload.get("params", decision.payload)
             if isinstance(params, dict):
                 self.chat_params = params
-        self._record_trace("model_request", self._build_model_request_trace(self.chat_params))
+        self._model_request_count = int(getattr(self, "_model_request_count", 0)) + 1
+        request_data = self._build_model_request_trace(self.chat_params)
+        request_data["request_index"] = self._model_request_count
+        self._pending_model_trace_event = self._record_trace("model_request", request_data)
+        self._pending_model_started_at = time.perf_counter()
         return None
+
+    def _complete_model_request(
+            self,
+            *,
+            response: Any = None,
+            error: BaseException | None = None,
+    ) -> None:
+        """Attach latency, usage, and outcome metadata to the request trace."""
+        event = getattr(self, "_pending_model_trace_event", None)
+        started_at = getattr(self, "_pending_model_started_at", None)
+        latency_ms = None
+        if started_at is not None:
+            latency_ms = round((time.perf_counter() - started_at) * 1000, 3)
+
+        usage = normalize_usage(getattr(response, "usage", None))
+        if usage:
+            self._accumulate_usage(usage)
+        if event is not None:
+            if latency_ms is not None:
+                event.data["latency_ms"] = latency_ms
+            event.data["success"] = error is None
+            if usage:
+                event.data["usage"] = usage
+            if error is not None:
+                event.data["error_type"] = error.__class__.__name__
+        self._last_model_trace_event = event
+        self._pending_model_trace_event = None
+        self._pending_model_started_at = None
+
+    def _accumulate_usage(self, usage: Any) -> None:
+        normalized = normalize_usage(usage)
+        if not normalized:
+            return
+        totals = getattr(self, "_usage_totals", {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "total_tokens": 0,
+        })
+        for key in totals:
+            totals[key] += normalized.get(key, 0)
+        self._usage_totals = totals
+        self._current_usage = dict(totals)
 
     def export_trace(self) -> List[Dict[str, Any]]:
         """Return structured trace events from the most recent run."""
@@ -781,6 +857,30 @@ class LightAgent:
         if not recorder:
             return []
         return recorder.to_list()
+
+    def summarize_trace(self, *, pricing: Dict[str, float] | None = None):
+        """Return aggregate metrics for the most recent trace."""
+        return summarize_trace(
+            self.export_trace(),
+            usage=getattr(self, "_current_usage", None),
+            pricing=pricing,
+        )
+
+    def export_trace_to(
+            self,
+            exporter: Any,
+            *,
+            pricing: Dict[str, float] | None = None,
+            metadata: Dict[str, Any] | None = None,
+    ) -> Any:
+        """Send the most recent trace to a callable or TraceExporter."""
+        return export_trace(
+            self.export_trace(),
+            exporter,
+            usage=getattr(self, "_current_usage", None),
+            pricing=pricing,
+            metadata=metadata,
+        )
 
     def _build_model_request_trace(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """Build a prompt-safe summary of a model request for trace events."""
@@ -1513,6 +1613,7 @@ class LightAgent:
                     # 调用工具并获取响应
                     # tool_response = asyncio.run(self.tool_dispatcher.dispatch(function_call.name, function_args))
                     # tool_response = await self.tool_dispatcher.dispatch(function_call.name, function_args)
+                    tool_started_at = time.perf_counter()
                     tool_response = run_async_safely(self.tool_dispatcher.dispatch(function_call.name, function_args))
 
                     # 如果 tool_response 是异步函数，需要再次 await
@@ -1569,6 +1670,7 @@ class LightAgent:
                     self._record_trace("tool_result", {
                         "name": function_call.name,
                         "output": single_tool_response,
+                        "latency_ms": round((time.perf_counter() - tool_started_at) * 1000, 3),
                     })
 
                     self.chat_params["messages"].append({
@@ -1609,11 +1711,13 @@ class LightAgent:
             try:
                 response = self.client.chat.completions.create(**self.chat_params)
             except Exception as e:
+                self._complete_model_request(error=e)
                 error_msg = format_lightagent_error(e, "continue chat completion")
                 self.log("ERROR", "model_request_failed", {"error": error_msg})
                 self._record_trace("error", {"stage": "model_request", "error": error_msg})
                 self._finish_run(success=False, error=error_msg, stage="model_request")
                 return error_msg
+            self._complete_model_request(response=response)
 
         # 重试次数用尽
         self.log("ERROR", "max_retry_reached", {"message": "Failed to generate a valid response."})
@@ -1709,7 +1813,10 @@ class LightAgent:
                                 not chunk.choices and hasattr(chunk, 'usage') and chunk.usage is not None):
                             # 可以在这里记录 token 使用情况（如果有）
                             if hasattr(chunk, 'usage') and chunk.usage:
-                                self._current_usage = chunk.usage
+                                self._accumulate_usage(chunk.usage)
+                                latest_event = getattr(self, "_last_model_trace_event", None)
+                                if latest_event is not None:
+                                    latest_event.data["usage"] = normalize_usage(chunk.usage)
                                 self.log("INFO", "token_usage", {"usage": chunk.usage})
 
                             # 如果没有任何工具调用，说明整个响应结束，可以直接退出生成器
@@ -1775,6 +1882,7 @@ class LightAgent:
                                         # 调用工具
                                         # tool_response = asyncio.run(self.tool_dispatcher.dispatch(tool_name, function_args))
                                         # tool_response = await self.tool_dispatcher.dispatch(tool_name, function_args)
+                                        tool_started_at = time.perf_counter()
                                         tool_response = run_async_safely(self.tool_dispatcher.dispatch(tool_name, function_args))
                                         # 如果 tool_response 是异步函数，需要再次 await
                                         # if asyncio.iscoroutine(tool_response) or asyncio.iscoroutinefunction(tool_response):
@@ -1798,6 +1906,10 @@ class LightAgent:
                                                         "name": tool_name,
                                                         "title": tool_title,
                                                         "output": chunk,
+                                                        "latency_ms": round(
+                                                            (time.perf_counter() - tool_started_at) * 1000,
+                                                            3,
+                                                        ),
                                                     }
                                                     self.log("DEBUG", "stream tool_output",
                                                              {"tool_output": tool_output})
@@ -1817,7 +1929,11 @@ class LightAgent:
                                             tool_output = {
                                                 "name": tool_name,
                                                 "title": tool_title,
-                                                "output": single_tool_response
+                                                "output": single_tool_response,
+                                                "latency_ms": round(
+                                                    (time.perf_counter() - tool_started_at) * 1000,
+                                                    3,
+                                                ),
                                             }
                                             self._record_trace("tool_result", deepcopy(tool_output))
                                             yield tool_output
@@ -1945,14 +2061,17 @@ class LightAgent:
                             try:
                                 response = self.client.chat.completions.create(**self.chat_params)
                             except Exception as e:
+                                self._complete_model_request(error=e)
                                 error_msg = format_lightagent_error(e, "continue streaming chat completion")
                                 self.log("ERROR", "model_request_failed", {"error": error_msg})
                                 self._record_trace("error", {"stage": "model_request", "error": error_msg})
                                 self._finish_run(success=False, error=error_msg, stage="model_request")
                                 yield error_msg
                                 return
+                            self._complete_model_request(response=response)
                             break
             except Exception as e:
+                self._retry_count = int(getattr(self, "_retry_count", 0)) + 1
                 self.log("WARNING", "retry", {"error": str(e)})
                 self._record_trace("error", {"stage": "stream_retry", "error": str(e)})
                 self._notify_error(stage="stream_retry", error=str(e))
@@ -2027,6 +2146,32 @@ class LightAgent:
                     extra={"source_agent": self.name, "target_agent": target_agent_name},
                 )
                 return self._error_stream(error_msg) if stream else error_msg
+
+            if decision.payload:
+                query = str(decision.payload.get("query", query))
+                edited_target = str(decision.payload.get("target_agent", target_agent_name))
+                if edited_target != target_agent_name:
+                    target_agent_name = edited_target
+                    target_agent = light_swarm.agents.get(target_agent_name)
+                    if target_agent is None or not hasattr(target_agent, "run"):
+                        error_msg = "Failed to transfer task: invalid approved target agent"
+                        self._record_trace("handoff", {
+                            **handoff_data,
+                            "target_agent": target_agent_name,
+                            "status": "failed",
+                            "error": error_msg,
+                        })
+                        self._finish_run(
+                            success=False,
+                            error=error_msg,
+                            stage="handoff",
+                            extra={"source_agent": self.name, "target_agent": target_agent_name},
+                        )
+                        return self._error_stream(error_msg) if stream else error_msg
+                handoff_data.update({
+                    "target_agent": target_agent_name,
+                    "query": query,
+                })
 
             self._record_trace("handoff", {**handoff_data, "status": "allowed"})
             if stream:
