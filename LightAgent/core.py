@@ -1522,6 +1522,13 @@ class LightAgent:
             item for item in results
             if self.memory_policy.allows_result(item, scoped_user_id, original_user_id)
         ]
+        self._record_trace("memory_retrieve_filter", {
+            "user_id": str(original_user_id),
+            "memory_user_id": str(scoped_user_id),
+            "total_count": len(results),
+            "allowed_count": len(filtered_results),
+            "blocked_count": len(results) - len(filtered_results),
+        })
         filtered = dict(memories)
         filtered["results"] = filtered_results
         return filtered

@@ -78,6 +78,55 @@ one user's conversational claims cannot overwrite or remove trusted facts for
 another user. If the backend cannot enforce that policy, use isolated memory
 instances or per-user namespaces.
 
+For high-impact shared graph deployments, fail closed before any conversational
+write reaches the backend:
+
+```python
+from LightAgent import LightAgent, MemoryAdmissionDecision, MemoryPolicy
+
+def block_chat_memory_writes(data, context):
+    return MemoryAdmissionDecision(
+        allowed=False,
+        reason="Shared graph writes require trusted ingestion and review.",
+    )
+
+agent = LightAgent(
+    model="gpt-4.1",
+    api_key="your_api_key",
+    base_url="your_base_url",
+    memory=memory_backend,
+    memory_policy=MemoryPolicy(
+        namespace="prod-tenant-a",
+        allow_unattributed_results=False,
+        allowed_sources=("system", "verified"),
+        allowed_scopes=("user",),
+        allowed_trust_levels=("system", "verified"),
+        min_confidence=0.8,
+        require_write_admission=True,
+        memory_write_admission=block_chat_memory_writes,
+    ),
+)
+```
+
+`require_write_admission=True` blocks writes when no admission callback exists,
+when the callback returns no explicit decision, or when the callback raises an
+exception. Trusted ingestion should use a separate adapter or administrative
+path that records `user_id`, `source`, `scope`, `trust_level`, and confidence
+metadata before data can be retrieved by an agent.
+
+This configuration is defense in depth. It cannot make an unsafe graph backend
+transactional or prevent mutations performed outside LightAgent. Before a
+production rollout, run an adversarial matrix that verifies:
+
+- an attacker write cannot delete or replace a higher-trust relation;
+- a backend that ignores its `user_id` query still cannot inject another
+  user's results through LightAgent;
+- unattributed and low-trust graph facts remain non-injectable;
+- admission failures and retrieval filtering are traceable without logging raw
+  memory text;
+- the same checks pass against the exact Mem0 Graph version and storage
+  configuration used in production.
+
 ### LightAgent Adapter Guidance
 
 Custom memory implementations passed to `LightAgent(memory=...)` should enforce
@@ -109,6 +158,9 @@ memory items include `user_id` or `metadata.user_id`, LightAgent filters out
 items that do not match the current scoped user. Set
 `allow_unattributed_results=False` when the backend can provide provenance for
 all memory records.
+
+With tracing enabled, `memory_retrieve_filter` records total, allowed, and
+blocked result counts without including raw memory values.
 
 For long-lived agents, self-learning agents, or LightSwarm deployments, also
 tag memory records by source and scope. See

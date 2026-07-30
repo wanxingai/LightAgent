@@ -105,7 +105,7 @@ result = flow.run("Analyze this company")
 
 ### Open Pull Requests
 
-- No open pull requests as of 2026-07-29.
+- No open pull requests as of 2026-07-30.
 
 ### Active Issues
 
@@ -119,10 +119,11 @@ Immediate security-governance work:
 
 P1 engineering work:
 
-- **#39 Shared graph memory security disclosure**: add an adversarial cross-user
-  graph-memory integration test, prove that low-trust writes cannot replace or
-  delete higher-trust facts without explicit approval, and document an auditable
-  production configuration.
+- **#39 Shared graph memory security disclosure**: v0.9.6 adds a fake-backend
+  adversarial cross-user regression, explicit fail-closed write admission, and
+  retrieval-filter audit counts. The remaining acceptance criterion is an
+  opt-in test against the exact Mem0 Graph version and storage configuration
+  used in production.
 
 P2 issues:
 
@@ -1082,7 +1083,8 @@ Reasoning:
   `before_memory_promote` / `after_memory_promote`, promotion trace events, and
   fail-closed tests for internal/shared memory safety.
 - v0.9.6 adds trace summaries/exporters, deterministic evaluation, tool and
-  handoff review, durable LightFlow approvals, and human feedback.
+  handoff review, durable LightFlow approvals, human feedback, and the first
+  fake-backend #39 cross-user graph-memory regression.
 - Follow-up #39 work keeps durable shared-memory poisoning, provenance, and
   multi-agent memory boundaries as active P1 concerns.
 - Database-backed durability should stay optional so the core package remains
