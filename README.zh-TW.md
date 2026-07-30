@@ -39,7 +39,8 @@
 ---
 
 ## 新聞
-- <img src="https://img.alicdn.com/imgextra/i3/O1CN01SFL0Gu26nrQBFKXFR_!!6000000007707-2-tps-500-500.png" alt="new" width="30" height="30"/>**[2026-06-24]** LightAgent v0.9.0 開發版：新增可持久化 LightFlow checkpoint、resume/rerun、審批節點、更清楚的步驟狀態與 trace metadata，並補充 Guardrails 範本、MemoryPolicy 控制與 SharedMemoryPool 原型。
+- <img src="https://img.alicdn.com/imgextra/i3/O1CN01SFL0Gu26nrQBFKXFR_!!6000000007707-2-tps-500-500.png" alt="new" width="30" height="30"/>**[2026-07-30]** LightAgent v0.9.6 正式發布：新增生產級 Trace 彙總與匯出、確定性評測、工具、handoff 與 LightFlow 的可持久化人工審批，以及共享 Graph Memory 的 fail-closed 寫入准入與稽核控制。
+- **[2026-06-24]** LightAgent v0.9.0 開發版：新增可持久化 LightFlow checkpoint、resume/rerun、審批節點、更清楚的步驟狀態與 trace metadata，並補充 Guardrails 範本、MemoryPolicy 控制與 SharedMemoryPool 原型。
 - **[2026-06-14]** LightAgent v0.8.1 開發版：新增 MemoryScope metadata 約定、MemoryPolicy 來源/範圍/可信度過濾，並說明 Trace、使用者記憶、自我反思記憶與 LightSwarm 委派狀態的邊界。
 - **[2026-06-02]** LightAgent v0.8.0 開發版：新增 LightFlow 工作流程編排，支援確定性多步驟 Agent 執行、DAG 依賴、步驟輸出傳遞、重試與 flow trace 事件。
 
@@ -64,6 +65,7 @@
 - **工作流程編排** 🔁：LightFlow 將多個 Agent 編排為確定性多步驟工作流程，支援顯式依賴、步驟輸出、重試、checkpoint、resume/rerun、審批節點、fallback agent 與可追蹤執行。
 - **共享記憶原型** 🧠：SharedMemoryPool 提供帶來源 metadata 與範圍檢索的追加式記憶，適合多 Agent 實驗。
 - **Guardrails 範本** 🛡️：可重用的輸入、工具與輸出安全策略，可用於隱私攔截、敏感工具確認、高風險參數校驗與輸出脫敏。
+- **評測與人工審核** 📊：`LightEvaluator` 提供確定性回歸評測；`HumanApprovalHook`、可持久化 review store 與 LightFlow checkpoint 支援高風險操作的批准、拒絕、參數編輯和回饋。
 
 ## 🧭 架構速覽
 
@@ -104,11 +106,12 @@ LightAgent 保持預設呼叫路徑簡單，同時允許逐步加入生產級控
 - 輸入、工具與輸出安全策略，請查看 [Guardrails](docs/guardrails.md)。
 - OpenRouter、本地模型與 OpenAI 相容設定，請查看 [Model Provider Configuration](docs/model_providers.md)。
 - Trace 可觀測能力請查看 [Trace Observability](docs/tracing.md)。
+- 確定性回歸評測請查看 [Evaluation Harness](docs/evaluation.md)。
+- 工具/handoff 審核、持久化 LightFlow 審批與回饋請查看 [Human Review](docs/human_review.md)。
 
 ## 🚧 即將推出
 
 - **智能體協同通訊** 🛠️：智能體之間還可以共享資訊和傳遞消息，實現複雜的信息通訊和任務協同。
-- **Agent 測評** 📊：內置 Agent 測評工具，方便評估和優化您構建的 Agent，對齊業務場景，持續提升智能水平。  
 
 
 ## 🌟 為什麼選擇 LightAgent？
@@ -304,7 +307,7 @@ LightAgent 接受任何提供 `store(data, user_id)` 和 `retrieve(query, user_i
 LightAgent 可透過內建 trace 或 Langfuse 設定觀察執行過程。
 
 ### 9. Agent 測評
-Agent 測評將在後續版本中圍繞業務場景評估 Agent 行為。
+`LightEvaluator` 可根據輸出、工具、策略事件、恢復、延遲與成本評估 Agent 行為。
 
 ### 10. LightFlow 工作流程
 `LightFlow` 是確定性工作流程層，適合讓任務按已知步驟執行，而不是完全依賴自由形式規劃。

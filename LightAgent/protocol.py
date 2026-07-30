@@ -247,6 +247,7 @@ class MemoryPolicy:
     reject_write_patterns: Iterable[str] | None = None
     memory_promotion_admission: Callable[[MemoryCandidate, dict[str, Any]], Any] | None = None
     require_promotion_for_internal_memory: bool = True
+    require_write_admission: bool = False
 
     def __post_init__(self):
         for field_name in ("allowed_sources", "allowed_scopes", "allowed_agent_names", "allowed_trust_levels"):
@@ -438,9 +439,25 @@ class MemoryPolicy:
             return MemoryAdmissionDecision(allowed=False, reason="Duplicate memory write blocked.")
 
         if self.memory_write_admission is None:
+            if self.require_write_admission:
+                return MemoryAdmissionDecision(
+                    allowed=False,
+                    reason="Memory write requires an explicit admission decision.",
+                )
             return MemoryAdmissionDecision(allowed=True, value=candidate)
 
-        raw_decision = self.memory_write_admission(candidate, context)
+        try:
+            raw_decision = self.memory_write_admission(candidate, context)
+        except Exception as exc:
+            return MemoryAdmissionDecision(
+                allowed=False,
+                reason=f"Memory write admission failed: {type(exc).__name__}",
+            )
+        if self.require_write_admission and raw_decision is None:
+            return MemoryAdmissionDecision(
+                allowed=False,
+                reason="Memory write admission did not explicitly approve this write.",
+            )
         return self._coerce_write_decision(raw_decision, candidate)
 
     def allows_promotion(

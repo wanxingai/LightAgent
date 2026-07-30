@@ -108,6 +108,10 @@ flow.step(
 )
 ```
 
+v0.9.6 approval handlers may also return `ApprovalDecision.approve()`,
+`reject()`, `edit({"query": "..."})`, or `respond("...")`. Boolean handlers
+remain compatible.
+
 Use `flow.validate()` to inspect workflow structure before execution. Unknown
 dependencies and cycles are reported as errors. Isolated steps are reported as
 warnings so they can be reviewed without blocking simple workflows.
@@ -140,6 +144,8 @@ Pass `trace=True` to collect flow-level events:
 | `step_start` | A step started. |
 | `step_end` | A step completed or failed. |
 | `flow_end` | The flow completed or stopped on failure. |
+| `approval_pending` | A step is waiting for a durable decision. |
+| `approval_approve` / `approval_reject` / `approval_edit` / `approval_respond` | A step review decision was applied. |
 
 Each step also preserves the underlying agent trace when the agent returns a
 structured `RunResult`.
@@ -168,6 +174,25 @@ result = flow.run("Analyze this company", run_id="report-001")
 if not result.success:
     result = flow.resume("report-001")
 ```
+
+For a step waiting on human review, persist a decision and resume:
+
+```python
+from LightAgent import ApprovalDecision
+
+waiting = flow.run("Publish the report", run_id="report-001")
+request_id = waiting.steps[0].approval_request_id
+
+flow.approve(
+    "report-001",
+    "publish",
+    ApprovalDecision.approve(reviewer_id="editor"),
+)
+result = flow.resume("report-001")
+```
+
+The request ID and decision are stored in the JSON checkpoint, so a new
+application process can rebuild the same flow definition and resume the run.
 
 For a selected step and its downstream dependencies:
 

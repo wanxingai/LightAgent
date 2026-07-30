@@ -55,7 +55,8 @@
 
 ---
 ## 新闻
-- <img src="https://img.alicdn.com/imgextra/i3/O1CN01SFL0Gu26nrQBFKXFR_!!6000000007707-2-tps-500-500.png" alt="new" width="30" height="30"/>**[2026-07-10]** LightAgent v0.9.3 正式发布：补全 `after_run`、`on_error` 和记忆检索 Hooks 生命周期，新增独立的 `max_tool_iterations` 流式工具循环上限并保持 `max_retry` 向后兼容，同时完善错误收尾、Trace 和回归测试。
+- <img src="https://img.alicdn.com/imgextra/i3/O1CN01SFL0Gu26nrQBFKXFR_!!6000000007707-2-tps-500-500.png" alt="new" width="30" height="30"/>**[2026-07-30]** LightAgent v0.9.6 正式发布：新增生产级 Trace 汇总与导出、确定性评测、工具、handoff 和 LightFlow 的可持久化人工审批，以及共享 Graph Memory 的 fail-closed 写入准入与审计控制。
+- **[2026-07-10]** LightAgent v0.9.3 正式发布：补全 `after_run`、`on_error` 和记忆检索 Hooks 生命周期，新增独立的 `max_tool_iterations` 流式工具循环上限并保持 `max_retry` 向后兼容，同时完善错误收尾、Trace 和回归测试。
 - **[2026-06-24]** LightAgent v0.9.0 开发版：新增可持久化 LightFlow checkpoint、resume/rerun、审批节点、更清晰的步骤状态和 trace 元数据，同时补充 Guardrails 模板、MemoryPolicy 控制和 SharedMemoryPool 原型。
 - **[2026-06-14]** LightAgent v0.8.1 开发版：新增 MemoryScope 元数据约定、MemoryPolicy 来源/范围/可信度过滤，并补充 Trace、用户记忆、自我反思记忆和 LightSwarm 委托状态的边界说明。
 - **[2026-06-02]** LightAgent v0.8.0 开发版：新增 LightFlow 工作流编排能力，支持确定性多步骤 Agent 执行、DAG 依赖、步骤输出传递、重试和 flow trace 事件。
@@ -80,6 +81,8 @@
 - **多模型支持** 🔄：兼容 OpenAI、智谱 ChatGLM、百川大模型、阶跃星辰、DeepSeek、Qwen 系列大模型。  
 - **流式 API输出** 🌊：支持 OpenAI 流格式 API 服务输出，无缝接入主流 Chat 框架，提升用户体验。  
 - **Trace 可观测性** 🔎：通过 `trace=True` 可选开启结构化运行轨迹，记录运行开始/结束、模型请求摘要、工具调用、工具结果和错误，同时保持默认字符串返回行为不变。  
+- **评测框架** 📊：`LightEvaluator` 可对 Agent 或 LightFlow 执行确定性回归用例，检查输出、工具选择、策略事件、恢复能力、延迟、usage 和预估成本。
+- **人工审核** 👤：`HumanApprovalHook`、可持久化审核存储和 LightFlow 审批 checkpoint 支持高风险动作的批准、拒绝、参数编辑、人工响应、批量审核和 trace 反馈。
 - **Runtime Hooks** 🧩：通过有序 `hooks=[...]` 中间件观察、替换或阻断运行、模型、工具、记忆、LightSwarm handoff 和 LightFlow 步骤阶段；安全策略可使用 `PolicyHook` 在异常或超时时 fail closed，并将决策写入 trace。
 - **Tools工具生成器** 🚀：只需将您的API文档交给[[Tools工具生成器]](#3-tools工具生成器)，它将自动化地为您打造专属的tools，助您在短短1小时内快速构建数百个个性化的自定义工具，提升效率，释放您的创新潜能。
 - **agent自我学习** 🧠️：每个agent拥有自己的场景记忆能力，拥有从用户的对话中进行自我学习能力。
@@ -94,13 +97,15 @@
 | --- | --- | --- |
 | 单 Agent 运行时 | `LightAgent` | 一个 Agent 的模型调用、工具、记忆、流式输出、trace 和 guardrails。 |
 | 多 Agent 路由 | `LightSwarm` | 在多个专业 Agent 之间进行角色化委托。 |
-| 确定性工作流 | `LightFlow` | DAG 工作流、重试、checkpoint、审批、resume 和 rerun。 |
+| 确定性工作流 | `LightFlow` | DAG 工作流、重试、checkpoint、持久化审批、resume 和 rerun。 |
 | 工具与集成 | `tools`、`ToolRegistry`、MCP | Python 工具、生成工具、运行时加载工具或 MCP 工具服务。 |
 | 记忆边界 | `MemoryPolicy`、`MemoryScope` | 租户隔离、来源、可信度、过期和写入准入控制。 |
 | 共享记忆原型 | `SharedMemoryPool` | 多 Agent 共享记忆实验。 |
 | 安全控制 | `input_guardrails`、`tool_guardrails`、`output_guardrails` | 隐私拦截、敏感工具确认、高风险参数校验和输出脱敏。 |
 | Runtime Hooks | `hooks`、`HookContext`、`HookDecision` | 在生命周期边界实现策略、审计、脱敏、路由和 payload 改写。 |
-| 可观测性 | `trace=True`、`agent.export_trace()` | 结构化运行、模型、工具、错误和工作流事件。 |
+| 可观测性 | `trace=True`、`summarize_trace`、trace exporter | 结构化事件、延迟、usage、重试/错误指标以及 JSONL 或外部导出。 |
+| 评测 | `LightEvaluator`、`EvaluationCase` | 对输出、工具、策略事件、恢复、延迟和成本执行固定回归用例。 |
+| 人工审核 | `HumanApprovalHook`、`ApprovalDecision`、review store | 工具/handoff 的 fail-closed 审核、参数编辑、持久化决策和反馈。 |
 
 ## 核心使用模式
 
@@ -116,7 +121,31 @@ LightAgent 保持默认调用路径简单，同时允许逐步加入生产级控
 | 工具 | `LightAgent(..., tools=[fn])` | 函数应提供 `tool_info` 元数据。 |
 | Guardrails | `LightAgent(..., input_guardrails=[...])` | 为 Agent 添加输入、工具和输出策略。 |
 | Runtime Hooks | `LightAgent(..., hooks=[fn])` | 观察、替换或阻断生命周期 payload。 |
+| 评测 | `LightEvaluator().run(agent, cases)` | 基于结构化 trace 执行确定性行为检查。 |
+| 工具审批 | `LightAgent(..., hooks=[HumanApprovalHook(...)])` | 在选定工具或 handoff 执行前要求人工审核。 |
 | 工作流 | `LightFlow().step(...).run(query)` | 用于确定性多步骤执行。 |
+
+### 评测并审核高风险动作
+
+```python
+from LightAgent import EvaluationCase, HumanApprovalHook, LightEvaluator
+
+agent.hooks.hooks.append(HumanApprovalHook(tools={"send_payment"}))
+
+report = LightEvaluator().run(agent, [
+    EvaluationCase(
+        name="payment policy",
+        query="支付 42 号发票",
+        expected_trace_events=("approval_required",),
+        forbidden_tools=("delete_account",),
+    ),
+])
+print(report.to_dict())
+```
+
+待审批请求可写入 `JsonReviewStore`；使用 `ApprovalDecision` 完成审核后，通过
+`approval_id=request.request_id` 重新运行。LightFlow 也可通过
+`flow.approve(...); flow.resume(...)` 持久化并恢复步骤审批。
 
 ## 📋 文档
 
@@ -130,13 +159,14 @@ LightAgent 保持默认调用路径简单，同时允许逐步加入生产级控
 - 运行期中间件和生命周期 payload 改写，请查看 [Runtime Hooks](docs/runtime_hooks.md)。
 - OpenRouter、本地模型和 OpenAI 兼容配置，请查看 [Model Provider Configuration](docs/model_providers.md)。
 - Trace 可观测能力请查看 [Trace Observability](docs/tracing.md)。
+- 确定性回归用例、指标和 CI 方案请查看 [Evaluation Harness](docs/evaluation.md)。
+- 工具/handoff 审批、LightFlow 持久化审核、批量决策和反馈请查看 [Human Review](docs/human_review.md)。
 
 ---
 
 ## 🚧 即将推出
 
 - **智能体协同通讯** 🛠️：智能体之间还可以共享信息和传递消息，实现复杂的信息通讯和任务协同。
-- **Agent 测评** 📊：内置 Agent 测评工具，方便评估和优化你构建的Agent，对齐业务场景，持续提升智能水平。
 
 
 ---
@@ -282,7 +312,7 @@ LightAgent 接受任何提供 `store(data, user_id)` 和 `retrieve(query, user_i
 LightAgent 可通过内置 trace 或 Langfuse 配置观察运行过程。
 
 ### 9. Agent 测评
-Agent 测评将在后续版本中围绕业务场景评估 Agent 行为。
+`LightEvaluator` 可围绕确定性业务用例评估输出、工具选择、策略事件、恢复能力、延迟、usage 和预估成本。
 
 ### 10. LightFlow 工作流
 `LightFlow` 是确定性工作流层，适合让任务按已知步骤执行，而不是完全依赖自由形式规划。

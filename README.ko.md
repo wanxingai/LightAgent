@@ -38,7 +38,8 @@
 ---
 
 ## 뉴스
-- <img src="https://img.alicdn.com/imgextra/i3/O1CN01SFL0Gu26nrQBFKXFR_!!6000000007707-2-tps-500-500.png" alt="new" width="30" height="30"/>**[2026-06-24]** LightAgent v0.9.0: 영속 LightFlow checkpoint, resume/rerun, 승인 노드, 명확한 단계 상태, trace 메타데이터, Guardrails 템플릿, MemoryPolicy 제어, SharedMemoryPool 프로토타입을 추가했습니다.
+- <img src="https://img.alicdn.com/imgextra/i3/O1CN01SFL0Gu26nrQBFKXFR_!!6000000007707-2-tps-500-500.png" alt="new" width="30" height="30"/>**[2026-07-30]** LightAgent v0.9.6 릴리스: 프로덕션 Trace 요약 및 내보내기, 결정론적 평가, 도구·handoff·LightFlow의 지속 가능한 사람 승인, 공유 Graph Memory의 fail-closed 쓰기 승인 및 감사 제어를 추가했습니다.
+- **[2026-06-24]** LightAgent v0.9.0: 영속 LightFlow checkpoint, resume/rerun, 승인 노드, 명확한 단계 상태, trace 메타데이터, Guardrails 템플릿, MemoryPolicy 제어, SharedMemoryPool 프로토타입을 추가했습니다.
 - **[2026-06-14]** LightAgent v0.8.1: MemoryScope 규약과 MemoryPolicy 출처/범위/신뢰도 필터를 추가했습니다.
 - **[2026-06-02]** LightAgent v0.8.0: 결정적 다단계 workflow를 위한 LightFlow를 도입했습니다.
 
@@ -64,6 +65,7 @@
 - **공유 메모리 프로토타입** 🧠: SharedMemoryPool은 출처 메타데이터, 범위 기반 검색, MemoryPolicy 호환 결과를 제공하는 인메모리 공유 기억입니다.
 - **Guardrails 템플릿** 🛡️: 입력, 도구, 출력에 대한 재사용 가능한 안전 정책으로 개인정보 차단, 민감 도구 확인, 고위험 인자 검증, 출력 마스킹을 수행합니다.
 - **Runtime Hooks** 🧩: 정렬된 `hooks=[...]` 미들웨어로 run, 모델, 도구, 메모리, LightFlow 단계 payload를 관찰, 교체, 차단할 수 있습니다.
+- **평가와 사람 검토** 📊: `LightEvaluator`는 결정적 회귀 평가를 실행하며, `HumanApprovalHook`, 영구 review store, LightFlow checkpoint는 승인, 거부, 인자 편집과 feedback을 지원합니다.
 
 ## 🧭 아키텍처 한눈에 보기
 
@@ -107,11 +109,12 @@ LightAgent는 기본 호출 경로를 단순하게 유지하면서 운영 제어
 - payload를 관찰, 교체, 차단하는 runtime middleware는 [Runtime Hooks](docs/runtime_hooks.md)를 참고하세요.
 - OpenRouter, 로컬 모델, OpenAI 호환 공급자는 [Model Provider Configuration](docs/model_providers.md)를 참고하세요.
 - 구조화 trace는 [Trace Observability](docs/tracing.md)를 참고하세요.
+- 결정적 회귀 평가는 [Evaluation Harness](docs/evaluation.md)를 참고하세요.
+- 도구/handoff 승인, 영구 검토와 feedback은 [Human Review](docs/human_review.md)를 참고하세요.
 
 ## 🚧 곧 출시 예정
 
 - **지능형 에이전트 협동 통신** 🛠️: 지능형 에이전트 간에 정보를 공유하고 메시지를 전달하여 복잡한 정보 통신 및 작업 협동을 실현할 수 있습니다.
-- **에이전트 평가** 📊: 내장된 에이전트 평가 도구로 귀하가 구축한 에이전트를 평가하고 최적화하여 비즈니스 장면에 맞춰 지속적으로 스마트 수준을 향상시킬 수 있습니다.  
 
 
 ## 🌟 왜 LightAgent를 선택해야 하나요?
@@ -307,7 +310,7 @@ LightAgent는 `store(data, user_id)`와 `retrieve(query, user_id)`를 제공하�
 LightAgent는 내장 trace 또는 Langfuse로 실행을 관측할 수 있습니다.
 
 ### 9. Agent 평가
-Agent 평가는 업무 시나리오에 대한 동작 측정을 목표로 합니다.
+`LightEvaluator`는 결정적 업무 사례에서 출력, 도구 선택, 정책 이벤트, 복구, 지연, usage와 예상 비용을 측정합니다.
 
 ### 10. LightFlow Workflow
 `LightFlow`는 알려진 단계대로 실행하기 위한 결정적 workflow 계층입니다.

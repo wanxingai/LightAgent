@@ -26,8 +26,26 @@ from .errors import (
     format_lightagent_error,
 )
 from .result import RunResult, StreamEvent
-from .tracing import TraceEvent, TraceRecorder
+from .tracing import (
+    JsonlTraceExporter,
+    TraceEvent,
+    TraceExporter,
+    TraceRecorder,
+    TraceSummary,
+    export_trace,
+    normalize_usage,
+    summarize_trace,
+)
+from .evaluation import EvaluationCase, EvaluationCaseResult, EvaluationReport, LightEvaluator
 from .hooks import HookContext, HookDecision, HookManager, PolicyHook
+from .review import (
+    ApprovalDecision,
+    ApprovalRequest,
+    HumanApprovalHook,
+    HumanFeedback,
+    InMemoryReviewStore,
+    JsonReviewStore,
+)
 from .guardrails import (
     DEFAULT_PRIVACY_PATTERNS,
     GuardrailDecision,
@@ -72,11 +90,27 @@ __all__ = [
     "RunResult",
     "StreamEvent",
     "TraceEvent",
+    "TraceExporter",
     "TraceRecorder",
+    "TraceSummary",
+    "JsonlTraceExporter",
+    "summarize_trace",
+    "normalize_usage",
+    "export_trace",
+    "EvaluationCase",
+    "EvaluationCaseResult",
+    "EvaluationReport",
+    "LightEvaluator",
     "HookContext",
     "HookDecision",
     "HookManager",
     "PolicyHook",
+    "ApprovalRequest",
+    "ApprovalDecision",
+    "HumanApprovalHook",
+    "HumanFeedback",
+    "InMemoryReviewStore",
+    "JsonReviewStore",
     "DEFAULT_PRIVACY_PATTERNS",
     "GuardrailDecision",
     "GuardrailManager",

@@ -83,6 +83,7 @@ def test_memory_policy_preserves_legacy_positional_arguments():
     assert policy.reject_write_patterns == (r"ignore previous instructions",)
     assert policy.memory_promotion_admission is None
     assert policy.require_promotion_for_internal_memory is True
+    assert policy.require_write_admission is False
 
 
 def test_memory_policy_namespaces_user_id_and_filters_cross_user_results():
@@ -548,6 +549,40 @@ def test_memory_write_admission_can_rewrite_memory_before_store():
     adapter_event = next(event for event in result.trace if event["type"] == "hook_decision")
     assert adapter_event["data"]["hook"] == "memory_write_admission"
     assert adapter_event["data"]["action"] == "replace"
+
+
+def test_required_memory_write_admission_fails_closed():
+    policy = MemoryPolicy(require_write_admission=True)
+
+    missing = policy.allows_write("unreviewed", {"user_id": "alice"})
+
+    assert missing.allowed is False
+    assert missing.reason == "Memory write requires an explicit admission decision."
+
+
+def test_required_memory_write_admission_needs_explicit_callback_approval():
+    policy = MemoryPolicy(
+        require_write_admission=True,
+        memory_write_admission=lambda data, context: None,
+    )
+
+    undecided = policy.allows_write("unreviewed", {"user_id": "alice"})
+
+    assert undecided.allowed is False
+    assert undecided.reason == "Memory write admission did not explicitly approve this write."
+
+
+def test_memory_write_admission_exception_fails_closed_and_redacts_details():
+    def broken_admission(data, context):
+        raise RuntimeError("private review service details")
+
+    policy = MemoryPolicy(memory_write_admission=broken_admission)
+
+    decision = policy.allows_write("unreviewed", {"user_id": "alice"})
+
+    assert decision.allowed is False
+    assert decision.reason == "Memory write admission failed: RuntimeError"
+    assert "private review service details" not in decision.reason
 
 
 def test_memory_policy_duplicate_fingerprints_are_scope_aware():

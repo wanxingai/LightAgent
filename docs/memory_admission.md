@@ -49,6 +49,30 @@ The hook can return:
 - a dictionary with `allowed`, `reason`, and optional `value`;
 - any other value to allow and rewrite the stored memory text.
 
+### Fail-Closed Shared-Memory Writes
+
+Set `require_write_admission=True` when a shared graph or vector backend must
+never receive an implicit conversational write:
+
+```python
+policy = MemoryPolicy(
+    require_write_admission=True,
+    memory_write_admission=review_shared_write,
+)
+```
+
+In this mode:
+
+- a missing callback blocks the write;
+- `None` from the callback blocks the write instead of implicitly allowing it;
+- callback exceptions block the write and expose only the exception type in the
+  trace reason;
+- `True` or `MemoryAdmissionDecision(allowed=True, ...)` is required to approve
+  persistence.
+
+Default behavior remains compatible: when `require_write_admission=False`,
+an unconfigured write policy still allows ordinary user-memory persistence.
+
 ### Write Limits
 
 Use `max_writes_per_run` to cap memory mutations from a single run.
@@ -182,6 +206,7 @@ When tracing is enabled, memory write controls emit:
 | --- | --- |
 | `memory_write` | A memory write was allowed and persisted. |
 | `memory_write_block` | A memory write was blocked by policy. |
+| `memory_retrieve_filter` | Retrieval result counts after namespace, provenance, trust, and promotion filtering. |
 | `memory_promotion_required` | Internal memory was converted to a non-injectable candidate. |
 | `memory_promotion_approved` | A candidate was approved and persisted. |
 | `memory_promotion_rewritten` | A candidate was rewritten before persistence. |
@@ -194,6 +219,8 @@ These events do not include raw memory text.
 
 - Keep default behavior for simple single-agent demos.
 - Configure `memory_write_admission` for shared or graph-backed memory.
+- Set `require_write_admission=True` for high-impact shared backends that must
+  fail closed.
 - Configure `memory_promotion_admission` before enabling self-learning or
   shared internal memory in production.
 - Use `max_writes_per_run` for self-learning agents to reduce write

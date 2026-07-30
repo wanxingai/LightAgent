@@ -40,7 +40,8 @@
 ---
 
 ## ニュース
-- <img src="https://img.alicdn.com/imgextra/i3/O1CN01SFL0Gu26nrQBFKXFR_!!6000000007707-2-tps-500-500.png" alt="new" width="30" height="30"/>**[2026-06-24]** LightAgent v0.9.0：永続化 LightFlow checkpoint、resume/rerun、承認ノード、明確なステップ状態、trace メタデータ、Guardrails テンプレート、MemoryPolicy 制御、SharedMemoryPool プロトタイプを追加。
+- <img src="https://img.alicdn.com/imgextra/i3/O1CN01SFL0Gu26nrQBFKXFR_!!6000000007707-2-tps-500-500.png" alt="new" width="30" height="30"/>**[2026-07-30]** LightAgent v0.9.6 リリース：本番向け Trace 要約とエクスポーター、決定的評価、ツール・handoff・LightFlow の永続的な人間承認、共有 Graph Memory の fail-closed 書き込み承認と監査制御を追加。
+- **[2026-06-24]** LightAgent v0.9.0：永続化 LightFlow checkpoint、resume/rerun、承認ノード、明確なステップ状態、trace メタデータ、Guardrails テンプレート、MemoryPolicy 制御、SharedMemoryPool プロトタイプを追加。
 - **[2026-06-14]** LightAgent v0.8.1：MemoryScope 規約と MemoryPolicy の出所・範囲・信頼度フィルタを追加。
 - **[2026-06-02]** LightAgent v0.8.0：決定的な複数ステップ workflow のための LightFlow を導入。
 
@@ -66,6 +67,7 @@
 - **共有メモリプロトタイプ** 🧠：SharedMemoryPool は出所メタデータ、スコープ付き検索、MemoryPolicy 互換結果を備えたインメモリ共有メモリを提供します。
 - **Guardrails テンプレート** 🛡️：入力、ツール、出力の再利用可能な安全ポリシーにより、個人情報の遮断、機密ツールの確認、高リスク引数の検証、出力のマスキングを行えます。
 - **Runtime Hooks** 🧩：順序付き `hooks=[...]` ミドルウェアで、run、モデル、ツール、メモリ、LightFlow ステップの各フェーズを監視、置換、ブロックできます。
+- **評価と人間レビュー** 📊：`LightEvaluator` は決定的な回帰評価を実行し、`HumanApprovalHook`、永続 review store、LightFlow checkpoint は承認、拒否、引数編集、feedback を支援します。
 
 ## 🧭 アーキテクチャ概要
 
@@ -109,11 +111,12 @@ LightAgent はデフォルトの呼び出しを簡単に保ちつつ、本番向
 - payload を監視、置換、ブロックする runtime middleware については [Runtime Hooks](docs/runtime_hooks.md) を参照してください。
 - OpenRouter、ローカルモデル、OpenAI 互換プロバイダーについては [Model Provider Configuration](docs/model_providers.md) を参照してください。
 - 構造化 trace については [Trace Observability](docs/tracing.md) を参照してください。
+- 決定的な回帰評価については [Evaluation Harness](docs/evaluation.md) を参照してください。
+- ツール/handoff 承認、永続レビュー、feedback については [Human Review](docs/human_review.md) を参照してください。
 
 ## 🚧 近日公開
 
 - **エージェント協調通信** 🛠️：エージェント間で情報を共有し、メッセージを伝達することができ、複雑な情報通信とタスク協調を実現します。
-- **エージェント評価** 📊：エージェントの評価ツールを内蔵しており、構築したエージェントを評価および最適化し、ビジネスシーンに直結し、知能レベルを継続的に向上させます。
 
 ## 🌟 なぜLightAgentを選ぶのか？
 
@@ -306,7 +309,7 @@ LightAgent は `store(data, user_id)` と `retrieve(query, user_id)` を持つ�
 LightAgent は組み込み trace または Langfuse で実行を観測できます。
 
 ### 9. Agent 評価
-Agent 評価は業務シナリオに対する振る舞いを測定する予定です。
+`LightEvaluator` は決定的な業務ケースに対して出力、ツール選択、ポリシーイベント、回復、遅延、usage、推定コストを測定します。
 
 ### 10. LightFlow Workflow
 `LightFlow` は既知の手順で実行するための決定的 workflow 層です。

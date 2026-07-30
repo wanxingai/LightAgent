@@ -39,7 +39,8 @@
 ---
 
 ## Noticias
-- <img src="https://img.alicdn.com/imgextra/i3/O1CN01SFL0Gu26nrQBFKXFR_!!6000000007707-2-tps-500-500.png" alt="new" width="30" height="30"/>**[2026-06-24]** LightAgent v0.9.0: añade workflows LightFlow con checkpoints, resume/rerun, nodos de aprobación, estados de paso más claros, metadatos de trace, plantillas Guardrails, controles MemoryPolicy y el prototipo SharedMemoryPool.
+- <img src="https://img.alicdn.com/imgextra/i3/O1CN01SFL0Gu26nrQBFKXFR_!!6000000007707-2-tps-500-500.png" alt="new" width="30" height="30"/>**[2026-07-30]** LightAgent v0.9.6 publicado: añade resúmenes y exportadores de trazas para producción, evaluación determinista, aprobación humana persistente para herramientas, handoffs y LightFlow, además de admisión de escritura fail-closed y auditoría para memoria gráfica compartida.
+- **[2026-06-24]** LightAgent v0.9.0: añade workflows LightFlow con checkpoints, resume/rerun, nodos de aprobación, estados de paso más claros, metadatos de trace, plantillas Guardrails, controles MemoryPolicy y el prototipo SharedMemoryPool.
 - **[2026-06-14]** LightAgent v0.8.1: añade convenciones MemoryScope y filtros MemoryPolicy por procedencia, alcance y confianza.
 - **[2026-06-02]** LightAgent v0.8.0: introduce LightFlow para workflows deterministas de varios pasos.
 
@@ -65,6 +66,7 @@ Las notas históricas están en [GitHub Releases](https://github.com/wanxingai/L
 - **Prototipo de memoria compartida** 🧠: SharedMemoryPool ofrece memoria compartida en memoria con metadatos de procedencia, recuperación por alcance y resultados compatibles con MemoryPolicy.
 - **Plantillas Guardrails** 🛡️: Políticas reutilizables de entrada, herramientas y salida para bloquear datos privados, confirmar herramientas sensibles, validar parámetros de alto riesgo y redactar salidas.
 - **Runtime Hooks** 🧩: Middleware ordenado `hooks=[...]` para observar, reemplazar o bloquear fases de ejecución, modelo, herramienta, memoria y pasos LightFlow.
+- **Evaluación y revisión humana** 📊: `LightEvaluator` ejecuta regresiones deterministas; `HumanApprovalHook`, los review stores persistentes y los checkpoints de LightFlow permiten aprobar, rechazar, editar argumentos y registrar feedback.
 
 ## 🧭 Arquitectura de un vistazo
 
@@ -108,11 +110,12 @@ LightAgent mantiene simple la llamada por defecto y permite añadir controles de
 - Para middleware runtime que observa, reemplaza o bloquea payloads, consulta [Runtime Hooks](docs/runtime_hooks.md).
 - Para OpenRouter, modelos locales y proveedores compatibles con OpenAI, consulta [Model Provider Configuration](docs/model_providers.md).
 - Para trazas estructuradas, consulta [Trace Observability](docs/tracing.md).
+- Para regresiones deterministas, consulta [Evaluation Harness](docs/evaluation.md).
+- Para aprobación de herramientas/handoffs, revisión persistente y feedback, consulta [Human Review](docs/human_review.md).
 
 ## 🚧 Próximamente
 
 - **Comunicación colaborativa de agentes** 🛠️: Los agentes también pueden compartir información y transmitir mensajes entre sí, logrando una comunicación de información compleja y colaboración en tareas.
-- **Evaluación de Agentes** 📊: Herramienta de evaluación de agentes integrada, facilitando la evaluación y optimización del agente que construyas, alineándose con el escenario empresarial y mejorando continuamente su inteligencia.  
 
 ## 🌟 ¿Por qué elegir LightAgent?
 
@@ -306,7 +309,7 @@ El autoaprendizaje debe combinarse con memoria y `MemoryPolicy` para evitar cont
 LightAgent permite observar la ejecución con traces internos o configuración Langfuse.
 
 ### 9. Evaluación de agentes
-La evaluación de agentes se centrará en medir comportamiento frente a escenarios de negocio.
+`LightEvaluator` mide salida, selección de herramientas, eventos de política, recuperación, latencia, usage y coste estimado.
 
 ### 10. Workflows LightFlow
 `LightFlow` es la capa de workflow determinista para ejecutar tareas por pasos conocidos.
