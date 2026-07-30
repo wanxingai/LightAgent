@@ -38,7 +38,8 @@
 ---
 
 ## 뉴스
-- <img src="https://img.alicdn.com/imgextra/i3/O1CN01SFL0Gu26nrQBFKXFR_!!6000000007707-2-tps-500-500.png" alt="new" width="30" height="30"/>**[2026-06-24]** LightAgent v0.9.0: 영속 LightFlow checkpoint, resume/rerun, 승인 노드, 명확한 단계 상태, trace 메타데이터, Guardrails 템플릿, MemoryPolicy 제어, SharedMemoryPool 프로토타입을 추가했습니다.
+- <img src="https://img.alicdn.com/imgextra/i3/O1CN01SFL0Gu26nrQBFKXFR_!!6000000007707-2-tps-500-500.png" alt="new" width="30" height="30"/>**[2026-07-30]** LightAgent v0.9.6 릴리스: 프로덕션 Trace 요약 및 내보내기, 결정론적 평가, 도구·handoff·LightFlow의 지속 가능한 사람 승인, 공유 Graph Memory의 fail-closed 쓰기 승인 및 감사 제어를 추가했습니다.
+- **[2026-06-24]** LightAgent v0.9.0: 영속 LightFlow checkpoint, resume/rerun, 승인 노드, 명확한 단계 상태, trace 메타데이터, Guardrails 템플릿, MemoryPolicy 제어, SharedMemoryPool 프로토타입을 추가했습니다.
 - **[2026-06-14]** LightAgent v0.8.1: MemoryScope 규약과 MemoryPolicy 출처/범위/신뢰도 필터를 추가했습니다.
 - **[2026-06-02]** LightAgent v0.8.0: 결정적 다단계 workflow를 위한 LightFlow를 도입했습니다.
 

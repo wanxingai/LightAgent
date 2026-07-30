@@ -38,7 +38,8 @@
 ---
 
 ## Neuigkeiten
-- <img src="https://img.alicdn.com/imgextra/i3/O1CN01SFL0Gu26nrQBFKXFR_!!6000000007707-2-tps-500-500.png" alt="new" width="30" height="30"/>**[2026-06-24]** LightAgent v0.9.0: ergänzt persistente LightFlow-Checkpoints, Resume/Rerun, Freigabeknoten, klarere Schrittzustände, Trace-Metadaten, Guardrails-Vorlagen, MemoryPolicy-Kontrollen und den SharedMemoryPool-Prototyp.
+- <img src="https://img.alicdn.com/imgextra/i3/O1CN01SFL0Gu26nrQBFKXFR_!!6000000007707-2-tps-500-500.png" alt="new" width="30" height="30"/>**[2026-07-30]** LightAgent v0.9.6 veröffentlicht: ergänzt produktionsreife Trace-Zusammenfassungen und Exporte, deterministische Evaluation, dauerhafte menschliche Freigaben für Tools, Handoffs und LightFlow sowie ausfallsichere Schreibfreigaben und Audit-Kontrollen für gemeinsam genutzten Graph-Speicher.
+- **[2026-06-24]** LightAgent v0.9.0: ergänzt persistente LightFlow-Checkpoints, Resume/Rerun, Freigabeknoten, klarere Schrittzustände, Trace-Metadaten, Guardrails-Vorlagen, MemoryPolicy-Kontrollen und den SharedMemoryPool-Prototyp.
 - **[2026-06-14]** LightAgent v0.8.1: ergänzt MemoryScope-Konventionen und MemoryPolicy-Filter nach Herkunft, Umfang und Vertrauen.
 - **[2026-06-02]** LightAgent v0.8.0: führt LightFlow für deterministische mehrstufige Workflows ein.
 

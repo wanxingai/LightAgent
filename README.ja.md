@@ -40,7 +40,8 @@
 ---
 
 ## ニュース
-- <img src="https://img.alicdn.com/imgextra/i3/O1CN01SFL0Gu26nrQBFKXFR_!!6000000007707-2-tps-500-500.png" alt="new" width="30" height="30"/>**[2026-06-24]** LightAgent v0.9.0：永続化 LightFlow checkpoint、resume/rerun、承認ノード、明確なステップ状態、trace メタデータ、Guardrails テンプレート、MemoryPolicy 制御、SharedMemoryPool プロトタイプを追加。
+- <img src="https://img.alicdn.com/imgextra/i3/O1CN01SFL0Gu26nrQBFKXFR_!!6000000007707-2-tps-500-500.png" alt="new" width="30" height="30"/>**[2026-07-30]** LightAgent v0.9.6 リリース：本番向け Trace 要約とエクスポーター、決定的評価、ツール・handoff・LightFlow の永続的な人間承認、共有 Graph Memory の fail-closed 書き込み承認と監査制御を追加。
+- **[2026-06-24]** LightAgent v0.9.0：永続化 LightFlow checkpoint、resume/rerun、承認ノード、明確なステップ状態、trace メタデータ、Guardrails テンプレート、MemoryPolicy 制御、SharedMemoryPool プロトタイプを追加。
 - **[2026-06-14]** LightAgent v0.8.1：MemoryScope 規約と MemoryPolicy の出所・範囲・信頼度フィルタを追加。
 - **[2026-06-02]** LightAgent v0.8.0：決定的な複数ステップ workflow のための LightFlow を導入。
 
