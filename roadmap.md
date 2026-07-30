@@ -1,6 +1,6 @@
 # LightAgent Roadmap
 
-Last updated: 2026-07-21
+Last updated: 2026-07-30
 
 LightAgent should continue to evolve as a lightweight, low-dependency agent
 framework rather than a broad replacement for LangChain, LangGraph, CrewAI, or
@@ -105,37 +105,46 @@ result = flow.run("Analyze this company")
 
 ### Open Pull Requests
 
-- **#81 fix for broken build pipeline**: external PR proposing Poetry/build
-  pipeline changes in `pyproject.toml`, `poetry.lock`, `.github/workflows`,
-  `.gitignore`, and a new `Makefile`. Review separately as release hygiene;
-  do not mix it with the v0.9.5 memory-safety feature line.
+- No open pull requests as of 2026-07-29.
 
 ### Active Issues
 
-P1 issues that should shape the next releases:
+Immediate security-governance work:
 
-- **#82 Explicit memory promotion workflow**: v0.9.5 implements the first
-  explicit, auditable promotion path; keep follow-up work focused on external
-  review queues and UI integration.
-- **#39 Shared graph memory security disclosure**: v0.9.5 blocks unreviewed
-  internal/shared evidence from prompt injection by default; continue
-  adapter-level hardening for durable graph/vector backends.
-- **#1 Enhanced memory management for multi-agent systems**: design a lightweight
-  shared memory model with per-agent boundaries, provenance, and conflict rules.
-- **#33 Optional ClawMem memory backend**: keep as an optional adapter that
-  satisfies `MemoryProtocol`.
-- **#5 Custom plugin/integration development**: define a small connector contract
-  without turning the core into a heavy plugin platform.
+- **#39 Shared graph memory security disclosure**: evaluate a private GitHub
+  Security Advisory and possible CVE scope without declaring affected versions
+  or a fully patched release before backend-level reproduction is complete.
+  v0.9.5 provides framework-level mitigation primitives, not proof that shared
+  graph mutation is fully contained.
+
+P1 engineering work:
+
+- **#39 Shared graph memory security disclosure**: add an adversarial cross-user
+  graph-memory integration test, prove that low-trust writes cannot replace or
+  delete higher-trust facts without explicit approval, and document an auditable
+  production configuration.
 
 P2 issues:
 
-- **#76 CCS fail-closed protocol proposal**: evaluate as an optional policy
-  integration or documentation pattern; keep the core dependency-free because
-  `PolicyHook` already provides first-party fail-closed behavior.
-- **#50 Nautilus A2A registry/discovery proposal**: evaluate as optional
-  connector or docs-only integration.
-- **#26 External API tool integrations**: accept one API/tool family per PR, no
-  secrets, no required core dependencies.
+- **#5 Custom plugin/integration development**: narrow this to a lightweight
+  connector contract built on Tools, Skills, MCP, Hooks, and `MemoryProtocol`.
+  Keep optional dependencies and network access outside the default runtime.
+
+Resolved or ready to close:
+
+- **#1 Enhanced memory management for multi-agent systems**: the initial
+  `SharedMemoryPool` prototype, provenance metadata, scoped retrieval,
+  `MemoryPolicy` compatibility, documentation, and tests are complete. Track
+  durable storage, access control, and conflict handling in focused follow-ups.
+- **#33 Optional ClawMem memory backend**: #74 delivered the optional
+  dependency-free adapter example, documentation, and fake-client tests.
+
+Not planned for the core repository:
+
+- **#26 External API tool bundle**: accept only focused, provider-owned tool
+  examples with no secrets, live CI calls, or required core dependencies.
+- **#50 Nautilus A2A registry/discovery proposal**: keep vendor registration,
+  wallets, and token economics in an external optional connector.
 
 ## Near-Term Version Plan
 
@@ -428,10 +437,12 @@ other observability hooks a new source of downtime.
 
 ### v0.9.5: Memory Promotion And Shared Memory Safety
 
-Status: implemented in v0.9.5.
+Status: the framework-level memory-promotion boundary was implemented in
+v0.9.5. Backend-level validation for #39 remains open.
 
-Fix target: v0.9.5 is the first release line for closing the #39 shared graph
-memory security risk and the #82 explicit memory promotion workflow.
+Security scope: v0.9.5 is the first mitigation release for the #39 shared graph
+memory risk and completes the #82 explicit memory promotion workflow. It is not
+yet evidence that every shared Graph Memory backend is fully remediated.
 
 Goal: make reflection, self-learning, delegation summaries, and shared-memory
 evidence safe by default before they can affect future user-facing prompts, and
@@ -468,9 +479,10 @@ Completed work:
   cross-scope internal memory before prompt injection.
 - Add tests proving reflection, delegation, and shared-memory candidates cannot
   become prompt-injectable without explicit promotion.
-- Treat #39 and #82 as release gates: v0.9.5 includes deterministic tests for
-  memory poisoning, cross-user contamination, and unreviewed internal-memory
-  promotion paths.
+- Treat #39 as an ongoing backend-level security validation item. v0.9.5
+  includes deterministic framework tests for cross-user filtering and
+  unreviewed internal-memory promotion paths, but does not yet prove containment
+  against a realistic shared Graph Memory mutation pipeline.
 - Document safe patterns for `SharedMemoryPool`, mem0-style graph memory,
   vector memory adapters, and optional external memory backends such as ClawMem.
 - Document how external approval queues or review UIs can integrate with memory
@@ -692,8 +704,8 @@ Goal: prevent trace observability, persistent memory, and LightSwarm
 self-reflection from collapsing into one uncontrolled feedback loop.
 
 This was the first partial response to issues #57, #39, and #1. The first
-#39 and #82 release-gate slice shipped in v0.9.5 through explicit memory
-promotion.
+framework-level #39 mitigation and the #82 promotion boundary shipped in v0.9.5
+through explicit memory promotion.
 
 ### Completed Work
 
@@ -886,8 +898,9 @@ memory-scoped human review promotes them.
   rewrites, blocks, and final decisions.
 - Add fail-closed tests for unattributed, unreviewed, cross-user, cross-agent,
   and cross-scope memory candidates.
-- Make those tests the v0.9.5 release gate for #39 shared graph memory
-  security and #82 memory promotion safety.
+- Make those tests the v0.9.5 framework-level release gate for #82 memory
+  promotion safety and the first mitigation checkpoint for #39. Keep realistic
+  shared Graph Memory backend tests as follow-up acceptance criteria.
 - Update memory security docs for SharedMemoryPool, mem0-style graph memory,
   vector memory adapters, and optional ClawMem-style adapters.
 - Document memory-review integration patterns for external approval queues,
@@ -1021,7 +1034,9 @@ building lightweight production agents.
 
 ### Immediate P0
 
-- No active P0 item as of 2026-07-21.
+- Respond to the #39 advisory/CVE request, move reproduction and version-scoping
+  details into a private security workflow, and avoid naming affected or fully
+  patched versions until the shared Graph Memory test matrix is complete.
 
 ### Next P1
 
@@ -1029,23 +1044,20 @@ building lightweight production agents.
   and production documentation.
 - Durable memory-review queue examples that build on v0.9.5 promotion
   candidates without becoming required core dependencies.
-- Shared-memory adapter hardening for #1 and follow-up #39 work, especially
-  durable graph/vector backends, tenant boundaries, provenance checks, and
-  conflict handling.
+- Shared-memory adapter hardening for follow-up #39 work, especially realistic
+  graph-backend tests, tenant boundaries, provenance checks, and protection
+  against low-trust mutation of higher-trust facts.
 - External trace/audit adapters and production review-queue examples built on
   the v0.9.6 exporter and approval contracts.
 
 ### P2
 
-- Review #81 build-pipeline PR separately as packaging/release hygiene.
 - Database-backed workflow and shared-memory adapters.
 - Stronger idempotency and distributed execution controls for persistent
   workflows.
-- Optional ClawMem adapter shape for #33.
 - Lightweight plugin/connector contract for #5.
-- CCS optional policy-integration documentation for #76.
-- Nautilus/A2A optional connector evaluation for #50.
-- External API examples for #26.
+- Focused external provider examples only when maintained outside the core
+  dependency set.
 
 ### P3
 
@@ -1071,8 +1083,8 @@ Reasoning:
   fail-closed tests for internal/shared memory safety.
 - v0.9.6 adds trace summaries/exporters, deterministic evaluation, tool and
   handoff review, durable LightFlow approvals, and human feedback.
-- #1 and follow-up #39 work keep durable shared-memory poisoning, provenance,
-  and multi-agent memory boundaries as active P1 concerns.
+- Follow-up #39 work keeps durable shared-memory poisoning, provenance, and
+  multi-agent memory boundaries as active P1 concerns.
 - Database-backed durability should stay optional so the core package remains
   lightweight.
 
