@@ -127,6 +127,10 @@ production rollout, run an adversarial matrix that verifies:
 - the same checks pass against the exact Mem0 Graph version and storage
   configuration used in production.
 
+See [Shared Graph Memory Security Validation](security_shared_graph_memory_validation.md)
+for the default fake-backend matrix, opt-in real Mem0 Graph test, evidence to
+record, and the public/private advisory boundary.
+
 ### LightAgent Adapter Guidance
 
 Custom memory implementations passed to `LightAgent(memory=...)` should enforce

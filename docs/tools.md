@@ -386,6 +386,11 @@ LightAgent automatically registers a set of built-in tools at startup:
 These are always available unless the agent's tool registry is explicitly
 overridden.
 
+The Python executor utilities use an AST denylist and a temporary working
+directory, but they are not complete sandboxes. Review the
+[Python Executor Security](python_executor_security.md) guide before exposing
+them to untrusted input or enabling runtime dependency installation.
+
 `upload_file_to_oss` is registered without importing `boto3`. Install
 `LightAgent[oss]`, `LightAgent[nos]`, or `boto3>=1.34.0` only when you use this
 object-storage tool.
