@@ -8,6 +8,7 @@ Lightweight workflow orchestration for LightAgent.
 from __future__ import annotations
 
 import json
+import asyncio
 import time
 from concurrent.futures import ThreadPoolExecutor, TimeoutError
 from dataclasses import asdict, dataclass, field
@@ -257,6 +258,10 @@ class LightFlow:
             parent_trace_id=parent_trace_id,
             run_group_id=run_group_id,
         )
+
+    async def arun(self, query: str, **kwargs: Any) -> LightFlowResult | str | dict[str, Any]:
+        """Run a workflow without blocking the caller's event loop."""
+        return await asyncio.to_thread(self.run, query, **kwargs)
 
     def resume(
             self,

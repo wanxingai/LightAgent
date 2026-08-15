@@ -27,6 +27,8 @@ class Skill:
     has_scripts: bool = False
     has_references: bool = False
     has_assets: bool = False
+    source_directory: str | None = None
+    precedence: int = 0
 
 
 class SkillManager:
@@ -35,17 +37,20 @@ class SkillManager:
     def __init__(self, skills_directories: List[str] = None, logger=None):
         self.skills_directories = skills_directories or ["skills"]
         self.skills: Dict[str, Skill] = {}
+        self.skill_conflicts: List[Dict[str, Any]] = []
         self.logger = logger or logging.getLogger(__name__)
 
     def discover_skills(self) -> List[Skill]:
         """发现所有可用技能（仅加载元数据）"""
         discovered = []
+        self.skills = {}
+        self.skill_conflicts = []
 
-        for base_dir in self.skills_directories:
+        for precedence, base_dir in enumerate(self.skills_directories):
             if not os.path.exists(base_dir):
                 continue
 
-            for item in os.listdir(base_dir):
+            for item in sorted(os.listdir(base_dir)):
                 skill_path = os.path.join(base_dir, item)
                 skill_file = os.path.join(skill_path, "SKILL.md")
 
@@ -53,6 +58,18 @@ class SkillManager:
                     try:
                         skill = self._load_skill_metadata(skill_path)
                         if skill:
+                            skill.source_directory = str(Path(base_dir).resolve())
+                            skill.precedence = precedence
+                            previous = self.skills.get(skill.name)
+                            if previous is not None:
+                                conflict = {
+                                    "name": skill.name,
+                                    "winner": skill.path,
+                                    "shadowed": previous.path,
+                                    "rule": "later skills_directories entry wins",
+                                }
+                                self.skill_conflicts.append(conflict)
+                                self._log("WARNING", "skill_conflict", conflict)
                             self.skills[skill.name] = skill
                             discovered.append(skill)
                             self._log("DEBUG", "discover_skill",
@@ -62,6 +79,33 @@ class SkillManager:
                                   {"path": skill_path, "error": str(e)})
 
         return discovered
+
+    def list_conflicts(self) -> List[Dict[str, Any]]:
+        """Return deterministic diagnostics for shadowed Skill names."""
+        return [dict(item) for item in self.skill_conflicts]
+
+    def discover_project_instructions(
+            self,
+            start_directory: str | os.PathLike[str] | None = None,
+            *,
+            filename: str = "AGENTS.md",
+            max_chars: int = 100_000,
+    ) -> str:
+        """Load project instructions from filesystem root to the working directory."""
+        current = Path(start_directory or os.getcwd()).resolve()
+        candidates = [current, *current.parents]
+        contents: List[str] = []
+        total = 0
+        for directory in reversed(candidates):
+            instruction_file = directory / filename
+            if not instruction_file.is_file():
+                continue
+            content = instruction_file.read_text(encoding="utf-8")
+            total += len(content)
+            if total > max_chars:
+                raise ValueError(f"project instructions exceed max_chars={max_chars}")
+            contents.append(f"# {instruction_file}\n{content.strip()}")
+        return "\n\n".join(contents)
 
     def _load_skill_metadata(self, skill_path: str) -> Optional[Skill]:
         """从SKILL.md加载技能元数据（仅frontmatter）"""
@@ -136,20 +180,21 @@ class SkillManager:
             return f"Error: Skill '{skill_name}' not found"
 
         skill = self.skills[skill_name]
-        script_path = os.path.join(skill.path, "scripts", script_name)
+        scripts_root = Path(skill.path, "scripts").resolve()
+        script_path = (scripts_root / script_name).resolve()
 
-        if not os.path.exists(script_path):
+        if not script_path.exists():
             return f"Error: Script '{script_path}' not found in skill '{skill_name}'"
 
         # 安全检查：只允许执行scripts目录下的文件
-        if not script_path.startswith(os.path.join(skill.path, "scripts")):
+        if not script_path.is_relative_to(scripts_root):
             return "Error: Security violation - cannot execute outside scripts directory"
 
         try:
             # 在临时目录中执行以提供隔离
             with tempfile.TemporaryDirectory() as tmpdir:
                 result = subprocess.run(
-                    [script_path] + (args or []),
+                    [str(script_path)] + (args or []),
                     capture_output=True,
                     text=True,
                     timeout=30,
@@ -175,13 +220,14 @@ class SkillManager:
             return f"Error: Skill '{skill_name}' not found"
 
         skill = self.skills[skill_name]
-        full_path = os.path.join(skill.path, "references", ref_path)
+        references_root = Path(skill.path, "references").resolve()
+        full_path = (references_root / ref_path).resolve()
 
         # 安全检查：防止目录遍历
-        if not full_path.startswith(os.path.join(skill.path, "references")):
+        if not full_path.is_relative_to(references_root):
             return "Error: Security violation - invalid reference path"
 
-        if not os.path.exists(full_path):
+        if not full_path.exists():
             return f"Error: Reference '{ref_path}' not found"
 
         try:
@@ -197,10 +243,11 @@ class SkillManager:
             raise ValueError(f"Skill '{skill_name}' not found")
 
         skill = self.skills[skill_name]
-        full_path = os.path.join(skill.path, "assets", asset_path)
+        assets_root = Path(skill.path, "assets").resolve()
+        full_path = (assets_root / asset_path).resolve()
 
         # 安全检查
-        if not full_path.startswith(os.path.join(skill.path, "assets")):
+        if not full_path.is_relative_to(assets_root):
             raise ValueError("Security violation: invalid asset path")
 
         with open(full_path, 'rb') as f:

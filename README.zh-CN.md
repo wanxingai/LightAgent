@@ -55,7 +55,8 @@
 
 ---
 ## 新闻
-- <img src="https://img.alicdn.com/imgextra/i3/O1CN01SFL0Gu26nrQBFKXFR_!!6000000007707-2-tps-500-500.png" alt="new" width="30" height="30"/>**[2026-07-30]** LightAgent v0.9.6 正式发布：新增生产级 Trace 汇总与导出、确定性评测、工具、handoff 和 LightFlow 的可持久化人工审批，以及共享 Graph Memory 的 fail-closed 写入准入与审计控制。
+- <img src="https://img.alicdn.com/imgextra/i3/O1CN01SFL0Gu26nrQBFKXFR_!!6000000007707-2-tps-500-500.png" alt="new" width="30" height="30"/>**[2026-08-15]** LightAgent v0.10.0 开发版：新增统一的事件溯源 Agent Runtime，支持可持久化 Session、异步执行、Capability Registry 与 Policy、Inbox/Goals/Budgets、上下文压缩与恢复、Jobs/子 Agent、标准化 Skills/MCP 适配器和 SQLite FTS5 检索。
+- **[2026-07-30]** LightAgent v0.9.6 正式发布：新增生产级 Trace 汇总与导出、确定性评测、工具、handoff 和 LightFlow 的可持久化人工审批，以及共享 Graph Memory 的 fail-closed 写入准入与审计控制。
 - **[2026-07-10]** LightAgent v0.9.3 正式发布：补全 `after_run`、`on_error` 和记忆检索 Hooks 生命周期，新增独立的 `max_tool_iterations` 流式工具循环上限并保持 `max_retry` 向后兼容，同时完善错误收尾、Trace 和回归测试。
 - **[2026-06-24]** LightAgent v0.9.0 开发版：新增可持久化 LightFlow checkpoint、resume/rerun、审批节点、更清晰的步骤状态和 trace 元数据，同时补充 Guardrails 模板、MemoryPolicy 控制和 SharedMemoryPool 原型。
 - **[2026-06-14]** LightAgent v0.8.1 开发版：新增 MemoryScope 元数据约定、MemoryPolicy 来源/范围/可信度过滤，并补充 Trace、用户记忆、自我反思记忆和 LightSwarm 委托状态的边界说明。
@@ -84,6 +85,7 @@
 - **评测框架** 📊：`LightEvaluator` 可对 Agent 或 LightFlow 执行确定性回归用例，检查输出、工具选择、策略事件、恢复能力、延迟、usage 和预估成本。
 - **人工审核** 👤：`HumanApprovalHook`、可持久化审核存储和 LightFlow 审批 checkpoint 支持高风险动作的批准、拒绝、参数编辑、人工响应、批量审核和 trace 反馈。
 - **Runtime Hooks** 🧩：通过有序 `hooks=[...]` 中间件观察、替换或阻断运行、模型、工具、记忆、LightSwarm handoff 和 LightFlow 步骤阶段；安全策略可使用 `PolicyHook` 在异常或超时时 fail closed，并将决策写入 trace。
+- **事件溯源 Runtime** 🧱：可选的持久化 Session、回放、checkpoint、fork、异步入口、分层 Capability Provider、统一 Policy、Inbox、Goals、Budgets、Jobs、子 Agent、上下文压缩和 SQLite FTS5 检索。
 - **Tools工具生成器** 🚀：只需将您的API文档交给[[Tools工具生成器]](#3-tools工具生成器)，它将自动化地为您打造专属的tools，助您在短短1小时内快速构建数百个个性化的自定义工具，提升效率，释放您的创新潜能。
 - **agent自我学习** 🧠️：每个agent拥有自己的场景记忆能力，拥有从用户的对话中进行自我学习能力。
 - **自适应tools机制** 🛠️：支持添加无限量tools，在上万个工具中让大模型过滤无关工具后再发送给大模型，可大幅度降低Token消耗。
@@ -96,6 +98,8 @@
 | 层级 | 主要 API | 适用场景 |
 | --- | --- | --- |
 | 单 Agent 运行时 | `LightAgent` | 一个 Agent 的模型调用、工具、记忆、流式输出、trace 和 guardrails。 |
+| 持久化运行状态 | `Session`、`AgentRuntime` | 可回放事件、checkpoint、Inbox、Goals、Budgets、Jobs 和上下文恢复。 |
+| 能力层 | `CapabilityRegistry`、`PolicyEngine` | 分层 Provider、权限快照、生命周期、策略与审计。 |
 | 多 Agent 路由 | `LightSwarm` | 在多个专业 Agent 之间进行角色化委托。 |
 | 确定性工作流 | `LightFlow` | DAG 工作流、重试、checkpoint、持久化审批、resume 和 rerun。 |
 | 工具与集成 | `tools`、`ToolRegistry`、MCP | Python 工具、生成工具、运行时加载工具或 MCP 工具服务。 |
@@ -124,6 +128,8 @@ LightAgent 保持默认调用路径简单，同时允许逐步加入生产级控
 | 评测 | `LightEvaluator().run(agent, cases)` | 基于结构化 trace 执行确定性行为检查。 |
 | 工具审批 | `LightAgent(..., hooks=[HumanApprovalHook(...)])` | 在选定工具或 handoff 执行前要求人工审核。 |
 | 工作流 | `LightFlow().step(...).run(query)` | 用于确定性多步骤执行。 |
+| 持久化 Session | `agent.run(query, session_id="project-42")` | 延续并回放持久化会话。 |
+| 异步调用 | `await agent.arun(query)` | 避免阻塞 asyncio 应用。 |
 
 ### 评测并审核高风险动作
 
@@ -161,6 +167,7 @@ print(report.to_dict())
 - Trace 可观测能力请查看 [Trace Observability](docs/tracing.md)。
 - 确定性回归用例、指标和 CI 方案请查看 [Evaluation Harness](docs/evaluation.md)。
 - 工具/handoff 审批、LightFlow 持久化审核、批量决策和反馈请查看 [Human Review](docs/human_review.md)。
+- 持久化 Session、Capability Provider、Policy、Inbox、Goals、Budgets、Jobs、上下文压缩、子 Agent、Skills/MCP 更新和 SQLite FTS5 检索，请查看 [LightAgent v0.10 Runtime](docs/runtime_v010.md)。
 
 ---
 
