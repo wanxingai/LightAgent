@@ -35,7 +35,8 @@
 ---
 
 ## Новости
-- <img src="https://img.alicdn.com/imgextra/i3/O1CN01SFL0Gu26nrQBFKXFR_!!6000000007707-2-tps-500-500.png" alt="new" width="30" height="30"/>**[2026-07-30]** Выпущен LightAgent v0.9.6: добавлены производственные сводки и экспорт Trace, детерминированная оценка, сохраняемое человеческое одобрение для инструментов, handoff и LightFlow, а также fail-closed допуск записей и аудит общей Graph Memory.
+- <img src="https://img.alicdn.com/imgextra/i3/O1CN01SFL0Gu26nrQBFKXFR_!!6000000007707-2-tps-500-500.png" alt="new" width="30" height="30"/>**[2026-08-15]** Выпущен LightAgent v0.9.7: добавлен лёгкий Connector-контракт без зависимостей с офлайн-валидацией и примерами, усилены проверки безопасности Python executor, добавлена опциональная матрица безопасности Mem0 Graph и подготовлена стабилизация v1.0 с помощью перечня совместимости публичного API.
+- **[2026-07-30]** Выпущен LightAgent v0.9.6: добавлены производственные сводки и экспорт Trace, детерминированная оценка, сохраняемое человеческое одобрение для инструментов, handoff и LightFlow, а также fail-closed допуск записей и аудит общей Graph Memory.
 - **[2026-06-24]** LightAgent v0.9.0: добавлены сохраняемые checkpoint для LightFlow, resume/rerun, узлы утверждения, более ясные состояния шагов, trace-метаданные, шаблоны Guardrails, управление MemoryPolicy и прототип SharedMemoryPool.
 - **[2026-06-14]** LightAgent v0.8.1: добавлены соглашения MemoryScope и фильтры MemoryPolicy по источнику, области и уровню доверия.
 - **[2026-06-02]** LightAgent v0.8.0: представлен LightFlow для детерминированных многошаговых workflow.

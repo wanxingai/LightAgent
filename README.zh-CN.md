@@ -55,7 +55,8 @@
 
 ---
 ## 新闻
-- <img src="https://img.alicdn.com/imgextra/i3/O1CN01SFL0Gu26nrQBFKXFR_!!6000000007707-2-tps-500-500.png" alt="new" width="30" height="30"/>**[2026-07-30]** LightAgent v0.9.6 正式发布：新增生产级 Trace 汇总与导出、确定性评测、工具、handoff 和 LightFlow 的可持久化人工审批，以及共享 Graph Memory 的 fail-closed 写入准入与审计控制。
+- <img src="https://img.alicdn.com/imgextra/i3/O1CN01SFL0Gu26nrQBFKXFR_!!6000000007707-2-tps-500-500.png" alt="new" width="30" height="30"/>**[2026-08-15]** LightAgent v0.9.7 正式发布：新增轻量、零依赖的 Connector 契约及离线校验与示例，强化 Python 执行器安全检查，补充可选的 Mem0 Graph 安全验证矩阵，并通过公共 API 兼容性清单为 v1.0 稳定化做准备。
+- **[2026-07-30]** LightAgent v0.9.6 正式发布：新增生产级 Trace 汇总与导出、确定性评测、工具、handoff 和 LightFlow 的可持久化人工审批，以及共享 Graph Memory 的 fail-closed 写入准入与审计控制。
 - **[2026-07-10]** LightAgent v0.9.3 正式发布：补全 `after_run`、`on_error` 和记忆检索 Hooks 生命周期，新增独立的 `max_tool_iterations` 流式工具循环上限并保持 `max_retry` 向后兼容，同时完善错误收尾、Trace 和回归测试。
 - **[2026-06-24]** LightAgent v0.9.0 开发版：新增可持久化 LightFlow checkpoint、resume/rerun、审批节点、更清晰的步骤状态和 trace 元数据，同时补充 Guardrails 模板、MemoryPolicy 控制和 SharedMemoryPool 原型。
 - **[2026-06-14]** LightAgent v0.8.1 开发版：新增 MemoryScope 元数据约定、MemoryPolicy 来源/范围/可信度过滤，并补充 Trace、用户记忆、自我反思记忆和 LightSwarm 委托状态的边界说明。

@@ -39,7 +39,8 @@
 ---
 
 ## 新聞
-- <img src="https://img.alicdn.com/imgextra/i3/O1CN01SFL0Gu26nrQBFKXFR_!!6000000007707-2-tps-500-500.png" alt="new" width="30" height="30"/>**[2026-07-30]** LightAgent v0.9.6 正式發布：新增生產級 Trace 彙總與匯出、確定性評測、工具、handoff 與 LightFlow 的可持久化人工審批，以及共享 Graph Memory 的 fail-closed 寫入准入與稽核控制。
+- <img src="https://img.alicdn.com/imgextra/i3/O1CN01SFL0Gu26nrQBFKXFR_!!6000000007707-2-tps-500-500.png" alt="new" width="30" height="30"/>**[2026-08-15]** LightAgent v0.9.7 正式發布：新增輕量、零依賴的 Connector 契約及離線驗證與範例，強化 Python 執行器安全檢查，補充可選的 Mem0 Graph 安全驗證矩陣，並透過公共 API 相容性清單為 v1.0 穩定化做準備。
+- **[2026-07-30]** LightAgent v0.9.6 正式發布：新增生產級 Trace 彙總與匯出、確定性評測、工具、handoff 與 LightFlow 的可持久化人工審批，以及共享 Graph Memory 的 fail-closed 寫入准入與稽核控制。
 - **[2026-06-24]** LightAgent v0.9.0 開發版：新增可持久化 LightFlow checkpoint、resume/rerun、審批節點、更清楚的步驟狀態與 trace metadata，並補充 Guardrails 範本、MemoryPolicy 控制與 SharedMemoryPool 原型。
 - **[2026-06-14]** LightAgent v0.8.1 開發版：新增 MemoryScope metadata 約定、MemoryPolicy 來源/範圍/可信度過濾，並說明 Trace、使用者記憶、自我反思記憶與 LightSwarm 委派狀態的邊界。
 - **[2026-06-02]** LightAgent v0.8.0 開發版：新增 LightFlow 工作流程編排，支援確定性多步驟 Agent 執行、DAG 依賴、步驟輸出傳遞、重試與 flow trace 事件。
