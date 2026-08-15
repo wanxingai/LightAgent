@@ -1,4 +1,5 @@
 import asyncio
+import json
 from types import SimpleNamespace
 
 from LightAgent import BudgetLimits, InMemorySessionStore, LightAgent
@@ -16,6 +17,39 @@ class StaticCompletions:
             choices=[SimpleNamespace(message=message)],
             usage=SimpleNamespace(prompt_tokens=2, completion_tokens=1, total_tokens=3),
         )
+
+
+class ToolCallCompletions:
+    def __init__(self):
+        self.requests = []
+
+    def create(self, **kwargs):
+        self.requests.append(kwargs)
+        if len(self.requests) == 1:
+            tool_call = SimpleNamespace(
+                id="call-add",
+                function=SimpleNamespace(name="add", arguments=json.dumps({"a": 2, "b": 3})),
+            )
+            return SimpleNamespace(
+                choices=[SimpleNamespace(message=SimpleNamespace(content=None, tool_calls=[tool_call]))]
+            )
+        return SimpleNamespace(
+            choices=[SimpleNamespace(message=SimpleNamespace(content="five", tool_calls=None))]
+        )
+
+
+def add(a, b):
+    return a + b
+
+
+add.tool_info = {
+    "tool_name": "add",
+    "tool_description": "Add two numbers.",
+    "tool_params": [
+        {"name": "a", "type": "number", "description": "First", "required": True},
+        {"name": "b", "type": "number", "description": "Second", "required": True},
+    ],
+}
 
 
 def make_agent(replies, **kwargs):
@@ -90,3 +124,107 @@ def test_model_call_budget_blocks_before_second_request():
 
     assert second.startswith("[LA-BUDGET]")
     assert agent.replay_session()["failed_turns"]
+
+
+def test_tool_call_persists_balanced_request_and_result_events():
+    store = InMemorySessionStore()
+    agent = LightAgent(
+        model="test-model",
+        api_key="test-key",
+        auto_discover_skills=False,
+        session_store=store,
+    )
+    completions = ToolCallCompletions()
+    agent.client = SimpleNamespace(chat=SimpleNamespace(completions=completions))
+
+    assert agent.run("add", tools=[add], session_id="tools") == "five"
+
+    session = store.get("tools")
+    requested = [event for event in session.events if event.type == "tool.requested"]
+    completed = [event for event in session.events if event.type == "tool.completed"]
+    assert len(requested) == len(completed) == 1
+    assert requested[0].data["name"] == completed[0].data["name"] == "add"
+    assert requested[0].turn_id == completed[0].turn_id
+    assert requested[0].run_id == completed[0].run_id
+    assert session.replay().incomplete_turns == []
+
+
+def test_model_exception_persists_failed_model_run_and_turn():
+    class FailingCompletions:
+        def create(self, **kwargs):
+            raise RuntimeError("provider unavailable")
+
+    store = InMemorySessionStore()
+    agent, _ = make_agent(["unused"], session_store=store)
+    agent.client = SimpleNamespace(chat=SimpleNamespace(completions=FailingCompletions()))
+
+    result = agent.run("hello", session_id="failed", result_format="object")
+
+    session = store.get("failed")
+    types = [event.type for event in session.events]
+    assert result.error
+    assert types.count("model.requested") == 1
+    assert types.count("model.failed") == 1
+    assert types.count("run.failed") == 1
+    assert types.count("turn.failed") == 1
+    assert session.replay().failed_turns
+    assert session.replay().incomplete_turns == []
+
+
+def test_astream_closes_sync_iterator_when_consumer_stops_early():
+    closed = []
+
+    def stream_values():
+        try:
+            yield "first"
+            yield "second"
+        finally:
+            closed.append(True)
+
+    agent, _ = make_agent(["unused"])
+    agent.run = lambda query, **kwargs: stream_values()
+
+    async def consume_one():
+        stream = await agent.arun("hello", stream=True)
+        assert await anext(stream) == "first"
+        await stream.aclose()
+
+    asyncio.run(consume_one())
+
+    assert closed == [True]
+
+
+def test_public_session_control_apis_persist_events_and_fork():
+    store = InMemorySessionStore()
+    agent, _ = make_agent(["answer"], session_store=store)
+    agent.run("hello", session_id="control")
+
+    checkpoint = agent.checkpoint_session("before review")
+    agent.pause_session("review")
+    agent.resume_session("approved")
+    agent.cancel_session("finished")
+    forked = agent.fork_session(through_sequence=checkpoint["sequence"])
+
+    session = store.get("control")
+    assert [event.type for event in session.events[-4:]] == [
+        "session.checkpointed", "session.paused", "session.resumed", "session.cancelled"
+    ]
+    assert forked.metadata["forked_from"] == "control"
+    assert store.get(forked.session_id) is not None
+
+
+def test_public_compact_session_reduces_projected_history_and_persists_event():
+    store = InMemorySessionStore()
+    agent, _ = make_agent(["one", "two", "three"], session_store=store)
+    agent.run("first", session_id="compact")
+    agent.run("second", session_id="compact")
+    agent.run("third", session_id="compact")
+
+    result = agent.compact_session(max_messages=2)
+
+    assert result["removed_count"] > 0
+    assert len(result["messages"]) <= 2
+    persisted = store.get("compact")
+    event = persisted.events[-1]
+    assert event.type == "context.compacted"
+    assert event.data["removed_count"] == result["removed_count"]

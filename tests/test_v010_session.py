@@ -1,4 +1,5 @@
 import json
+import sqlite3
 
 import pytest
 
@@ -105,3 +106,92 @@ def test_jsonl_store_rejects_truncated_event(tmp_path):
 
     with pytest.raises(json.JSONDecodeError):
         store.get(session.session_id)
+
+
+@pytest.mark.parametrize("store_factory", [
+    lambda path: InMemorySessionStore(),
+    lambda path: JsonlSessionStore(path / "jsonl"),
+    lambda path: SqliteSessionStore(path / "sessions.sqlite3"),
+])
+def test_session_store_list_delete_and_duplicate_create(tmp_path, store_factory):
+    store = store_factory(tmp_path)
+    store.create(Session(session_id="one"))
+    store.create(Session(session_id="two"))
+
+    assert {session.session_id for session in store.list(limit=2)} == {"one", "two"}
+    with pytest.raises(ValueError, match="already exists"):
+        store.create(Session(session_id="one"))
+    assert store.delete("one") is True
+    assert store.delete("one") is False
+    assert store.get("one") is None
+
+
+def test_session_page_append_event_and_future_schema_validation():
+    session = Session(session_id="session")
+    first = session.append("one")
+    session.append_event(SessionEvent(type="two", session_id="session"))
+
+    assert [event.type for event in session.page(after=first.sequence, limit=1)] == ["two"]
+    with pytest.raises(ValueError, match="limit must be at least 1"):
+        session.page(limit=0)
+    with pytest.raises(ValueError, match="does not match"):
+        session.append_event(SessionEvent(type="bad", session_id="other"))
+
+    payload = session.to_dict()
+    payload["events"][0]["schema_version"] = 999
+    with pytest.raises(ValueError, match="unsupported SessionEvent schema_version"):
+        Session.from_dict(payload)
+
+
+def test_in_memory_store_rejects_stale_session_save():
+    store = InMemorySessionStore()
+    original = Session(session_id="session")
+    original.append("first")
+    stale = store.create(original)
+    current = store.get("session")
+    current.append("second")
+    store.save(current)
+
+    with pytest.raises(ValueError, match="older event sequence"):
+        store.save(stale)
+
+
+def test_jsonl_atomic_save_failure_preserves_previous_session(tmp_path, monkeypatch):
+    from LightAgent import session as session_module
+
+    store = JsonlSessionStore(tmp_path)
+    current = store.create(Session(session_id="atomic"))
+    current.append("durable.event", {"value": 1})
+    store.save(current)
+    before = store.get("atomic").to_dict()
+    current.append("new.event", {"value": 2})
+
+    def fail_replace(source, destination):
+        raise OSError("simulated replace failure")
+
+    monkeypatch.setattr(session_module.os, "replace", fail_replace)
+    with pytest.raises(OSError, match="simulated replace failure"):
+        store.save(current)
+
+    assert store.get("atomic").to_dict() == before
+
+
+def test_sqlite_store_rejects_corrupt_persisted_event(tmp_path):
+    path = tmp_path / "sessions.sqlite3"
+    store = SqliteSessionStore(path)
+    store.create(Session(session_id="corrupt"))
+    with sqlite3.connect(path) as connection:
+        connection.execute(
+            "INSERT INTO session_events(session_id, sequence, event_id, payload) VALUES (?, ?, ?, ?)",
+            ("corrupt", 1, "bad-event", "{not-json"),
+        )
+
+    with pytest.raises(json.JSONDecodeError):
+        store.get("corrupt")
+
+
+def test_jsonl_store_rejects_unsafe_session_id(tmp_path):
+    store = JsonlSessionStore(tmp_path)
+
+    with pytest.raises(ValueError, match="unsafe characters"):
+        store.create(Session(session_id="../escape"))

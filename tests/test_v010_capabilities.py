@@ -29,6 +29,19 @@ class EchoProvider(BaseCapabilityProvider):
         return self.prefix + arguments["text"]
 
 
+class ControlledProvider(BaseCapabilityProvider):
+    name = "controlled"
+
+    def __init__(self, spec, result="result"):
+        super().__init__([spec])
+        self.result = result
+
+    async def invoke(self, capability, **arguments):
+        if arguments.get("wait"):
+            await asyncio.sleep(arguments["wait"])
+        return self.result
+
+
 def test_provider_lifecycle_and_health():
     provider = EchoProvider()
     context = RuntimeContext(runtime_id="runtime")
@@ -104,3 +117,76 @@ def test_audit_contains_digest_but_not_credentials():
     decision = next(data for event, data in events if event == "policy.decision")
     assert len(decision["configuration_digest"]) == 64
     assert "do-not-audit" not in repr(decision)
+
+
+@pytest.mark.parametrize("fail_closed,allowed", [(True, False), (False, True)])
+def test_policy_exception_respects_fail_closed_mode(fail_closed, allowed):
+    async def broken_policy(request):
+        await asyncio.sleep(0)
+        raise RuntimeError("policy backend unavailable")
+
+    engine = PolicyEngine([broken_policy], fail_closed=fail_closed)
+    request = RuntimeContext()
+    registry = CapabilityRegistry(policy_engine=engine)
+    registry.register(EchoProvider())
+
+    if allowed:
+        assert asyncio.run(registry.invoke("text.echo", {"text": "ok"}, context=request)) == "ok"
+    else:
+        with pytest.raises(PermissionError, match="policy `broken_policy` failed: RuntimeError"):
+            asyncio.run(registry.invoke("text.echo", {"text": "ok"}, context=request))
+
+
+def test_capability_requires_approval_before_provider_invocation():
+    provider = ControlledProvider(CapabilitySpec("dangerous.write", requires_approval=True))
+    registry = CapabilityRegistry()
+    registry.register(provider)
+
+    with pytest.raises(PermissionError, match="requires approval"):
+        asyncio.run(registry.invoke("dangerous.write"))
+
+
+def test_capability_timeout_and_output_limit_are_enforced():
+    timed = ControlledProvider(CapabilitySpec("slow.read", timeout=0.01))
+    limited = ControlledProvider(CapabilitySpec("limited.read", output_limit=4), result="abcdefgh")
+    limited.name = "limited"
+    registry = CapabilityRegistry()
+    registry.register(timed)
+    registry.register(limited)
+
+    with pytest.raises(asyncio.TimeoutError):
+        asyncio.run(registry.invoke("slow.read", {"wait": 0.05}))
+    assert asyncio.run(registry.invoke("limited.read")) == "abcd"
+
+
+def test_registry_lifecycle_reload_unregister_and_reverse_stop_order():
+    calls = []
+
+    class LifecycleProvider(EchoProvider):
+        async def stop(self):
+            calls.append(f"stop:{self.name}")
+            await super().stop()
+
+        async def unmount(self):
+            calls.append(f"unmount:{self.name}")
+            await super().unmount()
+
+    first = LifecycleProvider()
+    first.name = "first"
+    second = LifecycleProvider()
+    second.name = "second"
+    registry = CapabilityRegistry()
+    registry.register(first)
+    registry.register(second)
+
+    async def scenario():
+        await registry.mount(RuntimeContext(runtime_id="runtime"))
+        await registry.reload("first", {"mode": "strict"})
+        assert await registry.unregister("missing") is False
+        assert await registry.unregister("second") is True
+        await registry.stop()
+
+    asyncio.run(scenario())
+
+    assert first.config == {"mode": "strict"}
+    assert calls == ["stop:second", "unmount:second", "stop:first", "unmount:first"]

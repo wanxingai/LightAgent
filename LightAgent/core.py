@@ -750,11 +750,16 @@ class LightAgent:
         options["stream"] = True
         stream_result = await asyncio.to_thread(self.run, query, **options)
         sentinel = object()
-        while True:
-            chunk = await asyncio.to_thread(next, stream_result, sentinel)
-            if chunk is sentinel:
-                return
-            yield chunk
+        try:
+            while True:
+                chunk = await asyncio.to_thread(next, stream_result, sentinel)
+                if chunk is sentinel:
+                    return
+                yield chunk
+        finally:
+            close = getattr(stream_result, "close", None)
+            if callable(close):
+                await asyncio.to_thread(close)
 
     def get_session(self, session_id: str | None = None) -> Session | None:
         """Return a detached copy of the current or requested Session."""

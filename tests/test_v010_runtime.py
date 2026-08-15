@@ -93,3 +93,123 @@ def test_subagent_permissions_are_frozen_and_tree_is_inspectable():
 
     assert result == "HELLO"
     assert runtime.subagents.tree()[0]["status"] == "success"
+
+
+def test_steering_waits_for_safe_boundary_and_rejection_is_restored():
+    store = InMemorySessionStore()
+    runtime = AgentRuntime(session_store=store)
+    runtime.open_session("inbox")
+    message = runtime.inbox.enqueue("steering", "change direction")
+
+    assert runtime.inbox.claim_next(safe_boundary=False) is None
+    claimed = runtime.inbox.claim_next(safe_boundary=True)
+    assert claimed.message_id == message.message_id
+    runtime.inbox.reject(message.message_id, "unsafe request")
+
+    restored = AgentRuntime(session_store=store)
+    restored.open_session("inbox")
+    assert restored.inbox.get(message.message_id).status == InboxMessageStatus.REJECTED
+
+
+def test_goal_terminal_state_and_evidence_are_restored():
+    store = InMemorySessionStore()
+    runtime = AgentRuntime(session_store=store)
+    runtime.open_session("goals")
+    goal = runtime.goals.create("release", acceptance_criteria=["tests pass"])
+    runtime.goals.activate(goal.goal_id)
+    runtime.goals.complete(goal.goal_id, evidence=[{"suite": "passed"}])
+
+    with pytest.raises(ValueError, match="terminal goal"):
+        runtime.goals.block(goal.goal_id, "too late")
+
+    restored = AgentRuntime(session_store=store)
+    restored.open_session("goals")
+    completed = restored.goals.get(goal.goal_id)
+    assert completed.status == GoalStatus.COMPLETED
+    assert completed.evidence == [{"suite": "passed"}]
+
+
+@pytest.mark.parametrize("dimension,value", [
+    ("model_calls", 2),
+    ("tool_calls", 2),
+    ("tokens", 11),
+    ("seconds", 1.5),
+    ("cost", 0.6),
+])
+def test_each_budget_dimension_fails_without_committing_usage(dimension, value):
+    runtime = AgentRuntime(budget_limits=BudgetLimits(**{dimension: value / 2}))
+    runtime.open_session()
+
+    with pytest.raises(BudgetExceeded) as exc_info:
+        runtime.budget.consume(**{dimension: value})
+
+    assert exc_info.value.dimension == dimension
+    assert getattr(runtime.budget.usage, dimension) == 0
+    assert runtime.session.events[-1].type == "budget.exhausted"
+
+
+def test_background_job_failure_is_persisted_and_reported_to_inbox():
+    async def scenario():
+        runtime = AgentRuntime()
+        runtime.open_session()
+
+        async def fail():
+            raise RuntimeError("job failed")
+
+        record = runtime.jobs.start("failure", fail)
+        return runtime, await runtime.jobs.wait(record.job_id)
+
+    runtime, failed = asyncio.run(scenario())
+
+    assert failed.status == JobStatus.FAILED
+    assert failed.error == "RuntimeError: job failed"
+    assert runtime.inbox.pending()[0].metadata["kind"] == "job_completion"
+    assert any(event.type == "job.failed" for event in runtime.session.events)
+
+
+def test_background_job_cancellation_and_interrupted_restore():
+    store = InMemorySessionStore()
+
+    async def scenario():
+        runtime = AgentRuntime(session_store=store)
+        runtime.open_session("jobs")
+        started = asyncio.Event()
+
+        async def wait_forever():
+            started.set()
+            await asyncio.Event().wait()
+
+        record = runtime.jobs.start("cancelled", wait_forever)
+        await started.wait()
+        assert runtime.jobs.cancel(record.job_id)
+        return runtime, await runtime.jobs.wait(record.job_id)
+
+    runtime, cancelled = asyncio.run(scenario())
+    assert cancelled.status == JobStatus.CANCELLED
+
+    pending_event = runtime.session.append("job.created", {
+        "job": {**cancelled.to_dict(), "job_id": "interrupted", "status": "running"}
+    })
+    assert pending_event.type == "job.created"
+    store.save(runtime.session)
+    restored = AgentRuntime(session_store=store)
+    restored.open_session("jobs")
+    assert restored.jobs.get("interrupted").status == JobStatus.INTERRUPTED
+
+
+def test_runtime_pause_resume_cancel_checkpoint_and_fork_are_durable():
+    store = InMemorySessionStore()
+    runtime = AgentRuntime(session_store=store)
+    runtime.open_session("control")
+    runtime.pause("manual review")
+    checkpoint = runtime.checkpoint("reviewed")
+    runtime.resume("approved")
+    runtime.cancel("operator stop")
+    forked = runtime.fork(through_sequence=checkpoint.sequence)
+
+    persisted_types = [event.type for event in store.get("control").events]
+    assert persisted_types[-4:] == [
+        "session.paused", "session.checkpointed", "session.resumed", "session.cancelled"
+    ]
+    assert forked.metadata["forked_from"] == "control"
+    assert forked.metadata["forked_at_sequence"] == checkpoint.sequence

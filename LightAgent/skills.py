@@ -183,12 +183,12 @@ class SkillManager:
         scripts_root = Path(skill.path, "scripts").resolve()
         script_path = (scripts_root / script_name).resolve()
 
-        if not script_path.exists():
-            return f"Error: Script '{script_path}' not found in skill '{skill_name}'"
-
         # 安全检查：只允许执行scripts目录下的文件
         if not script_path.is_relative_to(scripts_root):
             return "Error: Security violation - cannot execute outside scripts directory"
+
+        if not script_path.exists():
+            return f"Error: Script '{script_path}' not found in skill '{skill_name}'"
 
         try:
             # 在临时目录中执行以提供隔离

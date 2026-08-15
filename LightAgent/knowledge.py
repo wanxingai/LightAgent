@@ -361,6 +361,8 @@ class SkillProviderAdapter(BaseCapabilityProvider):
         if capability == "skill.list":
             return [asdict(skill) for skill in self.skill_manager.skills.values()]
         method_name = capability.removeprefix("skill.")
+        if method_name == "activate":
+            method_name = "activate_skill"
         method = getattr(self.skill_manager, method_name)
         return method(**arguments)
 
