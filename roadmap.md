@@ -1,6 +1,6 @@
 # LightAgent Roadmap
 
-Last updated: 2026-07-30
+Last updated: 2026-08-09
 
 LightAgent should continue to evolve as a lightweight, low-dependency agent
 framework rather than a broad replacement for LangChain, LangGraph, CrewAI, or
@@ -55,6 +55,17 @@ ecosystem.**
   rewrite/keep `MemoryPromotionDecision` handling, `before_memory_promote` and
   `after_memory_promote` hooks, promotion trace events, fail-closed promotion
   policy behavior, and optional OSS/NOS `boto3` dependencies.
+- **v0.9.6**: Added production trace summaries and exporters, deterministic
+  evaluation, tool/handoff human review, durable LightFlow approvals, review
+  batches, human feedback, and shared Graph Memory fail-closed write admission
+  and audit controls.
+
+### In Development
+
+- **v0.9.7**: Added the dependency-free Connector manifest and offline
+  validation contract, two credential-free examples, expanded Python executor
+  adversarial checks, an opt-in real Mem0 Graph security matrix, and the first
+  v1.0 public API compatibility inventory. Pending pull request and release.
 
 ### Completed Milestone Details
 
@@ -105,7 +116,9 @@ result = flow.run("Analyze this company")
 
 ### Open Pull Requests
 
-- No open pull requests as of 2026-07-30.
+- No open pull requests as of 2026-08-09. PR #85 was merged before v0.9.7
+  development; v0.9.7 builds on it with broader adversarial and false-positive
+  regression coverage plus explicit execution-safety documentation.
 
 ### Active Issues
 
@@ -124,37 +137,39 @@ P1 engineering work:
   retrieval-filter audit counts. The remaining acceptance criterion is an
   opt-in test against the exact Mem0 Graph version and storage configuration
   used in production.
+- **#5 Custom plugin/integration development**: define a small connector
+  contract that can bundle Tools, Skills, MCP settings, Hooks, memory adapters,
+  optional dependencies, and docs without creating a heavy marketplace or
+  required plugin runtime.
+- **#1 Enhanced memory management for multi-agent systems**: keep shared-memory
+  adapter hardening active until durable graph/vector backends have explicit
+  tenant, provenance, conflict, and trust-boundary tests.
 
 P2 issues:
-
-- **#5 Custom plugin/integration development**: narrow this to a lightweight
-  connector contract built on Tools, Skills, MCP, Hooks, and `MemoryProtocol`.
-  Keep optional dependencies and network access outside the default runtime.
-
-Resolved or ready to close:
-
-- **#1 Enhanced memory management for multi-agent systems**: the initial
-  `SharedMemoryPool` prototype, provenance metadata, scoped retrieval,
-  `MemoryPolicy` compatibility, documentation, and tests are complete. Track
-  durable storage, access control, and conflict handling in focused follow-ups.
-- **#33 Optional ClawMem memory backend**: #74 delivered the optional
-  dependency-free adapter example, documentation, and fake-client tests.
-
-Not planned for the core repository:
 
 - **#26 External API tool bundle**: accept only focused, provider-owned tool
   examples with no secrets, live CI calls, or required core dependencies.
 - **#50 Nautilus A2A registry/discovery proposal**: keep vendor registration,
   wallets, and token economics in an external optional connector.
 
+Resolved or ready to close:
+
+- **#33 Optional ClawMem memory backend**: #74 delivered the optional
+  dependency-free adapter example, documentation, and fake-client tests.
+
+Not planned for the core repository:
+
+- Broad marketplace, hosted review UI, hosted observability dashboard, or
+  external API bundle in the default package.
+
 ## Near-Term Version Plan
 
 This section records the planned direction for the next several LightAgent
-versions after `v0.9.5`. Exact scope can still change as issues, pull requests,
+versions after `v0.9.6`. Exact scope can still change as issues, pull requests,
 and user feedback evolve, but the intended product direction is:
 
-**explicit memory promotion + safer shared memory + reliable hooks + better
-observability + stable APIs + enterprise-friendly integration.**
+**security validation + lightweight connectors + safer execution tools +
+stable APIs + production documentation.**
 
 ### v0.8.3 Goals: LightFlow Execution Controls
 
@@ -508,7 +523,7 @@ control, not as a general tool or workflow approval system.
 
 ### v0.9.6: Observability, Evaluation, And Human Review
 
-Status: implemented in v0.9.6; pending review and release.
+Status: completed in v0.9.6 and released on 2026-07-30.
 
 Goal: improve production debugging, measurement, and human control over
 high-risk actions after the memory-promotion boundary and memory-scoped review
@@ -567,6 +582,80 @@ Expected outcome:
 LightAgent should support production environments where teams need to measure
 agent quality, inspect failures, review memory-promotion decisions, and keep
 humans in control of high-impact external side effects.
+
+### v0.9.7: Security Validation, Connector Contract, And Release Hardening
+
+Status: implemented and locally validated; pending pull request and release.
+
+Goal: close the remaining security and extensibility gaps before the v1.0 API
+freeze. v0.9.7 should be a bridge release: small enough to ship quickly, but
+strong enough to reduce release risk around Python execution, shared memory,
+and third-party integrations.
+
+Primary themes:
+
+- **Security validation first**: finish the #39 backend-level validation track
+  before declaring shared Graph Memory risks fully handled.
+- **Safer execution tools**: build on merged #85 and extend Python executor
+  tests beyond direct imports into attribute access, `getattr`, subscripted
+  lookups, dynamic dispatch, import aliases, and builtins escape patterns.
+- **Lightweight connector contract**: address #5 with a small Python-native
+  contract for packaging Tools, Skills, MCP server settings, Hooks, memory
+  adapters, optional dependencies, and documentation.
+- **v1.0 readiness**: tighten public API inventory, compatibility promises,
+  examples, packaging, and release notes before the stable line.
+
+Implemented work:
+
+- Add a `docs/security_shared_graph_memory_validation.md` guide that separates
+  framework-level mitigations from backend-specific Mem0 Graph validation.
+- Add an opt-in Graph Memory regression matrix for the exact Mem0 Graph version
+  and storage settings used by maintainers or downstream deployments.
+- Add adversarial memory tests for cross-user poisoning, low-trust relation
+  mutation, trusted-fact overwrite, entity-neighborhood merge, and retrieval
+  audit counts.
+- Extended merged #85 with a table-driven `_safe_import_check` regression suite
+  for direct calls, attribute-style calls, dynamic dispatch helpers, import
+  aliases, `__dict__`/subscript access, and safe false-positive cases.
+- Document Python executor limitations clearly: AST filtering is defense in
+  depth, not a complete sandbox; high-risk deployments should wrap
+  `execute_python_code` with `PolicyHook`, Human Review, container isolation,
+  timeout limits, network restrictions, and dependency-install controls.
+- Introduce a minimal connector manifest shape, such as a dataclass or plain
+  dictionary, with fields for `name`, `version`, `tools`, `skills`,
+  `mcp_servers`, `hooks`, `memory_adapters`, `extras`, and `docs`.
+- Add connector validation utilities that inspect tool schemas, optional
+  dependency declarations, unsafe import hints, duplicate tool names, and
+  missing documentation without loading network services.
+- Provide two dependency-free connector examples:
+  - a local research connector that bundles a search-style tool and a Skill;
+  - an enterprise API connector skeleton that shows auth/config placeholders
+    without shipping secrets or provider SDKs.
+- Add a contributor guide for "build a connector in 10 minutes" using existing
+  Tools, Skills, MCP, Hooks, and `MemoryProtocol` primitives.
+- Prepare v1.0 compatibility docs: public API inventory, deprecation policy,
+  supported Python versions, dependency extras, and example coverage matrix.
+
+Release gates:
+
+- #39 has either a private-security follow-up path or a documented public
+  validation status that avoids overstating remediation.
+- #85 or equivalent Python executor hardening tests pass locally and in CI.
+- Connector contract remains optional and dependency-free in the core package.
+- Existing `LightAgent`, `LightSwarm`, `LightFlow`, tracing, evaluation,
+  review, memory, and streaming compatibility tests remain green.
+- Docs clearly distinguish built-in primitives from optional integration
+  examples.
+
+Local validation on the development branch: 193 passed, 1 opt-in Mem0 Graph
+test skipped, package compilation and wheel build passed, and `git diff
+--check` passed. Multi-version GitHub CI remains a pull-request release gate.
+
+Expected outcome:
+
+LightAgent should enter the v1.0 stabilization phase with fewer loose security
+threads, a practical answer to custom integrations, and clearer boundaries
+around what the lightweight core will and will not own.
 
 ### v1.0.0: Stable API And Production Documentation
 
@@ -917,7 +1006,7 @@ surface, limited to memory promotion decisions.
 
 ### v0.9.6 Workstream: Observability, Evaluation, And Human Review
 
-Status: implemented in v0.9.6; pending review and release.
+Status: completed in v0.9.6 and released on 2026-07-30.
 
 Goal: support production teams that need measurement, review, and control over
 agent behavior after the memory-promotion boundary and memory-review slice are
@@ -940,6 +1029,51 @@ explicit.
 LightAgent should support workflows where a model can plan and prepare actions,
 but humans retain control over important external side effects and memory
 promotion decisions.
+
+### v0.9.7 Workstream: Security Validation And Connector Contract
+
+Status: implemented and locally validated; pending pull request and release.
+
+Goal: harden the remaining high-risk surfaces and define a minimal custom
+integration path before the v1.0 API freeze.
+
+### Implemented Work
+
+- Treat #39 shared Graph Memory validation as the top security workstream:
+  keep public wording conservative, move reproduction/version scoping into an
+  appropriate private advisory workflow, and add backend-specific opt-in tests.
+- Build on merged #85 with broader Python executor AST blocklist hardening.
+- Expand Python executor security regression tests for:
+  - `builtins.eval`, `builtins.exec`, and `builtins.compile`;
+  - `getattr(obj, "eval")`, `getattr(obj, "system")`, and similar helpers;
+  - `obj.__dict__["eval"](...)` and other subscripted call patterns;
+  - aliased imports and nested dangerous module access;
+  - benign math/list/string code that should remain allowed.
+- Add docs that position `execute_python_code` as a controlled utility, not a
+  complete sandbox. Recommend tool allowlists, `PolicyHook`, Human Review,
+  container-level isolation, timeout limits, and dependency-install controls.
+- Define a dependency-free connector manifest and validation helper for #5.
+- Show how a connector can bundle:
+  - one or more Python tools;
+  - Skills and `SKILL.md` instructions;
+  - MCP server settings;
+  - lifecycle hooks;
+  - optional memory adapters;
+  - optional dependency extras;
+  - usage docs and examples.
+- Add at least two connector examples that run without live credentials.
+- Update docs so contributors understand the difference between core
+  primitives, optional connectors, and unsupported marketplace/runtime hosting.
+- Start v1.0 compatibility inventory for public imports, dataclasses, hook
+  phases, trace event names, review-store methods, LightFlow store methods,
+  and memory protocol behavior.
+
+### Expected Outcome
+
+LightAgent should have a safer Python execution story, a clearer response to
+the shared Graph Memory disclosure, and a small but useful extension path for
+domain integrations, while keeping v1.0 focused on stability instead of new
+surface area.
 
 ### v1.0.0 Workstream: Stable API And Ecosystem
 
@@ -1041,22 +1175,24 @@ building lightweight production agents.
 
 ### Next P1
 
-- v1.0.0 public API stabilization, compatibility contracts, deprecation policy,
-  and production documentation.
-- Durable memory-review queue examples that build on v0.9.5 promotion
-  candidates without becoming required core dependencies.
-- Shared-memory adapter hardening for follow-up #39 work, especially realistic
-  graph-backend tests, tenant boundaries, provenance checks, and protection
-  against low-trust mutation of higher-trust facts.
-- External trace/audit adapters and production review-queue examples built on
-  the v0.9.6 exporter and approval contracts.
+- Merge and release the completed v0.9.7 security validation and connector
+  contract before v1.0.
+- #39 shared Graph Memory backend-level validation, tenant/provenance tests,
+  and public/private advisory wording.
+- Close #5 after the v0.9.7 Connector manifest, offline validator, and
+  dependency-free examples are merged.
+- v1.0 public API inventory, compatibility contracts, deprecation policy, and
+  production documentation preparation.
 
 ### P2
 
+- Durable memory-review queue examples that build on v0.9.5 promotion
+  candidates without becoming required core dependencies.
+- External trace/audit adapters and production review-queue examples built on
+  the v0.9.6 exporter and approval contracts.
 - Database-backed workflow and shared-memory adapters.
 - Stronger idempotency and distributed execution controls for persistent
   workflows.
-- Lightweight plugin/connector contract for #5.
 - Focused external provider examples only when maintained outside the core
   dependency set.
 
@@ -1067,10 +1203,11 @@ building lightweight production agents.
 
 ## Next Development Recommendation
 
-After v0.9.6, the next development target should be **v1.0.0 Stable API And
-Production Documentation**. The main runtime, workflow, memory-safety,
-observability, evaluation, and human-review primitives now exist; the next
-priority is making their contracts stable and consistently documented.
+After v0.9.7 is reviewed and released, the next development target should be
+**v1.0.0 Stable API And Production Documentation**. The main runtime,
+workflow, memory-safety, observability, evaluation, human-review, and Connector
+primitives now exist; the next priority is freezing the documented public API
+and completing production release automation.
 
 Reasoning:
 
@@ -1085,18 +1222,27 @@ Reasoning:
 - v0.9.6 adds trace summaries/exporters, deterministic evaluation, tool and
   handoff review, durable LightFlow approvals, human feedback, and the first
   fake-backend #39 cross-user graph-memory regression.
+- Public GitHub state still shows #39 and #5 as open P1 issues. v0.9.7
+  implements #5's narrowed Connector scope, while #39 remains open until the
+  exact maintained Mem0 Graph configurations run the opt-in matrix.
 - Follow-up #39 work keeps durable shared-memory poisoning, provenance, and
   multi-agent memory boundaries as active P1 concerns.
+- The merged #85 hardening now has broader adversarial tests and explicit
+  documentation that AST filtering is not a complete sandbox.
+- #5 is best addressed before v1.0 as a lightweight connector contract, not a
+  broad marketplace or new plugin runtime.
 - Database-backed durability should stay optional so the core package remains
   lightweight.
 
-Suggested first implementation slice:
+Completed v0.9.7 implementation slice:
 
-1. Publish a supported public API inventory and compatibility matrix.
-2. Add a deprecation policy and warnings for any API that must change.
-3. Tighten type hints and protocol contracts for run results, memory, tracing,
-   evaluation, review stores, and workflow stores.
-4. Build a production documentation and example matrix for single-agent,
-   streaming, tools, memory, LightSwarm, LightFlow, evaluation, and review.
-5. Validate packaging, installation, and examples across Python 3.10-3.13.
-6. Continue #39 backend-level security validation as a focused parallel track.
+1. Documented the #39 security response boundary and added a backend-specific
+   opt-in Graph Memory validation test.
+2. Built on merged #85 and expanded Python executor adversarial blocklist and
+   safe false-positive coverage.
+3. Added Python executor safety docs and recommended `PolicyHook` / Human Review
+   wrappers for high-risk deployments.
+4. Defined a Connector manifest and offline validator without adding required
+   runtime dependencies.
+5. Added two dependency-free Connector examples and a contributor guide.
+6. Published the first v1.0 public API inventory and compatibility matrix.

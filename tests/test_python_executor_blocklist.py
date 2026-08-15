@@ -4,6 +4,8 @@ CWE-184: Ensures the AST-based blocklist in _safe_import_check covers
 both direct Name calls and Attribute calls for eval/exec/compile.
 """
 
+import pytest
+
 from LightAgent.builtin_tools.python_executor import _safe_import_check
 
 
@@ -152,3 +154,38 @@ class TestSafeImportCheckBlocklist:
     def test_allows_len_and_range(self):
         safe, msg = _safe_import_check("items = list(range(10))\ncount = len(items)")
         assert safe, f"len/range should pass: {msg}"
+
+
+@pytest.mark.parametrize("code,expected", [
+    ("from os.path import join\njoin('a', 'b')", "os.path"),
+    ("import subprocess as runner\nrunner.run(['id'])", "subprocess"),
+    ("from builtins import eval as calculate\ncalculate('1+1')", "eval"),
+    ("danger = eval\ndanger('1+1')", "eval"),
+    ("danger = builtins.eval\ndanger('1+1')", "eval"),
+    ("name = 'ev' + 'al'\ngetattr(builtins, name)('1+1')", "eval"),
+    ("key = 'ex' + 'ec'\nbuiltins.__dict__[key]('x=1')", "exec"),
+    ("from operator import attrgetter\nattrgetter('system')(target)('id')", "attrgetter"),
+    ("dispatch = getattr\ndispatch(builtins, 'eval')('1+1')", "getattr"),
+    ("from operator import attrgetter as select\nselect('system')(target)('id')", "attrgetter"),
+    ("open('/tmp/lightagent-test', 'w')", "open"),
+    ("fn = __import__\nfn('os')", "__import__"),
+])
+def test_blocks_adversarial_alias_and_dynamic_dispatch_patterns(code, expected):
+    safe, message = _safe_import_check(code)
+
+    assert safe is False
+    assert expected in message
+
+
+@pytest.mark.parametrize("code", [
+    "import math\nresult = math.sqrt(9)",
+    "class Runner:\n    def run(self):\n        return 1\nresult = Runner().run()",
+    "scores = {'eval': 0.9}\nresult = scores['eval']",
+    "result = getattr('hello', 'upper')()",
+    "values = [item * 2 for item in range(3)]",
+    "text = 'systematic evaluation'\nprint(text)",
+])
+def test_allows_safe_false_positive_cases(code):
+    safe, message = _safe_import_check(code)
+
+    assert safe is True, message

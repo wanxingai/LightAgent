@@ -144,7 +144,11 @@ For deterministic multi-step workflows, checkpointed run records, resume/rerun, 
 
 For custom tool creation, runtime tools, ToolRegistry, ToolLoader, AsyncToolDispatcher, and MCP tool integration, see [Tools Guide](docs/tools.md).
 
+For packaging existing Tools, Skills, MCP settings, Hooks, and memory adapters into an offline-validatable extension, see [Lightweight Connectors](docs/connectors.md).
+
 For shared long-term memory or graph memory deployments, review the [Memory Security Guidance](docs/memory_security.md).
+
+For the opt-in Mem0 Graph backend security matrix and issue #39 validation boundary, see [Shared Graph Memory Security Validation](docs/security_shared_graph_memory_validation.md).
 
 For lightweight shared memory experiments, see [SharedMemoryPool](docs/shared_memory_pool.md).
 
@@ -167,6 +171,8 @@ For trace observability, summaries, and external export, see [Trace Observabilit
 For deterministic regression cases, metrics, and CI guidance, see [Evaluation Harness](docs/evaluation.md).
 
 For tool/handoff approval, durable LightFlow review, batches, and feedback, see [Human Review](docs/human_review.md).
+
+For the v1.0 stability proposal, supported Python versions, public imports, and compatibility promises, see [Public API And Compatibility Inventory](docs/public_api_compatibility.md).
 
 For browser-use integration with recent `browser-use` versions, see [browser-use Integration](docs/browser_use.md).
 

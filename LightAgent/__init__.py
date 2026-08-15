@@ -61,6 +61,13 @@ from .logger import LoggerManager
 from .mcp_client_manager import MCPClientManager
 from .skills import SkillManager, Skill
 from .skill_tools import create_skill_tools
+from .connectors import (
+    ConnectorDiagnostic,
+    ConnectorManifest,
+    ConnectorValidationReport,
+    ConnectorValidator,
+    validate_connector,
+)
 from .builtin_tools.python_executor import (
     execute_python_code,
     execute_python_file,
@@ -130,6 +137,11 @@ __all__ = [
     "SkillManager",
     "Skill",
     "create_skill_tools",
+    "ConnectorDiagnostic",
+    "ConnectorManifest",
+    "ConnectorValidationReport",
+    "ConnectorValidator",
+    "validate_connector",
     "execute_python_code",
     "execute_python_file",
     "execute_python_code_stream",

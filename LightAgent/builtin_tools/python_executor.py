@@ -19,6 +19,26 @@ import ast
 from typing import Dict, Any, List, Optional, Union, Tuple
 
 
+_DANGEROUS_MODULES = frozenset({
+    "__builtins__",
+    "ctypes",
+    "glob",
+    "importlib",
+    "os",
+    "pickle",
+    "pty",
+    "shelve",
+    "shutil",
+    "socket",
+    "subprocess",
+    "sys",
+})
+_DANGEROUS_BUILTINS = frozenset({"__import__", "compile", "eval", "exec", "input", "open", "raw_input"})
+_DANGEROUS_ATTRIBUTES = frozenset({"compile", "eval", "exec", "popen", "system"})
+_PROCESS_ATTRIBUTES = frozenset({"Popen", "call", "check_call", "check_output", "run"})
+_DANGEROUS_DYNAMIC_ATTRIBUTES = _DANGEROUS_BUILTINS | _DANGEROUS_ATTRIBUTES | _PROCESS_ATTRIBUTES
+
+
 def _parse_code_parameter(code_param: Union[str, Dict, Any]) -> str:
     """
     解析可能包含在各种格式中的代码参数
@@ -156,6 +176,102 @@ def _extract_code_from_text(text: str) -> str:
     return text
 
 
+def _literal_string(node: ast.AST, constants: Dict[str, str]) -> Optional[str]:
+    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+        return node.value
+    if isinstance(node, ast.Name):
+        return constants.get(node.id)
+    if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Add):
+        left = _literal_string(node.left, constants)
+        right = _literal_string(node.right, constants)
+        if left is not None and right is not None:
+            return left + right
+    if isinstance(node, ast.JoinedStr):
+        parts = []
+        for value in node.values:
+            if not isinstance(value, ast.Constant) or not isinstance(value.value, str):
+                return None
+            parts.append(value.value)
+        return "".join(parts)
+    return None
+
+
+def _resolved_name(node: ast.AST, aliases: Dict[str, str], constants: Dict[str, str]) -> Optional[str]:
+    if isinstance(node, ast.Name):
+        return aliases.get(node.id, node.id)
+    if isinstance(node, ast.Attribute):
+        parent = _resolved_name(node.value, aliases, constants)
+        return f"{parent}.{node.attr}" if parent else node.attr
+    if isinstance(node, ast.Subscript):
+        parent = _resolved_name(node.value, aliases, constants)
+        key = _literal_string(node.slice, constants)
+        if parent and key:
+            return f"{parent}.{key}"
+    if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
+        dispatch_name = aliases.get(node.func.id, node.func.id).split(".")[-1]
+        if dispatch_name not in {"getattr", "attrgetter"}:
+            return None
+        attribute_index = 1 if dispatch_name == "getattr" else 0
+        if len(node.args) > attribute_index:
+            attribute = _literal_string(node.args[attribute_index], constants)
+            if attribute:
+                parent = _resolved_name(node.args[0], aliases, constants) if dispatch_name == "getattr" else "dynamic"
+                return f"{parent or 'dynamic'}.{attribute}"
+    return None
+
+
+def _dynamic_dispatch(
+        node: ast.AST,
+        aliases: Dict[str, str],
+        constants: Dict[str, str],
+) -> Optional[tuple[str, str]]:
+    if not isinstance(node, ast.Call):
+        return None
+    if isinstance(node.func, ast.Name):
+        dispatch_name = aliases.get(node.func.id, node.func.id).split(".")[-1]
+        if dispatch_name not in {"getattr", "attrgetter"}:
+            return _dynamic_dispatch(node.func, aliases, constants)
+        attribute_index = 1 if dispatch_name == "getattr" else 0
+        if len(node.args) > attribute_index:
+            attribute = _literal_string(node.args[attribute_index], constants)
+            if attribute:
+                return dispatch_name, attribute
+    return _dynamic_dispatch(node.func, aliases, constants)
+
+
+def _collect_static_bindings(tree: ast.AST) -> tuple[Dict[str, str], Dict[str, str]]:
+    aliases: Dict[str, str] = {}
+    constants: Dict[str, str] = {}
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                aliases[alias.asname or alias.name.split(".", 1)[0]] = alias.name
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            for alias in node.names:
+                aliases[alias.asname or alias.name] = f"{node.module}.{alias.name}"
+        elif isinstance(node, (ast.Assign, ast.AnnAssign)):
+            targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+            value = node.value
+            literal = _literal_string(value, constants) if value is not None else None
+            for target in targets:
+                if isinstance(target, ast.Name) and literal is not None:
+                    constants[target.id] = literal
+
+    # Resolve callable aliases and aliases that depend on constant strings.
+    for _ in range(3):
+        for node in ast.walk(tree):
+            if not isinstance(node, (ast.Assign, ast.AnnAssign)):
+                continue
+            targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+            value = node.value
+            resolved = _resolved_name(value, aliases, constants) if value is not None else None
+            for target in targets:
+                if isinstance(target, ast.Name) and resolved and resolved != target.id:
+                    aliases[target.id] = resolved
+    return aliases, constants
+
+
 def _safe_import_check(code: str) -> tuple[bool, str]:
     """
     检查代码中的导入是否安全
@@ -166,50 +282,58 @@ def _safe_import_check(code: str) -> tuple[bool, str]:
     Returns:
         (是否安全, 错误信息)
     """
-    dangerous_modules = ['os', 'subprocess', 'sys', 'shutil', 'glob',
-                         'pickle', 'shelve', 'ctypes', 'pty', 'socket',
-                         'importlib', '__builtins__', 'eval', 'exec',
-                         'compile', 'open', 'input', 'raw_input']
-
     try:
         tree = ast.parse(code)
+        aliases, constants = _collect_static_bindings(tree)
         for node in ast.walk(tree):
-            # 检查导入语句
             if isinstance(node, ast.Import):
                 for alias in node.names:
-                    if alias.name in dangerous_modules:
-                        return False, f"禁止导入危险模块 '{alias.name}'"
-                    # 检查是否尝试导入子模块
-                    if any(alias.name.startswith(mod + '.') for mod in dangerous_modules):
+                    root_module = alias.name.split(".", 1)[0]
+                    if root_module in _DANGEROUS_MODULES:
                         return False, f"禁止导入危险模块 '{alias.name}'"
             elif isinstance(node, ast.ImportFrom):
-                if node.module in dangerous_modules:
+                root_module = (node.module or "").split(".", 1)[0]
+                if root_module in _DANGEROUS_MODULES:
                     return False, f"禁止从危险模块 '{node.module}' 导入"
-                # 检查导入的函数是否危险
                 if node.module in ['builtins', '__builtins__']:
                     for alias in node.names:
-                        if alias.name in ['eval', 'exec', 'compile', 'open', 'input']:
+                        if alias.name in _DANGEROUS_BUILTINS:
                             return False, f"禁止使用内置函数 '{alias.name}'"
-
-            # 检查函数调用
             elif isinstance(node, ast.Call):
+                resolved_call = _resolved_name(node.func, aliases, constants) or ""
+                call_parts = resolved_call.split(".")
+                root_name = call_parts[0] if call_parts else ""
+                final_name = call_parts[-1] if call_parts else ""
+
+                dispatch = _dynamic_dispatch(node.func, aliases, constants)
+                if dispatch and dispatch[1] in _DANGEROUS_DYNAMIC_ATTRIBUTES:
+                    return False, f"禁止通过 {dispatch[0]} 访问危险函数 '{dispatch[1]}'"
+
                 if isinstance(node.func, ast.Name):
-                    if node.func.id in ['eval', 'exec', 'compile', '__import__']:
-                        return False, f"禁止使用 '{node.func.id}' 函数"
-                    # Block getattr with constant dangerous attribute name
-                    if node.func.id == 'getattr' and len(node.args) >= 2:
-                        second_arg = node.args[1]
-                        if isinstance(second_arg, ast.Constant) and isinstance(second_arg.value, str):
-                            if second_arg.value in ['eval', 'exec', 'compile', '__import__', 'system', 'popen', 'call', 'run']:
-                                return False, f"禁止通过 getattr 访问危险函数 '{second_arg.value}'"
-                elif isinstance(node.func, ast.Attribute):
-                    if node.func.attr in ['system', 'popen', 'call', 'run', 'eval', 'exec', 'compile']:
-                        return False, f"禁止使用危险函数 '{node.func.attr}'"
-                # Block subscript access to dangerous functions: obj['eval'](...)
-                elif isinstance(node.func, ast.Subscript):
-                    if isinstance(node.func.slice, ast.Constant) and isinstance(node.func.slice.value, str):
-                        if node.func.slice.value in ['eval', 'exec', 'compile', '__import__']:
-                            return False, f"禁止通过下标访问危险函数 '{node.func.slice.value}'"
+                    if final_name in _DANGEROUS_BUILTINS:
+                        return False, f"禁止使用 '{final_name}' 函数"
+                    dispatch_name = aliases.get(node.func.id, node.func.id).split(".")[-1]
+                    if dispatch_name in {"getattr", "attrgetter"}:
+                        attribute_index = 1 if dispatch_name == "getattr" else 0
+                        if len(node.args) > attribute_index:
+                            attribute = _literal_string(node.args[attribute_index], constants)
+                            if attribute in _DANGEROUS_DYNAMIC_ATTRIBUTES:
+                                return False, f"禁止通过 {dispatch_name} 访问危险函数 '{attribute}'"
+
+                if final_name in _DANGEROUS_BUILTINS | _DANGEROUS_ATTRIBUTES:
+                    return False, f"禁止使用危险函数 '{final_name}'"
+                if final_name in _PROCESS_ATTRIBUTES and root_name in _DANGEROUS_MODULES:
+                    return False, f"禁止通过危险模块调用 '{resolved_call}'"
+
+                if isinstance(node.func, ast.Subscript):
+                    key = _literal_string(node.func.slice, constants)
+                    if key in _DANGEROUS_DYNAMIC_ATTRIBUTES:
+                        return False, f"禁止通过下标访问危险函数 '{key}'"
+
+            elif isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load):
+                resolved = aliases.get(node.id, node.id)
+                if resolved.split(".")[-1] in _DANGEROUS_BUILTINS:
+                    return False, f"禁止引用危险内置函数 '{resolved.split('.')[-1]}'"
     except SyntaxError as e:
         return False, f"语法错误：{str(e)}"
 
