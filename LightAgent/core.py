@@ -43,6 +43,24 @@ from .guardrails import GuardrailManager
 from .mcp_client_manager import MCPClientManager
 from .skills import SkillManager
 from .skill_tools import create_skill_tools
+from .capabilities import (
+    CapabilityRegistry,
+    CapabilityRisk,
+    CapabilityScope,
+    CapabilitySpec,
+    MemoryProviderAdapter,
+    PolicyEngine,
+    PolicyRequest,
+    ToolProviderAdapter,
+)
+from .runtime import AgentRuntime, BudgetExceeded, BudgetLimits
+from .session import (
+    ContextBudget,
+    ContextCompactor,
+    ContextProjector,
+    Session,
+    SessionStore,
+)
 # 新增：导入内置工具
 from .builtin_tools.python_executor import (
     execute_python_code,
@@ -119,6 +137,12 @@ class LightAgent:
             tool_guardrails: List[Callable[..., Any]] | None = None,  # 工具调用安全策略
             output_guardrails: List[Callable[..., Any]] | None = None,  # 输出安全策略
             hooks: List[Callable[..., Any] | PolicyHook] | None = None,  # 运行期 hook / middleware
+            session_store: SessionStore | None = None,  # v0.10 Session 持久化后端
+            capability_registry: CapabilityRegistry | None = None,  # v0.10 能力注册表
+            policy_engine: PolicyEngine | None = None,  # v0.10 统一能力策略
+            budget_limits: BudgetLimits | None = None,  # v0.10 长任务预算
+            context_budget: ContextBudget | None = None,  # 可选模型上下文预算
+            context_compactor: ContextCompactor | None = None,  # 可选上下文压缩器
             debug: bool = False,  # 是否启用调试模式
             log_level: str = "INFO",  # 日志级别（INFO, DEBUG, ERROR）
             log_file: Optional[str] = None,  # 日志文件路径
@@ -148,6 +172,12 @@ class LightAgent:
         :param tool_guardrails: 工具调用安全策略列表，返回 False、原因字符串、dict 或 GuardrailDecision 可阻止工具执行。
         :param output_guardrails: 输出安全策略列表，返回 False、原因字符串、dict 或 GuardrailDecision 可阻止非流式输出。
         :param hooks: 运行期 hook 列表，可观察、替换或阻断指定生命周期阶段。
+        :param session_store: 可选 SessionStore；默认使用进程内存储且不影响旧调用方式。
+        :param capability_registry: 可选 CapabilityRegistry，用于统一 Provider 生命周期与策略。
+        :param policy_engine: 可选能力策略引擎；传入 registry 时应优先配置 registry 自身策略。
+        :param budget_limits: 可选模型调用、工具调用、token、时间和成本预算。
+        :param context_budget: 可选上下文 token 预算。
+        :param context_compactor: 可选两阶段上下文压缩器。
         :param debug: 是否启用调试模式。
         :param log_level: 日志级别（INFO, DEBUG, ERROR）。
         :param log_file: 日志文件路径。
@@ -199,6 +229,8 @@ class LightAgent:
         self._parent_trace_id: str | None = None
         self._run_group_id: str | None = None
         self._memory_promotion_candidates: list[MemoryCandidate] = []
+        self.context_budget = context_budget
+        self.context_compactor = context_compactor or ContextCompactor()
         # 确保 log 目录存在
         log_dir = 'logs'
         if not os.path.exists(log_dir):
@@ -283,6 +315,21 @@ class LightAgent:
         self.tracetools = tracetools
         self.chat_params = {}  # history 存储器
         self._trace_recorder = TraceRecorder(enabled=False)
+        registry = capability_registry or CapabilityRegistry(policy_engine=policy_engine)
+        if capability_registry is not None and policy_engine is not None:
+            registry.policy_engine = policy_engine
+        self.runtime = AgentRuntime(
+            session_store=session_store,
+            capability_registry=registry,
+            budget_limits=budget_limits,
+        )
+        self.capability_registry = self.runtime.registry
+        self.capability_registry.audit = self._record_session_event
+        self._register_builtin_providers()
+        self._current_session_id: str | None = None
+        self._current_turn_id: str | None = None
+        self._session_turn_finished = True
+        self._session_store_error: str | None = None
 
     def _initialize_clients(self, tracetools, tot_api_key, tot_base_url, tot_model):
         """初始化 OpenAI 客户端"""
@@ -436,6 +483,7 @@ class LightAgent:
             parent_trace_id: str | None = None,
             run_group_id: str | None = None,
             approval_id: str | None = None,
+            session_id: str | None = None,
     ) -> Union[Generator[str, None, None], str, RunResult]:
         """
         运行代理，处理用户输入。
@@ -455,6 +503,7 @@ class LightAgent:
         :param parent_trace_id: 可选父 trace，用于 LightFlow、LightSwarm 或应用层嵌套调用。
         :param run_group_id: 可选运行组 ID，用于把多个 sibling traces 归到同一任务。
         :param approval_id: 可选人工审批请求 ID，仅传给运行期 hooks，不发送给模型服务。
+        :param session_id: 可选持久化 Session ID。省略时每次调用创建独立的内存 Session。
         :return: 代理的回复。
         """
         if result_format not in ("str", "object", "dict", "event"):
@@ -499,6 +548,14 @@ class LightAgent:
         self._memory_write_count = 0
         self._memory_write_fingerprints = set()
         self._memory_promotion_candidates = []
+        self._budget_error = None
+        projected_history = self._begin_session_run(
+            session_id=session_id,
+            query=query,
+            user_id=str(user_id),
+            metadata=dict(metadata or {}),
+            stream=stream,
+        )
         if self.debug and hasattr(self, 'logger'):  # 仅在 debug=True 且 logger 存在时记录日志
             self.logger.set_traceid(traceid)
         self.log("INFO", "run_start", {"query": query, "user_id": user_id, "stream": stream})
@@ -554,7 +611,7 @@ class LightAgent:
             query = input_decision.value
 
         # 初始化历史记录
-        history = history or []
+        history = projected_history if history is None and session_id is not None else (history or [])
 
         # 处理运行时传入的工具
         runtime_tools = []
@@ -675,11 +732,196 @@ class LightAgent:
             return result
         return self._format_run_result(result, result_format, traceid)
 
+    async def arun(self, query: str, **kwargs: Any) -> Any:
+        """Run without blocking the caller's event loop.
+
+        Sync model and tool clients are isolated in a worker thread for v0.9
+        compatibility. Native async Providers and Jobs remain on the caller's
+        event loop through ``CapabilityRegistry`` and ``AgentRuntime``.
+        """
+        stream = bool(kwargs.get("stream", False))
+        if not stream:
+            return await asyncio.to_thread(self.run, query, **kwargs)
+        return self.astream(query, **kwargs)
+
+    async def astream(self, query: str, **kwargs: Any) -> AsyncGenerator[Any, None]:
+        """Expose the legacy streaming generator as a cancellable async iterator."""
+        options = dict(kwargs)
+        options["stream"] = True
+        stream_result = await asyncio.to_thread(self.run, query, **options)
+        sentinel = object()
+        try:
+            while True:
+                chunk = await asyncio.to_thread(next, stream_result, sentinel)
+                if chunk is sentinel:
+                    return
+                yield chunk
+        finally:
+            close = getattr(stream_result, "close", None)
+            if callable(close):
+                await asyncio.to_thread(close)
+
+    def get_session(self, session_id: str | None = None) -> Session | None:
+        """Return a detached copy of the current or requested Session."""
+        resolved = session_id or self._current_session_id
+        return self.runtime.session_store.get(resolved) if resolved else None
+
+    def export_session(self, session_id: str | None = None) -> Dict[str, Any]:
+        session = self.get_session(session_id)
+        if session is None:
+            raise KeyError(session_id or "current session")
+        return session.to_dict()
+
+    def replay_session(self, session_id: str | None = None) -> Dict[str, Any]:
+        session = self.get_session(session_id)
+        if session is None:
+            raise KeyError(session_id or "current session")
+        return session.replay().to_dict()
+
+    def checkpoint_session(
+            self,
+            label: str | None = None,
+            metadata: Dict[str, Any] | None = None,
+    ) -> Dict[str, Any]:
+        return self.runtime.checkpoint(label, metadata).to_dict()
+
+    def fork_session(
+            self,
+            *,
+            through_sequence: int | None = None,
+            metadata: Dict[str, Any] | None = None,
+    ) -> Session:
+        return self.runtime.fork(through_sequence=through_sequence, metadata=metadata)
+
+    def compact_session(
+            self,
+            *,
+            max_messages: int = 20,
+            session_id: str | None = None,
+    ) -> Dict[str, Any]:
+        session = self.get_session(session_id)
+        if session is None:
+            raise KeyError(session_id or "current session")
+        result = self.context_compactor.compact(ContextProjector().messages(session), max_messages=max_messages)
+        target = self.runtime.session if self.runtime.session and self.runtime.session.session_id == session.session_id else session
+        target.append("context.compacted", {
+            "messages": result.messages,
+            "removed_count": result.removed_count,
+            "summary": result.summary,
+            "spilled": result.spilled,
+        })
+        self.runtime.session_store.save(target)
+        return {
+            "messages": result.messages,
+            "removed_count": result.removed_count,
+            "summary": result.summary,
+            "spilled": result.spilled,
+        }
+
+    def pause_session(self, reason: str | None = None) -> None:
+        self._record_session_event("session.paused", {"reason": reason})
+
+    def resume_session(self, reason: str | None = None) -> None:
+        self._record_session_event("session.resumed", {"reason": reason})
+
+    def cancel_session(self, reason: str | None = None) -> None:
+        self._record_session_event("session.cancelled", {"reason": reason})
+
+    async def invoke_capability(self, capability: str, **arguments: Any) -> Any:
+        """Invoke one registered capability through Policy and audit."""
+        return await self.capability_registry.invoke(
+            capability,
+            arguments,
+            context=self.runtime.context,
+        )
+
+    def _begin_session_run(
+            self,
+            *,
+            session_id: str | None,
+            query: str,
+            user_id: str,
+            metadata: Dict[str, Any],
+            stream: bool,
+    ) -> List[Dict[str, Any]]:
+        self.runtime.open_session(
+            session_id,
+            metadata=metadata,
+            agent_id=self.name,
+            user_id=user_id,
+        )
+        current = self.runtime.session
+        projected = ContextProjector().messages(current) if current is not None else []
+        self._current_session_id = current.session_id if current is not None else None
+        self._current_turn_id = uuid4().hex
+        self._session_turn_finished = False
+        self._session_store_error = None
+        self.runtime.context.turn_id = self._current_turn_id
+        self.runtime.context.run_id = self._current_run_id
+        self.runtime.context.metadata = deepcopy(metadata)
+        self._record_session_event("turn.started", {
+            "query": query,
+            "stream": stream,
+            "trace_id": self.traceid,
+        })
+        self._record_session_event("message.received", {"role": "user", "content": query})
+        return projected
+
+    def _register_builtin_providers(self) -> None:
+        existing = {item["name"] for item in self.capability_registry.list()}
+        if "tools" not in existing:
+            self.capability_registry.register(ToolProviderAdapter(self.tool_registry), scope=CapabilityScope.RUNTIME)
+        if self.memory is not None and "memory" not in existing:
+            self.capability_registry.register(MemoryProviderAdapter(self.memory), scope=CapabilityScope.RUNTIME)
+
+    def _record_session_event(self, event_type: str, data: Dict[str, Any] | None = None) -> Any:
+        if not getattr(self, "runtime", None) or self.runtime.session is None:
+            return None
+        try:
+            session = self.runtime.session
+            event = session.append(
+                event_type,
+                data or {},
+                turn_id=getattr(self, "_current_turn_id", None),
+                run_id=getattr(self, "_current_run_id", None),
+                agent_id=self.name,
+            )
+            self.runtime.session_store.save(session)
+            return event
+        except Exception as error:
+            self._session_store_error = f"{type(error).__name__}: {error}"
+            self.log("ERROR", "session_store_error", {"error": self._session_store_error})
+            return None
+
     def _record_trace(self, event_type: str, data: Dict[str, Any] | None = None):
-        """Record a trace event when tracing is enabled."""
+        """Record compatible Trace and durable Session views from one event."""
+        trace_data = deepcopy(data or {})
+        session_type = {
+            "run_start": "run.started",
+            "model_request": "model.requested",
+            "model_response": "assistant.completed",
+            "tool_call": "tool.requested",
+            "tool_result": "tool.completed",
+            "guardrail_block": "policy.blocked",
+            "hook_block": "policy.blocked",
+            "error": "error.recorded",
+            "handoff": "handoff.requested",
+            "run_end": "run.completed" if trace_data.get("success") else "run.failed",
+        }.get(event_type, "trace.recorded")
+        session_data = {
+            **trace_data,
+            "trace_type": event_type,
+            "trace_data": trace_data,
+            "trace_id": getattr(self, "traceid", None),
+            "parent_trace_id": getattr(self, "_parent_trace_id", None),
+            "run_group_id": getattr(self, "_run_group_id", None),
+        }
+        if event_type == "model_request":
+            session_data["messages"] = deepcopy(getattr(self, "chat_params", {}).get("messages", []))
+        self._record_session_event(session_type, session_data)
         recorder = getattr(self, "_trace_recorder", None)
         if recorder:
-            return recorder.record(event_type, data)
+            return recorder.record(event_type, trace_data)
         return None
 
     def _run_hooks(
@@ -746,6 +988,20 @@ class LightAgent:
             extra: Dict[str, Any] | None = None,
     ) -> HookDecision:
         """Close a run with on_error/after_run hooks and a run_end trace event."""
+        started_at = getattr(self, "_run_started_at", None)
+        duration_seconds = (time.perf_counter() - started_at) if started_at is not None else 0.0
+        budget_error = getattr(self, "_budget_error", None)
+        if budget_error:
+            success = False
+            error = error or budget_error
+            stage = stage or "budget"
+        try:
+            if duration_seconds:
+                self.runtime.budget.consume(seconds=duration_seconds)
+        except BudgetExceeded as exceeded:
+            success = False
+            error = error or format_error_code("LA-BUDGET", str(exceeded))
+            stage = stage or "budget"
         payload = {
             "success": success,
             "content": content,
@@ -769,7 +1025,6 @@ class LightAgent:
             run_end["stage"] = stage
         if extra:
             run_end.update(extra)
-        started_at = getattr(self, "_run_started_at", None)
         if started_at is not None:
             run_end["duration_ms"] = round((time.perf_counter() - started_at) * 1000, 3)
         run_end["model_request_count"] = int(getattr(self, "_model_request_count", 0))
@@ -779,6 +1034,12 @@ class LightAgent:
         if usage:
             run_end["usage"] = usage
         self._record_trace("run_end", run_end)
+        if not getattr(self, "_session_turn_finished", True):
+            self._record_session_event("turn.completed" if success else "turn.failed", {
+                **run_end,
+                "content": content,
+            })
+            self._session_turn_finished = True
         return decision
 
     def _notify_error(self, *, stage: str, error: str, **payload: Any) -> HookDecision:
@@ -795,6 +1056,7 @@ class LightAgent:
         return format_error_code("LA-HOOK", details)
 
     def _prepare_model_request(self) -> str | None:
+        self._compact_model_context()
         decision = self._run_hooks("before_model_request", {"params": deepcopy(self.chat_params)})
         if decision.action == HOOK_BLOCK:
             return self._format_hook_error("before_model_request", decision.reason)
@@ -802,12 +1064,29 @@ class LightAgent:
             params = decision.payload.get("params", decision.payload)
             if isinstance(params, dict):
                 self.chat_params = params
+        try:
+            self.runtime.budget.consume(model_calls=1)
+        except BudgetExceeded as error:
+            return format_error_code("LA-BUDGET", str(error))
         self._model_request_count = int(getattr(self, "_model_request_count", 0)) + 1
         request_data = self._build_model_request_trace(self.chat_params)
         request_data["request_index"] = self._model_request_count
         self._pending_model_trace_event = self._record_trace("model_request", request_data)
         self._pending_model_started_at = time.perf_counter()
         return None
+
+    def _compact_model_context(self) -> None:
+        messages = self.chat_params.get("messages", [])
+        if not self.context_budget or self.context_budget.fits(messages):
+            return
+        compacted = self.context_compactor.compact_to_budget(messages, self.context_budget)
+        self.chat_params["messages"] = compacted.messages
+        self._record_session_event("context.compacted", {
+            "removed_count": compacted.removed_count,
+            "summary": compacted.summary,
+            "spilled": compacted.spilled,
+            "estimated_tokens": self.context_budget.estimate(compacted.messages),
+        })
 
     def _complete_model_request(
             self,
@@ -833,6 +1112,17 @@ class LightAgent:
                 event.data["usage"] = usage
             if error is not None:
                 event.data["error_type"] = error.__class__.__name__
+        self._record_session_event("model.failed" if error is not None else "model.completed", {
+            "request_index": int(getattr(self, "_model_request_count", 0)),
+            "latency_ms": latency_ms,
+            "usage": usage,
+            "error_type": error.__class__.__name__ if error is not None else None,
+        })
+        if usage:
+            try:
+                self.runtime.budget.consume(tokens=int(usage.get("total_tokens", 0)))
+            except BudgetExceeded as exceeded:
+                self._budget_error = format_error_code("LA-BUDGET", str(exceeded))
         self._last_model_trace_event = event
         self._pending_model_trace_event = None
         self._pending_model_started_at = None
@@ -934,6 +1224,38 @@ class LightAgent:
         return arguments, error_msg
 
     def _prepare_tool_call(self, tool_name: str, arguments: Dict[str, Any]) -> tuple[Dict[str, Any], str | None]:
+        spec = CapabilitySpec(
+            name=f"tool.{tool_name}",
+            description=str(self.tool_registry.function_info.get(tool_name, {}).get("tool_description", "")),
+            execute=True,
+            risk=CapabilityRisk.SENSITIVE,
+            cancellable=True,
+        )
+        policy_decision = self.capability_registry.policy_engine.evaluate_sync(PolicyRequest(
+            capability=spec,
+            provider_name="tools",
+            arguments=deepcopy(arguments),
+            context=self.runtime.context,
+        ))
+        self._record_session_event("policy.decision", {
+            "provider": "tools",
+            "capability": spec.name,
+            "allowed": policy_decision.allowed,
+            "requires_approval": policy_decision.requires_approval,
+            "reason": policy_decision.reason,
+        })
+        if not policy_decision.allowed:
+            state = "requires approval" if policy_decision.requires_approval else "was denied"
+            return arguments, format_error_code(
+                "LA-POLICY",
+                f"capability `{spec.name}` {state}: {policy_decision.reason or 'policy decision'}",
+            )
+        if policy_decision.arguments is not None:
+            arguments = policy_decision.arguments
+        try:
+            self.runtime.budget.consume(tool_calls=1)
+        except BudgetExceeded as error:
+            return arguments, format_error_code("LA-BUDGET", str(error))
         arguments, guardrail_error = self._apply_tool_guardrails(tool_name, arguments)
         if guardrail_error:
             return arguments, guardrail_error

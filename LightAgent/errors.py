@@ -108,6 +108,36 @@ ERROR_TAXONOMY = {
         "A configured runtime hook blocked this operation.",
         "Review the hook decision, configured phase, and application policy before retrying.",
     ),
+    "LA-POLICY": LightAgentErrorInfo(
+        "LA-POLICY",
+        "The unified capability policy denied this operation.",
+        "Review Provider scope, permission snapshots, approval requirements, and Policy decisions.",
+    ),
+    "LA-BUDGET": LightAgentErrorInfo(
+        "LA-BUDGET",
+        "The configured runtime budget was exhausted.",
+        "Increase the relevant budget or resume with a narrower goal, tool set, or context.",
+    ),
+    "LA-SESSION": LightAgentErrorInfo(
+        "LA-SESSION",
+        "Session persistence or replay failed.",
+        "Inspect the SessionStore, event sequence, schema version, and latest checkpoint.",
+    ),
+    "LA-PROVIDER": LightAgentErrorInfo(
+        "LA-PROVIDER",
+        "A capability Provider failed or is unavailable.",
+        "Inspect Provider health, lifecycle state, configuration digest, and optional dependencies.",
+    ),
+    "LA-APPROVAL": LightAgentErrorInfo(
+        "LA-APPROVAL",
+        "This operation is waiting for explicit approval.",
+        "Resolve the approval request and resume the same Session or workflow run.",
+    ),
+    "LA-CANCELLED": LightAgentErrorInfo(
+        "LA-CANCELLED",
+        "The run, Job, workflow, or Session was cancelled.",
+        "Inspect the cancellation event and resume from a checkpoint when the operation is resumable.",
+    ),
     "LA-UNKNOWN": LightAgentErrorInfo(
         "LA-UNKNOWN",
         "An unexpected LightAgent error occurred.",

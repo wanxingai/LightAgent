@@ -1,6 +1,6 @@
 # LightAgent Roadmap
 
-Last updated: 2026-08-09
+Last updated: 2026-08-15
 
 LightAgent should continue to evolve as a lightweight, low-dependency agent
 framework rather than a broad replacement for LangChain, LangGraph, CrewAI, or
@@ -8,9 +8,9 @@ LlamaIndex.
 
 The product direction remains:
 
-**Lightweight core + composable Skills + reliable tool execution + observable
-traces + safe memory + deterministic workflows + OpenAI-compatible model
-ecosystem.**
+**Lightweight core + event-sourced Sessions + composable capability Providers +
+reliable tool execution + unified Policy + safe memory + deterministic
+workflows + OpenAI-compatible model ecosystem.**
 
 ## Current Status
 
@@ -59,13 +59,17 @@ ecosystem.**
   evaluation, tool/handoff human review, durable LightFlow approvals, review
   batches, human feedback, and shared Graph Memory fail-closed write admission
   and audit controls.
-
-### In Development
-
 - **v0.9.7**: Added the dependency-free Connector manifest and offline
   validation contract, two credential-free examples, expanded Python executor
   adversarial checks, an opt-in real Mem0 Graph security matrix, and the first
-  v1.0 public API compatibility inventory. Pending pull request and release.
+  public API compatibility inventory for the v1.0 stabilization line.
+
+### In Development
+
+- **v0.10.0**: Deliver the unified event-sourced Agent Runtime, combining
+  durable Sessions, native async execution, Capability Registry and Policy,
+  Inbox/Goals/Budgets, compaction and recovery, multi-Agent Jobs/Workflow, and
+  standardized Memory/Skills/MCP/RAG Providers while preserving v0.9.x APIs.
 
 ### Completed Milestone Details
 
@@ -116,9 +120,9 @@ result = flow.run("Analyze this company")
 
 ### Open Pull Requests
 
-- No open pull requests as of 2026-08-09. PR #85 was merged before v0.9.7
-  development; v0.9.7 builds on it with broader adversarial and false-positive
-  regression coverage plus explicit execution-safety documentation.
+- Live pull-request state changes faster than this roadmap and should be read
+  from GitHub. Documentation-only pull requests do not change the runtime
+  version plan or release gates recorded here.
 
 ### Active Issues
 
@@ -137,10 +141,6 @@ P1 engineering work:
   retrieval-filter audit counts. The remaining acceptance criterion is an
   opt-in test against the exact Mem0 Graph version and storage configuration
   used in production.
-- **#5 Custom plugin/integration development**: define a small connector
-  contract that can bundle Tools, Skills, MCP settings, Hooks, memory adapters,
-  optional dependencies, and docs without creating a heavy marketplace or
-  required plugin runtime.
 - **#1 Enhanced memory management for multi-agent systems**: keep shared-memory
   adapter hardening active until durable graph/vector backends have explicit
   tenant, provenance, conflict, and trust-boundary tests.
@@ -154,6 +154,9 @@ P2 issues:
 
 Resolved or ready to close:
 
+- **#5 Custom plugin/integration development**: v0.9.7 delivered the optional,
+  dependency-free Connector manifest, offline validator, examples, and
+  contributor documentation without adding a marketplace runtime.
 - **#33 Optional ClawMem memory backend**: #74 delivered the optional
   dependency-free adapter example, documentation, and fake-client tests.
 
@@ -165,11 +168,11 @@ Not planned for the core repository:
 ## Near-Term Version Plan
 
 This section records the planned direction for the next several LightAgent
-versions after `v0.9.6`. Exact scope can still change as issues, pull requests,
+versions after `v0.9.7`. Exact scope can still change as issues, pull requests,
 and user feedback evolve, but the intended product direction is:
 
-**security validation + lightweight connectors + safer execution tools +
-stable APIs + production documentation.**
+**event-sourced runtime + composable capability providers + unified policy +
+long-task control + recoverable context + stable APIs.**
 
 ### v0.8.3 Goals: LightFlow Execution Controls
 
@@ -585,7 +588,7 @@ humans in control of high-impact external side effects.
 
 ### v0.9.7: Security Validation, Connector Contract, And Release Hardening
 
-Status: implemented and locally validated; pending pull request and release.
+Status: released on 2026-08-15.
 
 Goal: close the remaining security and extensibility gaps before the v1.0 API
 freeze. v0.9.7 should be a bridge release: small enough to ship quickly, but
@@ -647,69 +650,284 @@ Release gates:
 - Docs clearly distinguish built-in primitives from optional integration
   examples.
 
-Local validation on the development branch: 193 passed, 1 opt-in Mem0 Graph
-test skipped, package compilation and wheel build passed, and `git diff
---check` passed. Multi-version GitHub CI remains a pull-request release gate.
+Release validation: 193 passed, 1 opt-in Mem0 Graph test skipped, package
+compilation and wheel build passed, `git diff --check` passed, and GitHub CI
+passed on Python 3.10, 3.11, 3.12, and 3.13.
 
 Expected outcome:
 
-LightAgent should enter the v1.0 stabilization phase with fewer loose security
+LightAgent enters the v0.10 runtime-evolution phase with fewer loose security
 threads, a practical answer to custom integrations, and clearer boundaries
 around what the lightweight core will and will not own.
 
-### v1.0.0: Stable API And Production Documentation
+### Post-v0.9.7 Runtime Design Guardrails
 
-Goal: freeze the public API surface and make LightAgent dependable for
-production users and contributors.
+The next development line should strengthen the runtime without turning the
+core package into a hosted platform or a mandatory collection of heavyweight
+integrations.
+
+- Preserve `agent.run("hello")`, `stream=True`, structured results, existing
+  Tools, Hooks, Memory backends, LightSwarm, and the LightFlow chain API.
+- Make every model-visible message, tool result, memory item, approval result,
+  steering message, and compaction summary reconstructable from durable Session
+  events.
+- Separate capability execution from policy decisions: a Provider implements
+  an operation, while Policy, Sandbox, Guardrails, and Approval decide whether
+  that operation may run.
+- Require child Agents, Skills, and Workflow steps to inherit or reduce parent
+  permissions; task code must never expand its own capability set.
+- Make the runtime async-first while retaining synchronous compatibility
+  wrappers.
+- Keep Browser, Docker, LSP, vector databases, WebUI frameworks, and hosted
+  services as optional Providers or upper-layer product capabilities.
+- Distinguish model errors, tool failures, policy denials, approval waits,
+  budget exhaustion, cancellation, and context overflow with explicit states
+  and error codes.
+
+### v0.10.0: Unified Event-Sourced Agent Runtime
+
+Status: implementation candidate completed on `codex/develop-v0.10.0`;
+release validation is in progress.
+
+Goal: deliver one coherent runtime release that combines the previously
+planned v0.10.0-v0.15.0 capabilities without breaking v0.9.x applications.
+The work remains ordered as six internal milestones, but there are no separate
+public v0.11.0-v0.15.0 releases in this plan.
+
+Implementation delivered in the v0.10.0 development PR:
+
+- Versioned Session events, in-memory/JSONL/SQLite stores, replay, pagination,
+  checkpoints, fork lineage, migration hooks, context/trace projection, and
+  explicit incomplete-Turn detection.
+- Compatible `arun()`/`astream()` entry points and durable model/tool/runtime
+  lifecycle recording without changing default `run()` return behavior.
+- Scoped Capability Registry, Provider lifecycle, deterministic conflict
+  diagnostics, narrowing-only permissions, unified Policy decisions, audit
+  configuration digests, and adapters for Tools, Memory, Skills, MCP, and
+  LightFlow.
+- Durable Inbox, Goals, Budgets, progress detection, Jobs, bounded subagents,
+  context budgets, deterministic/summary compaction, oversized-tool spill
+  references, Session control events, and restart restoration.
+- Deterministic Skill precedence, conflict reporting, nested `AGENTS.md`
+  discovery, MCP Streamable HTTP/reconnect/refresh/namespaces/credential
+  headers, SQLite FTS5 RAG, and citation-based cross-Session search.
+- Focused v0.10 protocol, persistence, corruption, policy, runtime, async,
+  compatibility, and retrieval tests plus complete legacy regression testing.
+
+External validation still required before release:
+
+- Python 3.10-3.13 GitHub Actions, package build/install, and real provider
+  smoke tests.
+- Fault injection against real MCP Streamable HTTP, process interruption,
+  concurrent persistent writes, and context-overflow provider responses.
+- Contract tests for optional Browser, Terminal, Shell, LSP, vector, sandbox,
+  and hosted-service Providers supplied outside the lightweight core.
+
+#### Milestone 1: Event-Sourced Sessions And Native Async
+
+- Add versioned `Session`, `SessionEvent`, and `SessionStore` contracts.
+- Define Session, Turn, Step, Message, Model, Tool, Approval, Error, and
+  lifecycle events with schema validation and migration hooks.
+- Provide dependency-free in-memory and JSONL stores plus an optional SQLite
+  store based on the Python standard library.
+- Add Session export, pagination, replay, recovery, and incomplete-Turn
+  detection.
+- Derive model context and the current `TraceRecorder` view from the same event
+  history instead of maintaining unrelated sources of truth.
+- Add native `agent.arun()` and retain `run()` as a compatibility wrapper.
+- Record balanced model request/response and tool request/result pairs with
+  explicit interrupted and failed terminal states.
+
+#### Milestone 2: Capability Registry And Unified Policy
+
+- Add `CapabilityProvider` and `CapabilityRegistry` protocols with mount,
+  start, health, reload, stop, and unmount lifecycle methods.
+- Support Runtime, Session, and Agent scopes with deterministic resolution and
+  conflict diagnostics.
+- Define protocols for Model, Tool, FileSystem, Shell, Terminal, Browser, Web,
+  LSP, Memory, RAG, Subagent, Workflow, Interaction, Sandbox, Credential,
+  Policy, and Telemetry Providers.
+- Adapt existing Tools, MCP, Memory, Connector, LightFlow, Hooks, Guardrails,
+  and approval APIs instead of introducing a parallel plugin runtime.
+- Add capability metadata for read/write/network/execute behavior, risk,
+  timeout, output limits, cancellation, persistence, and optional dependencies.
+- Route sensitive operations through one Policy decision path and record the
+  Provider name, version, and configuration digest in audit events.
+
+#### Milestone 3: Agent Inbox, Goals, And Budgets
+
+- Add a durable Agent Inbox for `followup`, `steering`, `context`, and
+  `approval` messages.
+- Queue and consume messages in order, injecting steering only at safe Step
+  boundaries.
+- Add durable Goals with acceptance criteria, subgoals, completion evidence,
+  blockers, and status transitions.
+- Add model-call, tool-call, token, time, and estimated-cost budgets.
+- Support pause, resume, cancel, and continue through Session events.
+- Add no-progress detection, repeated-tool detection, bounded retry, and
+  message idempotency keys.
+
+#### Milestone 4: Context Compaction, Checkpoints, And Fork
+
+- Add model-aware token accounting and configurable context budgets.
+- Implement two-stage compaction: deterministic trimming first, optional LLM
+  summarization second.
+- Spill oversized tool results outside the prompt while retaining event-backed
+  references and integrity metadata.
+- Persist compaction summaries and covered event ranges as versioned Session
+  events.
+- Add Session checkpoints, restore validation, and Fork from a selected event
+  boundary.
+- Support bounded recovery from context-overflow errors and an optional
+  dedicated summarization model.
+
+#### Milestone 5: Multi-Agent, Jobs, And Workflow Unification
+
+- Unify LightSwarm, handoff, and subagent lifecycle events while preserving
+  existing LightSwarm behavior.
+- Support one-shot, persistent, and Session-Fork subagents with depth, count,
+  concurrency, and budget limits.
+- Add Agent-tree inspection, messaging, interruption, resume, and result
+  collection.
+- Freeze auditable child-permission snapshots and prohibit capability
+  escalation.
+- Add background Jobs with status, incremental output, cancellation, and Inbox
+  completion notifications.
+- Evolve LightFlow into the common Workflow Provider for fixed DAGs, dynamic
+  model-planned workflows, checkpoints, approvals, reruns, and parallel steps.
+- Add optional persistent Terminal and LSP Providers without making them core
+  dependencies.
+
+#### Milestone 6: Memory, Skills, MCP, And Knowledge Standardization
+
+- Standardize Working, Session, Workspace, User, and Shared Memory scopes with
+  owner, tenant, provenance, TTL, trust, sensitivity, and admission metadata.
+- Keep automatic Memory writes and promotion behind `MemoryPolicy`, Policy,
+  and optional approval.
+- Support user, workspace, nested-directory, managed, and built-in Markdown
+  Skills with deterministic precedence and conflict diagnostics.
+- Add compatible project instruction discovery such as `AGENTS.md` without
+  runtime self-modification.
+- Add MCP Streamable HTTP, reconnect, tool-list refresh, namespace isolation,
+  and external Credential Provider integration while retaining stdio/SSE
+  configuration compatibility.
+- Define a Retrieval/RAG Provider and ship an optional SQLite FTS5 minimum
+  implementation; keep embeddings, vector databases, reranking, and hybrid
+  retrieval optional.
+- Add cross-Session text search with citations while keeping Session Search
+  separate from knowledge-base retrieval.
+
+#### v0.10.0 Compatibility Commitments
+
+- Preserve `agent.run("hello")`, `stream=True`, structured results, existing
+  Tools, Hooks, Guardrails, Memory backends, LightSwarm, and LightFlow APIs.
+- Existing users can adopt Session, Registry, Inbox, Goal, compaction,
+  subagent, and knowledge features incrementally; none becomes mandatory for a
+  basic Agent.
+- Existing Trace, Tool, Memory, Hook, MCP, LightSwarm, and LightFlow data is
+  exposed through compatibility adapters instead of forced migration.
+- Browser, Docker, LSP, vector databases, hosted services, and WebUI frameworks
+  remain optional.
+
+#### v0.10.0 Release Gates
+
+- Every model request can be reconstructed deterministically from persisted
+  Session events, and model/tool/approval records remain balanced.
+- Process interruption, EventLog failure, context overflow, Provider failure,
+  and incomplete Turns have explicit recoverable or terminal states.
+- Provider contract and cleanup tests prove that replacement and unload do not
+  leak tools, listeners, processes, credentials, or stale registrations.
+- Write, network, execution, credential, and persistence operations cannot
+  bypass Policy, approval, scope inheritance, or audit handling.
+- Restart preserves Inbox order, Goal state, pending approvals, budgets,
+  checkpoints, and idempotency markers.
+- Compaction preserves unresolved Goals, approvals, decisions, file changes,
+  tool lineage, and replay integrity.
+- Child Agent and Job failures cannot erase parent state; concurrent writes are
+  denied or serialized unless explicitly allowed.
+- Workflow and Agentic Loop execution use the same Session, capability,
+  Policy, approval, budget, and recovery contracts.
+- Memory, Skill, MCP, RAG, and Session Search retain source, owner, scope, and
+  provenance metadata; MCP reconnect cannot duplicate tools.
+- The Runtime remains usable without vector, Browser, Docker, hosted service,
+  or model-gateway dependencies.
+- The complete v0.9.7 compatibility suite passes on Python 3.10-3.13, together
+  with replay, migration, corruption, fault-injection, long-task, concurrency,
+  security, package-build, and import tests.
+
+### v1.0.0: Stable Runtime And Ecosystem
+
+Goal: freeze the runtime contracts only after they have survived multiple
+pre-1.0 releases and fault-oriented validation.
 
 Planned work:
 
-- Stabilize public APIs:
-  - `LightAgent`
-  - `LightSwarm`
-  - `LightFlow`
-  - `Skill`
-  - `ToolRegistry`
-  - `MemoryProtocol`
-  - `MemoryPolicy`
-  - `GuardrailDecision`
-  - `RunResult`
-  - `StreamEvent`
-- Reduce breaking changes after the 1.0 line.
-- Complete bilingual documentation for installation, tools, skills, memory,
-  MCP, Guardrails, Trace, LightSwarm, LightFlow, and production deployment.
-- Add a complete example matrix covering basic agents, constructor tools,
-  runtime tools, memory, Skills, MCP, browser-use, OpenRouter, LiteLLM, local
-  LLMs, LightFlow, human approval, and error handling.
-- Add stronger CI coverage for core runtime behavior.
-- Automate PyPI release publishing and release notes.
+- Freeze the public API, Provider protocols, Session event schemas, Policy
+  decisions, and compatibility adapters.
+- Publish a versioned deprecation and migration policy with tooling for v0.9.x
+  Session, Trace, Tool, Memory, Hook, LightSwarm, and LightFlow users.
+- Provide a Headless Runner, Python SDK, and optional JSON-RPC service surface.
+- Publish official Provider templates and contract-test kits.
+- Complete multilingual production documentation and the supported example
+  matrix.
+- Add OpenTelemetry, Langfuse, and JSONL exporters through optional adapters.
+- Establish performance, recovery, tool-call, multi-agent, and workflow
+  reliability benchmarks.
+- Automate signed package build, PyPI publishing, release notes, and rollback
+  checks.
 
-Expected outcome:
+Release gates:
 
-LightAgent 1.0 should provide a stable, documented, tested foundation for
-building lightweight production agents.
+- Public contracts have passed the complete v0.10.0 milestone suite and at
+  least one release-candidate or stabilization-patch compatibility cycle.
+- Event schemas support forward migration and deterministic replay.
+- Long-task interruption recovery passes in deterministic test environments.
+- Multi-Agent, approval, compaction, MCP, and Provider lifecycle paths pass
+  fault-injection tests.
+- Core installation does not require Browser, Docker, vector databases, model
+  gateway SDKs, or Web frameworks.
+- The v0.9.x-to-v1.0 migration guide and compatibility suite are complete.
 
 ### v1.1.0: Enterprise Integration
 
-Goal: make LightAgent easier to embed into internal systems and private
-deployments.
+Goal: make LightAgent easier to embed into internal systems after the runtime
+contracts are stable.
 
 Planned work:
 
-- Add stronger multi-tenant memory isolation examples and policy templates.
-- Provide tool-level permission and audit patterns for production systems.
-- Add deployment templates for Docker and service-style API wrappers.
-- Improve model routing guidance for OpenAI-compatible endpoints, LiteLLM,
-  local inference servers, and private model gateways.
-- Provide audit log export examples for trace, tool calls, guardrail blocks,
-  memory writes, and workflow steps.
-- Add enterprise-oriented examples for customer service, data analysis,
-  internal knowledge assistants, and automated office workflows.
+- Add multi-tenant policy templates and reference deployment profiles.
+- Provide tool-level permission, credential, and audit patterns.
+- Add optional Docker and service-wrapper deployment templates.
+- Improve model routing guidance for compatible endpoints, LiteLLM, local
+  inference, and private gateways.
+- Add enterprise examples without placing business workflows or hosted user
+  interfaces in the core package.
 
-Expected outcome:
+### Unified v0.10.0 Quality Gates
 
-LightAgent should be easier to adopt inside enterprise systems without turning
-the core framework into a large platform.
+Every internal v0.10.0 milestone must extend, not replace, the following
+validation layers. Passing an early milestone does not authorize releasing a
+partial v0.10.0 as the final version:
+
+1. Protocol and state-machine unit tests.
+2. Provider contract and resource-cleanup tests.
+3. Session replay, migration, projection, and corruption tests.
+4. Compatibility tests for all v0.9.7 public APIs.
+5. Security tests for Policy, Sandbox, Approval, Credential, and scope
+   inheritance.
+6. Fault injection for model streams, tools, stores, MCP, Providers, Jobs, and
+   subagents.
+7. Long-task tests covering budgets, compaction, checkpoint, resume, and
+   idempotency.
+8. Python 3.10, 3.11, 3.12, and 3.13 CI plus package build and import checks.
+
+Suggested release cadence:
+
+| Version | Theme | Suggested cycle |
+| --- | --- | --- |
+| v0.10.0 | Unified event-sourced Agent Runtime | 24-36 weeks, milestone-driven |
+| v1.0.0 | API freeze and production hardening | After v0.10 stabilization gates |
+| v1.1.0 | Optional enterprise integration | Post-v1.0 feedback-driven |
 
 ## Reference Directions From Other Agent Frameworks
 
@@ -1032,7 +1250,7 @@ promotion decisions.
 
 ### v0.9.7 Workstream: Security Validation And Connector Contract
 
-Status: implemented and locally validated; pending pull request and release.
+Status: released on 2026-08-15.
 
 Goal: harden the remaining high-risk surfaces and define a minimal custom
 integration path before the v1.0 API freeze.
@@ -1075,45 +1293,22 @@ the shared Graph Memory disclosure, and a small but useful extension path for
 domain integrations, while keeping v1.0 focused on stability instead of new
 surface area.
 
-### v1.0.0 Workstream: Stable API And Ecosystem
+### Post-v0.9.7 Runtime Workstreams
 
-Goal: stabilize the public API and make LightAgent reliable for production users
-and contributors.
+The earlier plan split runtime evolution across v0.10.0-v0.15.0. These scopes
+are now consolidated into one public **v0.10.0 Unified Event-Sourced Agent
+Runtime** release with six ordered internal milestones:
 
-### Planned Work
+1. Session events, stores, replay, projection, and native async execution.
+2. Capability Registry, Provider lifecycle, scopes, and unified Policy.
+3. Durable Inbox, Goals, budgets, steering, and cancellation.
+4. Context compaction, checkpoints, restore, and Session Fork.
+5. Subagents, background Jobs, and Workflow/Agent Loop unification.
+6. Standardized Memory, Skills, MCP, Retrieval, and RAG Providers.
 
-- Stabilize public APIs:
-  - `LightAgent`
-  - `LightSwarm`
-  - `LightFlow`
-  - `Skill`
-  - `ToolRegistry`
-  - `MemoryProtocol`
-  - `MemoryPolicy`
-  - `RunResult`
-- Build a complete documentation site.
-- Add a full example matrix:
-  - basic agent;
-  - constructor tools;
-  - runtime tools;
-  - memory;
-  - Skills;
-  - MCP;
-  - browser-use;
-  - OpenRouter;
-  - LiteLLM;
-  - local LLM;
-  - LightFlow;
-  - human approval.
-- Add CI coverage for core runtime behavior.
-- Automate PyPI release publishing.
-- Add benchmarks for tool-call success rate, multi-turn completion, token cost,
-  latency, and recovery behavior.
-
-### Expected Outcome
-
-LightAgent 1.0 should provide a stable, documented, tested foundation for
-building lightweight production agents.
+The detailed scope and release gates are maintained in the Near-Term Version
+Plan. v1.0 is deferred until the complete v0.10.0 runtime has passed its
+compatibility, replay, recovery, security, and stabilization gates.
 
 ## Longer-Term Directions
 
@@ -1172,77 +1367,73 @@ building lightweight production agents.
 - Respond to the #39 advisory/CVE request, move reproduction and version-scoping
   details into a private security workflow, and avoid naming affected or fully
   patched versions until the shared Graph Memory test matrix is complete.
+- Run the opt-in matrix against every maintained Mem0 Graph and storage
+  configuration before changing public remediation claims.
 
 ### Next P1
 
-- Merge and release the completed v0.9.7 security validation and connector
-  contract before v1.0.
-- #39 shared Graph Memory backend-level validation, tenant/provenance tests,
-  and public/private advisory wording.
-- Close #5 after the v0.9.7 Connector manifest, offline validator, and
-  dependency-free examples are merged.
-- v1.0 public API inventory, compatibility contracts, deprecation policy, and
-  production documentation preparation.
+- Start **v0.10.0 Unified Event-Sourced Agent Runtime** with the smallest
+  stable Session event model and compatibility adapters, then advance through
+  all six internal milestones under the same public version.
+- Implement native `arun()` without changing `run()` or streaming behavior.
+- Add in-memory, JSONL, and optional SQLite Session stores with replay and
+  incomplete-Turn recovery tests.
+- Convert Trace into a projection of Session history while preserving current
+  Trace APIs and exporters.
+- Continue #39 backend validation as an independent security release gate.
 
 ### P2
 
-- Durable memory-review queue examples that build on v0.9.5 promotion
-  candidates without becoming required core dependencies.
-- External trace/audit adapters and production review-queue examples built on
-  the v0.9.6 exporter and approval contracts.
-- Database-backed workflow and shared-memory adapters.
-- Stronger idempotency and distributed execution controls for persistent
-  workflows.
-- Focused external provider examples only when maintained outside the core
-  dependency set.
+- Prepare the v0.10.0 Capability Registry milestone and Provider contract-test
+  fixtures in parallel, but do not route production execution through them
+  before Session invariants are stable.
+- Add fault-injection fixtures for interrupted model streams, tool timeout,
+  EventLog write failure, and concurrent Session recovery.
+- Keep external Provider examples focused, optional, credential-free in CI,
+  and outside the required core dependency set.
 
 ### P3
 
-- Visual trace UI.
-- Distributed execution and durable worker coordination.
+- Inbox, Goal, Budget, compaction, subagents, background Jobs, Workflow, MCP,
+  and RAG remain required v0.10.0 milestones and must land after their Session
+  and Provider prerequisites instead of accumulating in one unreviewable
+  change.
+- Visual trace UI and distributed worker coordination remain upper-layer or
+  post-protocol work.
 
 ## Next Development Recommendation
 
-After v0.9.7 is reviewed and released, the next development target should be
-**v1.0.0 Stable API And Production Documentation**. The main runtime,
-workflow, memory-safety, observability, evaluation, human-review, and Connector
-primitives now exist; the next priority is freezing the documented public API
-and completing production release automation.
+The next development target is **v0.10.0 Unified Event-Sourced Agent Runtime**.
+It includes the complete former v0.10.0-v0.15.0 scope. Implementation remains
+milestone-ordered, but the public version is released only after all six
+milestones and their combined quality gates pass.
 
 Reasoning:
 
-- v0.9.0 covers checkpointed LightFlow runs, resume/rerun, approval nodes,
-  memory-safety controls, guardrail templates, and the shared-memory prototype.
-- v0.9.3 completes stream tool-loop safety and consistent runtime hook closure.
-- v0.9.4 completes tool schema diagnostics, `PolicyHook`, `on_handoff`,
-  LightSwarm runtime-context propagation, and full tracked-test CI.
-- v0.9.5 adds explicit promotion candidates, promotion decisions,
-  `before_memory_promote` / `after_memory_promote`, promotion trace events, and
-  fail-closed tests for internal/shared memory safety.
-- v0.9.6 adds trace summaries/exporters, deterministic evaluation, tool and
-  handoff review, durable LightFlow approvals, human feedback, and the first
-  fake-backend #39 cross-user graph-memory regression.
-- Public GitHub state still shows #39 and #5 as open P1 issues. v0.9.7
-  implements #5's narrowed Connector scope, while #39 remains open until the
-  exact maintained Mem0 Graph configurations run the opt-in matrix.
-- Follow-up #39 work keeps durable shared-memory poisoning, provenance, and
-  multi-agent memory boundaries as active P1 concerns.
-- The merged #85 hardening now has broader adversarial tests and explicit
-  documentation that AST filtering is not a complete sandbox.
-- #5 is best addressed before v1.0 as a lightweight connector contract, not a
-  broad marketplace or new plugin runtime.
-- Database-backed durability should stay optional so the core package remains
-  lightweight.
+- Trace, Hooks, review, Memory, LightFlow, and streaming currently record
+  related lifecycle data through different surfaces; one durable EventLog is
+  required before reliable resume and context reconstruction can be promised.
+- Long-running Agent execution needs native async cancellation and recovery
+  semantics rather than additional wrappers around the current synchronous
+  loop.
+- Capability Registry and Policy unification depend on stable Session identity,
+  event ordering, and audit records, so milestone 1 must precede milestone 2
+  even though both ship in v0.10.0.
+- The six-milestone v0.10.0 plan reduces the risk of freezing immature
+  contracts in v1.0 while keeping development increments independently
+  reviewable and testable.
+- Optional stores and Providers preserve the lightweight core and let
+  LightWorker or other products supply Browser, Docker, WebUI, and business
+  workflow implementations.
 
-Completed v0.9.7 implementation slice:
+First v0.10.0 implementation slice:
 
-1. Documented the #39 security response boundary and added a backend-specific
-   opt-in Graph Memory validation test.
-2. Built on merged #85 and expanded Python executor adversarial blocklist and
-   safe false-positive coverage.
-3. Added Python executor safety docs and recommended `PolicyHook` / Human Review
-   wrappers for high-risk deployments.
-4. Defined a Connector manifest and offline validator without adding required
-   runtime dependencies.
-5. Added two dependency-free Connector examples and a contributor guide.
-6. Published the first v1.0 public API inventory and compatibility matrix.
+1. Publish versioned Session event dataclasses and an in-memory store.
+2. Record one non-streaming Agent run as balanced Session, Turn, Model, Tool,
+   and terminal events.
+3. Rebuild current Trace events and model context from that Session history.
+4. Add JSONL persistence, replay, incomplete-Turn detection, and corruption
+   tests.
+5. Add native `arun()` and prove `run()` plus `stream=True` compatibility.
+6. Add optional SQLite storage only after the store contract passes the same
+   replay and migration suite.

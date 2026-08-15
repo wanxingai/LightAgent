@@ -1,3 +1,4 @@
+import asyncio
 import time
 
 from LightAgent import HookDecision, JsonLightFlowStore, LightFlow, LightFlowResult, RunResult
@@ -32,6 +33,27 @@ def test_lightflow_runs_single_step_and_returns_object_result():
     assert [event["type"] for event in result.trace] == ["flow_start", "step_start", "step_end", "flow_end"]
     assert agent.calls[0]["kwargs"]["parent_trace_id"] == result.trace_id
     assert agent.calls[0]["kwargs"]["run_group_id"] == result.run_id
+
+
+def test_lightflow_arun_preserves_result_and_does_not_block_event_loop():
+    agent = FakeAgent("writer", ["done"])
+    flow = LightFlow().step("write", agent=agent)
+
+    async def scenario():
+        marker = []
+
+        async def tick():
+            await asyncio.sleep(0)
+            marker.append("tick")
+
+        result, _ = await asyncio.gather(flow.arun("draft"), tick())
+        return result, marker
+
+    result, marker = asyncio.run(scenario())
+
+    assert result.success is True
+    assert result.content == "done"
+    assert marker == ["tick"]
 
 
 def test_lightflow_passes_dependency_outputs_to_later_steps():
