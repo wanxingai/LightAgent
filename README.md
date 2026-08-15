@@ -37,7 +37,8 @@ LightAgent is an ultra‑lightweight, open‑source framework that now natively 
 
 ---
 ## News
-- <img src="https://img.alicdn.com/imgextra/i3/O1CN01SFL0Gu26nrQBFKXFR_!!6000000007707-2-tps-500-500.png" alt="new" width="30" height="30"/>**[2026-07-30]** LightAgent v0.9.6 Released: Adds production trace summaries and exporters, deterministic evaluation, durable human approval for tools, handoffs, and LightFlow, plus fail-closed shared Graph Memory admission and audit controls.
+- <img src="https://img.alicdn.com/imgextra/i3/O1CN01SFL0Gu26nrQBFKXFR_!!6000000007707-2-tps-500-500.png" alt="new" width="30" height="30"/>**[2026-08-15]** LightAgent v0.9.7 Released: Adds a dependency-free Connector contract with offline validation and examples, expands Python executor security checks, introduces an opt-in Mem0 Graph security matrix, and adds a public API compatibility inventory for v1.0 stabilization.
+- **[2026-07-30]** LightAgent v0.9.6 Released: Adds production trace summaries and exporters, deterministic evaluation, durable human approval for tools, handoffs, and LightFlow, plus fail-closed shared Graph Memory admission and audit controls.
 - **[2026-07-10]** LightAgent v0.9.3 Released: Completes runtime hook lifecycle coverage and hardens streaming tool safety with `max_tool_iterations`, consistent `on_error` / `after_run` closure, and expanded regression coverage.
 - **[2026-06-24]** LightAgent v0.9.0 Development: Adds checkpointed LightFlow workflows with resume/rerun support, approval nodes, richer step status and trace metadata, reusable Guardrails templates, stronger MemoryPolicy controls, and the first SharedMemoryPool prototype.
 - **[2026-06-14]** LightAgent v0.8.1 Development: Adds MemoryScope metadata conventions, stricter MemoryPolicy provenance filters, and guidance for separating trace, user memory, self-reflection memory, and LightSwarm delegation state.
