@@ -125,7 +125,7 @@ def _clean_code_string(code_str: str) -> str:
     if code_str.startswith('"') and code_str.endswith('"'):
         try:
             code_str = json.loads(code_str)
-        except:
+        except (json.JSONDecodeError, TypeError):
             code_str = code_str[1:-1]
 
     # 步骤6: 尝试解析为JSON并提取代码字段
@@ -139,7 +139,7 @@ def _clean_code_string(code_str: str) -> str:
                 return _clean_code_string(code)  # 递归清理
         elif isinstance(parsed, str):
             return _clean_code_string(parsed)  # 递归清理
-    except:
+    except (json.JSONDecodeError, TypeError):
         pass
 
     return code_str
