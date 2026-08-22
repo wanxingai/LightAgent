@@ -442,7 +442,7 @@ LightAgent 采用 [Apache 2.0 许可证](LICENSE)。您可以自由使用、修�
 
 ## Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=wanxingai/LightAgent&type=Date)](https://star-history.com/#wanxingai/LightAgent&Date)
+[![Star History Chart](https://star-history.dera.page/svg?repos=wanxingai/LightAgent&type=Date)](https://star-history.dera.page/#wanxingai/LightAgent&Date)
 
 ## 论文
 

@@ -702,7 +702,7 @@ We look forward to your feedback and work together to make LightAgent even stron
 
 ## Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=wanxingai/LightAgent&type=Date)](https://star-history.com/#wanxingai/LightAgent&Date)
+[![Star History Chart](https://star-history.dera.page/svg?repos=wanxingai/LightAgent&type=Date)](https://star-history.dera.page/#wanxingai/LightAgent&Date)
 
 ## Paper
 
