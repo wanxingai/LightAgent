@@ -26,6 +26,27 @@ OpenRouter model names are provider-routed strings such as
 `openai/gpt-4.1`, `anthropic/claude-sonnet-4`, or another model listed in your
 OpenRouter account.
 
+### OrcaRouter
+
+```python
+from LightAgent import LightAgent
+
+agent = LightAgent(
+    model="openai/gpt-5.5",
+    api_key="your_orcarouter_api_key",
+    base_url="https://api.orcarouter.ai/v1",
+)
+
+print(agent.run("Who are you?"))
+```
+
+OrcaRouter is an OpenAI-compatible model routing gateway that exposes models
+from OpenAI, Anthropic, Google, DeepSeek, Qwen and others behind a single
+endpoint and API key. Keys start with `sk-orca-`. Model names are
+provider-routed strings such as `openai/gpt-5.5` or
+`anthropic/claude-opus-4.8`; `orcarouter/auto` is a named router that picks an
+upstream model per request.
+
 ### Atlas Cloud
 
 Atlas Cloud exposes an OpenAI-compatible `/v1` endpoint, so it works with the

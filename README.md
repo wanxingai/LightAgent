@@ -65,7 +65,7 @@ Older release notes are available on [GitHub Releases](https://github.com/wanxin
 - **Workflow Orchestration** 🔁: LightFlow chains agents into deterministic multi-step workflows with explicit dependencies, step output passing, retries, checkpointed run records, resume/rerun support, approval nodes, fallback agents, and traceable execution.
 - **Shared Memory Prototype** 🧠: SharedMemoryPool provides append-first in-memory shared memory with provenance metadata, scoped retrieval, and MemoryPolicy-compatible results for multi-agent experiments.
 - **Independent Execution** 🤖: Tasks and tool calls are completed autonomously without human intervention.  
-- **Multi-Model Support** 🔄: Compatible with OpenAI-style providers such as OpenAI, OpenRouter, Zhipu ChatGLM, Baichuan, StepFun, DeepSeek, Qwen, vLLM, llama.cpp, and other OpenAI-compatible endpoints.  
+- **Multi-Model Support** 🔄: Compatible with OpenAI-style providers such as OpenAI, OpenRouter, OrcaRouter, Zhipu ChatGLM, Baichuan, StepFun, DeepSeek, Qwen, vLLM, llama.cpp, and other OpenAI-compatible endpoints.  
 - **Streaming API** 🌊: Supports OpenAI streaming format API service output, seamlessly integrates with mainstream chat frameworks, enhancing user experience.  
 - **Trace Observability** 🔎: Opt-in `trace=True` run traces record structured run lifecycle, model request summaries, tool calls, tool results, and errors without changing the default string return value.  
 - **Evaluation Harness** 📊: `LightEvaluator` runs deterministic agent or LightFlow regression cases for output, tool choice, policy events, recovery, latency, usage, and estimated cost.
@@ -624,7 +624,7 @@ When upgrading from v0.9.4, audit legacy internal memory before backfilling `pro
 
 ## Mainstream Agent Model Support
 
-LightAgent works with OpenAI-compatible chat completion endpoints, including OpenAI, OpenRouter, Zhipu ChatGLM, DeepSeek, Qwen, StepFun, Moonshot/Kimi, MiniMax, vLLM, llama.cpp, Ollama-compatible endpoints, and self-hosted gateways.
+LightAgent works with OpenAI-compatible chat completion endpoints, including OpenAI, OpenRouter, OrcaRouter, Zhipu ChatGLM, DeepSeek, Qwen, StepFun, Moonshot/Kimi, MiniMax, vLLM, llama.cpp, Ollama-compatible endpoints, and self-hosted gateways.
 
 For provider-specific parameters, base URLs, local model setup, and troubleshooting, see [Model Provider Configuration](docs/model_providers.md).
 
