@@ -449,9 +449,19 @@ class LightAgent:
     async def setup_mcp(
             self,
             mcp_setting: dict | None = None,  # mcp 设置
+            parallel_search: bool = False,
     ):
         if mcp_setting:
             self.mcp_setting = mcp_setting
+        if parallel_search:
+            current_setting = self.mcp_setting or {}
+            mcp_servers = dict(current_setting.get("mcpServers", {}))
+            mcp_servers.setdefault("parallel-search", {
+                "transport": "streamable-http",
+                "url": "https://search.parallel.ai/mcp",
+                "headers": {"User-Agent": "lightagent/0.10.0"},
+            })
+            self.mcp_setting = {**current_setting, "mcpServers": mcp_servers}
         """单独初始化 MCP 模块"""
         if self.mcp_setting and not self.mcp_client:
             self.mcp_client = MCPClientManager(self.mcp_setting, self.tool_registry)

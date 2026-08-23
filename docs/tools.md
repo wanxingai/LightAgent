@@ -398,8 +398,8 @@ object-storage tool.
 ### MCP Integration
 
 LightAgent supports the Model Context Protocol (MCP) for connecting to external
-tool servers. MCP servers can provide tools over stdio or SSE (Server-Sent
-Events) transports.
+tool servers. MCP servers can provide tools over stdio, SSE (Server-Sent
+Events), or Streamable HTTP transports.
 
 #### Configuration
 
@@ -439,13 +439,27 @@ async def setup():
 asyncio.run(setup())
 ```
 
+To explicitly opt in to Parallel Search, enable it while preserving any MCP
+servers in your configuration:
+
+```python
+await agent.setup_mcp(mcp_setting=mcp_config, parallel_search=True)
+```
+
+This adds the native Streamable HTTP endpoint
+`https://search.parallel.ai/mcp`. It requires no account or API key. Enabling
+the hosted service sends search objectives and search queries to Parallel, and
+the service may request page URLs needed to answer them. Review the
+[Parallel Search MCP documentation](https://docs.parallel.ai/integrations/mcp/search-mcp)
+before opting in.
+
 #### How MCP Tool Registration Works
 
 The `MCPClientManager` connects to each configured server, lists available
 tools via the MCP `list_tools` request, and registers them into the agent's
 `ToolRegistry`:
 
-1. For each enabled server, a session is created (stdio or SSE).
+1. For each enabled server, a session is created (stdio, SSE, or Streamable HTTP).
 2. Tools are fetched using `session.list_tools()`.
 3. Each tool's name, description, and parameter schema are converted to the
    `tool_info` format and registered.

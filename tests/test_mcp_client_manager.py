@@ -4,6 +4,7 @@ from types import SimpleNamespace
 import pytest
 
 from LightAgent.mcp_client_manager import MCPClientManager
+from LightAgent.core import LightAgent
 from LightAgent.tools import ToolRegistry
 
 
@@ -197,3 +198,94 @@ def test_streamable_http_uses_async_credential_provider(monkeypatch):
         "url": "https://mcp.example.test",
         "headers": {"X-Client": "LightAgent", "Authorization": "Bearer dynamic-token"},
     }
+
+
+def test_setup_mcp_parallel_search_is_explicit_and_preserves_user_config(monkeypatch):
+    captured = []
+
+    class FakeManager:
+        def __init__(self, config, tool_registry):
+            captured.append(config)
+
+        async def register_mcp_tool(self):
+            return True
+
+    monkeypatch.setattr("LightAgent.core.MCPClientManager", FakeManager)
+
+    def agent_with(setting=None):
+        agent = LightAgent.__new__(LightAgent)
+        agent.mcp_setting = setting
+        agent.mcp_client = None
+        agent.tool_registry = ToolRegistry()
+        agent.log = lambda *args: None
+        return agent
+
+    user_setting = {
+        "mcpServers": {
+            "private-tools": {
+                "transport": "streamable-http",
+                "url": "https://mcp.example.test",
+                "headers": {"X-Existing": "preserved"},
+            }
+        },
+        "project": "owned-by-user",
+    }
+    disabled = agent_with()
+    asyncio.run(disabled.setup_mcp())
+    assert captured == []
+    assert disabled.mcp_setting is None
+
+    enabled = agent_with()
+    asyncio.run(enabled.setup_mcp(mcp_setting=user_setting, parallel_search=True))
+
+    assert user_setting == {
+        "mcpServers": {
+            "private-tools": {
+                "transport": "streamable-http",
+                "url": "https://mcp.example.test",
+                "headers": {"X-Existing": "preserved"},
+            }
+        },
+        "project": "owned-by-user",
+    }
+    assert captured == [{
+        "mcpServers": {
+            "private-tools": user_setting["mcpServers"]["private-tools"],
+            "parallel-search": {
+                "transport": "streamable-http",
+                "url": "https://search.parallel.ai/mcp",
+                "headers": {"User-Agent": "lightagent/0.10.0"},
+            },
+        },
+        "project": "owned-by-user",
+    }]
+
+
+def test_setup_mcp_parallel_search_does_not_override_user_server(monkeypatch):
+    captured = []
+
+    class FakeManager:
+        def __init__(self, config, tool_registry):
+            captured.append(config)
+
+        async def register_mcp_tool(self):
+            return True
+
+    monkeypatch.setattr("LightAgent.core.MCPClientManager", FakeManager)
+    agent = LightAgent.__new__(LightAgent)
+    agent.mcp_setting = None
+    agent.mcp_client = None
+    agent.tool_registry = ToolRegistry()
+    agent.log = lambda *args: None
+    custom = {
+        "mcpServers": {
+            "parallel-search": {
+                "url": "https://user-owned.example.test/mcp",
+                "headers": {"X-User": "kept"},
+            }
+        }
+    }
+
+    asyncio.run(agent.setup_mcp(mcp_setting=custom, parallel_search=True))
+
+    assert captured[0]["mcpServers"]["parallel-search"] == custom["mcpServers"]["parallel-search"]
