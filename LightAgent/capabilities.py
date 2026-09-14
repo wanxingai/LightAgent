@@ -78,9 +78,14 @@ class RuntimeContext:
     session_id: str | None = None
     agent_id: str | None = None
     user_id: str | None = None
+    tenant_id: str | None = None
+    project_id: str | None = None
     turn_id: str | None = None
     run_id: str | None = None
+    task_id: str | None = None
+    attempt_id: str | None = None
     permissions: "PermissionSet | None" = None
+    security_context: Any = None
     metadata: dict[str, Any] = field(default_factory=dict)
 
 
@@ -425,6 +430,7 @@ class CapabilityRegistry:
         return deepcopy(self._conflicts)
 
     async def mount(self, context: RuntimeContext) -> None:
+        context = self._runtime_context(context)
         for item in self._matching(context):
             await item.provider.mount(context)
             await item.provider.start()
@@ -452,7 +458,7 @@ class CapabilityRegistry:
         return bool(matches)
 
     def resolve(self, capability: str, context: RuntimeContext | None = None) -> CapabilityProvider:
-        runtime_context = context or RuntimeContext()
+        runtime_context = self._runtime_context(context)
         matches = [
             item for item in self._matching(runtime_context)
             if capability in item.provider.capabilities
@@ -463,7 +469,7 @@ class CapabilityRegistry:
         return matches[0].provider
 
     def get(self, name: str, context: RuntimeContext | None = None) -> CapabilityProvider:
-        matches = [item for item in self._matching(context or RuntimeContext()) if item.provider.name == name]
+        matches = [item for item in self._matching(self._runtime_context(context)) if item.provider.name == name]
         if not matches:
             raise LookupError(f"provider `{name}` is not registered")
         matches.sort(key=lambda item: (self._precedence[item.scope], item.order), reverse=True)
@@ -471,7 +477,7 @@ class CapabilityRegistry:
 
     def list(self, context: RuntimeContext | None = None) -> list[dict[str, Any]]:
         values = []
-        for item in self._matching(context or RuntimeContext()):
+        for item in self._matching(self._runtime_context(context)):
             values.append({
                 "name": item.provider.name,
                 "version": item.provider.version,
@@ -483,7 +489,7 @@ class CapabilityRegistry:
 
     async def health(self, context: RuntimeContext | None = None) -> dict[str, ProviderHealth]:
         result = {}
-        for item in self._matching(context or RuntimeContext()):
+        for item in self._matching(self._runtime_context(context)):
             result[item.provider.name] = await item.provider.health()
         return result
 
@@ -492,10 +498,11 @@ class CapabilityRegistry:
         await provider.reload(config)
 
     async def stop(self, context: RuntimeContext | None = None) -> None:
-        for item in reversed(self._matching(context or RuntimeContext())):
+        runtime_context = self._runtime_context(context)
+        for item in reversed(self._matching(runtime_context)):
             await item.provider.stop()
             await item.provider.unmount()
-            self._audit("provider.stopped", item, context=context)
+            self._audit("provider.stopped", item, context=runtime_context)
 
     async def invoke(
             self,
@@ -503,8 +510,20 @@ class CapabilityRegistry:
             arguments: dict[str, Any] | None = None,
             *,
             context: RuntimeContext | None = None,
+            approval_token: Any = None,
+            resource: str | None = None,
     ) -> Any:
-        runtime_context = context or RuntimeContext()
+        if context is not None and hasattr(context, "to_runtime_context"):
+            from .security import CapabilityGate
+
+            return await CapabilityGate(self).invoke(
+                capability,
+                arguments,
+                context,
+                approval_token=approval_token,
+                resource=resource,
+            )
+        runtime_context = self._runtime_context(context)
         provider = self.resolve(capability, runtime_context)
         spec = provider.capabilities[capability]
         decision = await self.policy_engine.evaluate(PolicyRequest(
@@ -531,6 +550,17 @@ class CapabilityRegistry:
         if spec.output_limit is not None and len(str(result)) > spec.output_limit:
             result = str(result)[:spec.output_limit]
         return result
+
+    @staticmethod
+    def _runtime_context(context: Any = None) -> RuntimeContext:
+        if context is None:
+            return RuntimeContext()
+        if isinstance(context, RuntimeContext):
+            return context
+        to_runtime = getattr(context, "to_runtime_context", None)
+        if callable(to_runtime):
+            return to_runtime()
+        raise TypeError("context must be RuntimeContext or SecurityContext")
 
     def _matching(self, context: RuntimeContext) -> list[ProviderRegistration]:
         return [

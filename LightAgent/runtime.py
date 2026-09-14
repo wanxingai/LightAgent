@@ -6,6 +6,7 @@ import asyncio
 import inspect
 from copy import deepcopy
 from dataclasses import asdict, dataclass, field
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Any, Awaitable, Callable, Iterable
 from uuid import uuid4
@@ -452,6 +453,9 @@ class JobRecord:
     error: str | None = None
     idempotency_key: str | None = None
     cancellation_token_id: str | None = None
+    lease_owner: str | None = None
+    lease_epoch: int = 0
+    lease_expires_at: str | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
     output: list[Any] = field(default_factory=list)
 
@@ -473,6 +477,7 @@ class JobManager:
         self._tasks: dict[str, asyncio.Task[Any]] = {}
         self._cancellations: dict[str, CancellationToken] = {}
         self._idempotency_keys: dict[str, str] = {}
+        self.manager_id = uuid4().hex
         self._event_sink = event_sink
         self._inbox = inbox
 
@@ -485,8 +490,11 @@ class JobManager:
             metadata: dict[str, Any] | None = None,
             idempotency_key: str | None = None,
             cancellation_token: CancellationToken | None = None,
+            lease_seconds: float | None = None,
     ) -> JobRecord:
         loop = asyncio.get_running_loop()
+        if lease_seconds is not None and lease_seconds <= 0:
+            raise ValueError("lease_seconds must be positive")
         if idempotency_key is not None and not str(idempotency_key).strip():
             raise ValueError("idempotency_key must not be empty")
         if idempotency_key is not None and idempotency_key in self._idempotency_keys:
@@ -498,6 +506,13 @@ class JobManager:
             metadata=deepcopy(metadata or {}),
             idempotency_key=idempotency_key,
             cancellation_token_id=token.token_id,
+            lease_owner=self.manager_id if lease_seconds is not None else None,
+            lease_epoch=1 if lease_seconds is not None else 0,
+            lease_expires_at=(
+                (datetime.now(timezone.utc) + timedelta(seconds=lease_seconds)).isoformat()
+                if lease_seconds is not None
+                else None
+            ),
         )
         self._records[record.job_id] = record
         self._cancellations[record.job_id] = token
@@ -516,6 +531,12 @@ class JobManager:
         try:
             if token.cancelled:
                 raise asyncio.CancelledError
+            if self._lease_expired(record):
+                record.status = JobStatus.INTERRUPTED
+                record.error = "job lease expired before execution"
+                record.completed_at = _utc_now()
+                self._emit("job.interrupted", record)
+                return
             if callable(operation):
                 if accepts_keyword(operation, "cancellation_token"):
                     value = operation(cancellation_token=token)
@@ -527,6 +548,12 @@ class JobManager:
                 value = await value
             if token.cancelled:
                 raise asyncio.CancelledError
+            if self._lease_expired(record):
+                record.status = JobStatus.INTERRUPTED
+                record.error = "job lease expired before result publication"
+                record.completed_at = _utc_now()
+                self._emit("job.interrupted", record)
+                return
             record.result = value
             record.status = JobStatus.SUCCESS
             record.completed_at = _utc_now()
@@ -581,6 +608,63 @@ class JobManager:
             raise RuntimeError(f"job `{job_id}` is not active")
         return token
 
+    def renew_lease(
+            self,
+            job_id: str,
+            lease_seconds: float,
+            *,
+            owner: str | None = None,
+            expected_epoch: int | None = None,
+    ) -> JobRecord:
+        if lease_seconds <= 0:
+            raise ValueError("lease_seconds must be positive")
+        record = self._records.get(job_id)
+        if record is None:
+            raise KeyError(job_id)
+        resolved_owner = owner or self.manager_id
+        if record.lease_owner != resolved_owner:
+            raise PermissionError("job lease belongs to another owner")
+        if expected_epoch is not None and record.lease_epoch != expected_epoch:
+            raise RuntimeError("job lease epoch is stale")
+        if record.status not in {JobStatus.PENDING, JobStatus.RUNNING}:
+            raise RuntimeError("only active jobs can renew a lease")
+        record.lease_expires_at = (
+            datetime.now(timezone.utc) + timedelta(seconds=lease_seconds)
+        ).isoformat()
+        self._emit("job.lease_renewed", record)
+        return deepcopy(record)
+
+    def resume(
+            self,
+            job_id: str,
+            operation: Callable[..., Any] | Awaitable[Any],
+            *,
+            lease_seconds: float = 60.0,
+    ) -> JobRecord:
+        loop = asyncio.get_running_loop()
+        if lease_seconds <= 0:
+            raise ValueError("lease_seconds must be positive")
+        record = self._records.get(job_id)
+        if record is None:
+            raise KeyError(job_id)
+        if record.status != JobStatus.INTERRUPTED:
+            raise RuntimeError("only interrupted jobs can be resumed")
+        token = CancellationToken()
+        record.status = JobStatus.PENDING
+        record.started_at = None
+        record.completed_at = None
+        record.error = None
+        record.lease_owner = self.manager_id
+        record.lease_epoch += 1
+        record.lease_expires_at = (
+            datetime.now(timezone.utc) + timedelta(seconds=lease_seconds)
+        ).isoformat()
+        record.cancellation_token_id = token.token_id
+        self._cancellations[job_id] = token
+        self._emit("job.resumed", record)
+        self._tasks[job_id] = loop.create_task(self._execute(job_id, operation))
+        return deepcopy(record)
+
     def emit_output(self, job_id: str, value: Any) -> JobRecord:
         record = self._records.get(job_id)
         if record is None:
@@ -603,6 +687,15 @@ class JobManager:
                 record.status = JobStatus.INTERRUPTED
                 record.completed_at = _utc_now()
                 self._emit("job.interrupted", record)
+
+    @staticmethod
+    def _lease_expired(record: JobRecord) -> bool:
+        if record.lease_expires_at is None:
+            return False
+        expires = datetime.fromisoformat(record.lease_expires_at.replace("Z", "+00:00"))
+        if expires.tzinfo is None:
+            expires = expires.replace(tzinfo=timezone.utc)
+        return datetime.now(timezone.utc) >= expires.astimezone(timezone.utc)
 
     def restore(self, session: Session) -> None:
         records: dict[str, JobRecord] = {}
@@ -831,6 +924,7 @@ class AgentRuntime:
             metadata: dict[str, Any] | None = None,
             agent_id: str | None = None,
             user_id: str | None = None,
+            security_context: Any = None,
     ) -> Session:
         session = self.session_store.get(session_id) if session_id else None
         if session is None:
@@ -838,9 +932,19 @@ class AgentRuntime:
             session.append("session.started", {"runtime_id": self.runtime_id})
             self.session_store.create(session)
         self.session = session
-        self.context.session_id = session.session_id
-        self.context.agent_id = agent_id
-        self.context.user_id = user_id
+        if security_context is not None:
+            runtime_context = security_context.to_runtime_context()
+            if runtime_context.session_id not in {None, session.session_id}:
+                raise ValueError("SecurityContext session_id does not match the opened Session")
+            runtime_context.runtime_id = self.runtime_id
+            runtime_context.session_id = session.session_id
+            runtime_context.agent_id = agent_id or runtime_context.agent_id
+            runtime_context.user_id = user_id or runtime_context.user_id
+            self.context = runtime_context
+        else:
+            self.context.session_id = session.session_id
+            self.context.agent_id = agent_id
+            self.context.user_id = user_id
         self.inbox.restore(session)
         self.goals.restore(session)
         self.budget.restore(session)

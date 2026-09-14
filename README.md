@@ -37,7 +37,8 @@ LightAgent is an ultra‑lightweight, open‑source framework that now natively 
 
 ---
 ## News
-- <img src="https://img.alicdn.com/imgextra/i3/O1CN01SFL0Gu26nrQBFKXFR_!!6000000007707-2-tps-500-500.png" alt="new" width="30" height="30"/>**[2026-08-15]** LightAgent v0.10.0 Development: Adds the unified event-sourced Agent Runtime with durable Sessions, async execution, Capability Registry and Policy, Inbox/Goals/Budgets, compaction and recovery, Jobs/subagents, standardized Skills/MCP adapters, and SQLite FTS5 retrieval.
+- <img src="https://img.alicdn.com/imgextra/i3/O1CN01SFL0Gu26nrQBFKXFR_!!6000000007707-2-tps-500-500.png" alt="new" width="30" height="30"/>**[2026-09-14]** LightAgent v0.11.0 Development: Adds opt-in persistent Dynamic DAG multi-agent execution, verification-gated immutable artifacts, restart-safe leases and fencing, and a unified narrowing-only `SecurityContext` with capability and approval controls.
+- **[2026-08-15]** LightAgent v0.10.0 Released: Adds the unified event-sourced Agent Runtime with durable Sessions, async execution, Capability Registry and Policy, Inbox/Goals/Budgets, compaction and recovery, Jobs/subagents, standardized Skills/MCP adapters, and SQLite FTS5 retrieval.
 - **[2026-08-15]** LightAgent v0.9.7 Released: Adds a dependency-free Connector contract with offline validation and examples, expands Python executor security checks, introduces an opt-in Mem0 Graph security matrix, and adds a public API compatibility inventory for v1.0 stabilization.
 - **[2026-07-30]** LightAgent v0.9.6 Released: Adds production trace summaries and exporters, deterministic evaluation, durable human approval for tools, handoffs, and LightFlow, plus fail-closed shared Graph Memory admission and audit controls.
 - **[2026-07-10]** LightAgent v0.9.3 Released: Completes runtime hook lifecycle coverage and hardens streaming tool safety with `max_tool_iterations`, consistent `on_error` / `after_run` closure, and expanded regression coverage.
@@ -72,6 +73,7 @@ Older release notes are available on [GitHub Releases](https://github.com/wanxin
 - **Human Review** 👤: `HumanApprovalHook`, durable review stores, and LightFlow approval checkpoints support approve, reject, argument editing, human responses, batches, and trace feedback for high-impact actions.
 - **Runtime Hooks** 🧩: Ordered `hooks=[...]` middleware can observe, replace, or block run, model, tool, memory, and LightFlow step phases while recording hook decisions in trace events.
 - **Event-Sourced Runtime** 🧱: Optional durable Sessions, replay, checkpoints, forks, async entry points, scoped Capability Providers, unified Policy, Inbox, Goals, Budgets, Jobs, subagents, context compaction, and SQLite FTS5 retrieval.
+- **Dynamic Verified DAGs**: Opt-in LightDAG persists runtime graph changes, executes independent Workers concurrently, requires application-owned verification before artifact publication, and resumes safely with leases and fencing.
 - **Guardrails Templates** 🛡️: Reusable input/tool/output guardrail templates help block private data, require confirmation for sensitive tools, validate high-risk parameters, and redact sensitive output.
 - **Tool Generator** 🚀: Just provide your API documentation to the [Tool Generator], which will automatically create exclusive tools for you, allowing you to quickly build hundreds of personalized custom tools in just 1 hour to improve efficiency and unleash your creative potential.
 - **Agent Self-Learning** 🧠️: Each agent has its own scene memory capabilities and the ability to self-learn from user conversations.
@@ -112,6 +114,7 @@ LightAgent keeps the default call path simple while allowing production controls
 | Evaluation | `LightEvaluator().run(agent, cases)` | Run deterministic behavioral checks from structured traces. |
 | Tool approval | `LightAgent(..., hooks=[HumanApprovalHook(...)])` | Require review before selected tools or handoffs. |
 | Workflow | `LightFlow().step(...).run(query)` | Use for deterministic multi-step execution. |
+| Dynamic workflow | `LightDAG(...).create_run(...)` | Use when Workers must propose tasks and only verified artifacts may complete nodes. |
 | Durable session | `agent.run(query, session_id="project-42")` | Continue and replay a persisted conversation. |
 | Async | `await agent.arun(query)` | Keep an asyncio application responsive. |
 
@@ -199,6 +202,10 @@ For tool/handoff approval, durable LightFlow review, batches, and feedback, see 
 For the v1.0 stability proposal, supported Python versions, public imports, and compatibility promises, see [Public API And Compatibility Inventory](docs/public_api_compatibility.md).
 
 For durable Sessions, Capability Providers, Policy, Inbox, Goals, Budgets, Jobs, compaction, subagents, Skills/MCP updates, and SQLite FTS5 retrieval, see [LightAgent v0.10 Runtime](docs/runtime_v010.md).
+
+For persistent dynamic task graphs, isolated Workers, strict verification,
+immutable artifacts, leases, restart recovery, and unified security context,
+see [LightDAG](docs/lightdag.md).
 
 For browser-use integration with recent `browser-use` versions, see [browser-use Integration](docs/browser_use.md).
 

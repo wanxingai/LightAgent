@@ -80,17 +80,19 @@ workflows + OpenAI-compatible model ecosystem.**
 ### In Development
 
 - **v0.11.0**: Dynamic DAG Multi-Agent and Unified Security Context. This is
-  the next development target after the v0.10.2 runtime-hardening release.
+  implemented locally on `codex/develop-v0.11.0`; the offline example, full
+  local regression suite, and package build pass. PR CI and remaining release
+  gates are pending.
 
-### Next Feature Release
+### Current Feature Release
 
-- **v0.11.0 (planned)**: Dynamic DAG Multi-Agent and Unified Security Context.
+- **v0.11.0 (pre-release)**: Dynamic DAG Multi-Agent and Unified Security Context.
   Add an opt-in `LightDAG` layer for persistent task graphs, runtime
   decomposition, bounded concurrent workers, verified artifacts, and restart
   recovery while retaining the existing v0.11.0 security requirements.
   The implementation guide is
   [LightDAG v0.11.0 development plan (Chinese)](docs/lightdag_v011_development_plan.zh-CN.md).
-  This plan does not change package versions or mark unreleased work complete.
+  The branch uses package version 0.11.0 but does not mark the version released.
 
 ### Completed Milestone Details
 
@@ -999,7 +1001,7 @@ Released in v0.10.2:
 
 ### v0.11.0: Dynamic DAG Multi-Agent And Unified Security Context
 
-Status: planned next feature release after v0.10.2.
+Status: implementation in progress on `codex/develop-v0.11.0`.
 
 Goal: add persistent, dynamically decomposed, verification-driven multi-agent
 execution and make security decisions explicit across runtime capabilities.
@@ -1587,9 +1589,8 @@ compatibility, replay, recovery, security, and stabilization gates.
 - Continue #39 shared Graph Memory validation as an independent security gate,
   including the opt-in matrix against the exact Mem0 Graph version and storage
   configuration used in production-like deployments.
-- Begin v0.11.0 with the shared `SecurityContext`, capability-gating contracts,
-  and the opt-in persistent LightDAG foundation described in the development
-  plan.
+- Complete PR and release-gate review for the shared `SecurityContext`,
+  capability-gating contracts, and opt-in persistent LightDAG implementation.
 - Keep `agent.run("hello")`, `stream=True`, existing Tools, Hooks, Memory,
   LightSwarm, and LightFlow compatibility behavior stable.
 

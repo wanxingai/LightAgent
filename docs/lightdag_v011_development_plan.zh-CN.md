@@ -1,8 +1,8 @@
 # LightAgent v0.11.0 开发方案：动态 DAG Multi-Agent 与统一安全上下文
 
-状态：计划，尚未实现。编写日期：2026-09-14。源码评估基线：本地 v0.10.2。
+状态：本地实现与回归测试已完成，等待 PR CI，尚未发布。编写日期：2026-09-14。实现分支：`codex/develop-v0.11.0`。
 
-本文是 v0.10.2 之后的下一个功能版本开发指导。所有新增类型、方法、事件、配置和文件名均为拟议契约；不能作为当前版本的使用文档。正式发布前以实现、契约测试及 API 清单为准。
+本文是 v0.10.2 之后的功能版本开发与验收指导。实现分支已提供本文所述核心协议；正式发布前仍以 PR 差异、契约测试及公共 API 清单为准。
 
 ## 1. 版本目标与范围
 
@@ -17,8 +17,8 @@ v0.11.0 增加可选的 `LightDAG` 运行层，让多个 LightAgent 围绕一张
 - v0.10.2 继续完成既定异常、取消、超时和幂等加固，不在补丁版本加入新调度体系。
 - v0.11.0 合并动态 DAG 与原 roadmap 的 Unified Security Context 工作。原有 `SecurityContext`、`CapabilityGate`、`ApprovalToken`、`ProviderManifest`、权限收窄与 Job 租约要求保留。
 - v0.12.0/v0.13.0 继续承担广泛的可信数据、供应链与恢复加固。DAG 自身必需的租约、权限检查、恢复和故障测试必须在 v0.11.0 完成，不能以未来版本为理由推迟。
-- 本文不改变当前包版本号；v0.10.2 已于 2026-09-14 正式发布，
-  本文件只规划 v0.11.0，也不改变既有安全问题的发布门禁。
+- 实现分支已把包版本更新为 v0.11.0；v0.10.2 已于 2026-09-14 正式发布。
+  v0.11.0 在 PR CI 和合并前仍视为未发布，也不改变既有安全问题的发布门禁。
 
 ### 1.1 首版交付范围
 
@@ -404,14 +404,16 @@ SQLite 与文件写失败、磁盘空间不足、数据库锁竞争和损坏成�
 ### 11.4 发布清单
 
 - [ ] 核心协议、状态机、序列化与 SQLite schema migration 测试通过。
-- [ ] 动态拆解 → 并发 → 修复 → 集成验证的离线示例可执行，无 API key、外网或沙箱依赖。
+- [x] 动态拆解 → 并发 → 修复 → 集成验证的离线示例可执行，无 API key、外网或沙箱依赖。
 - [ ] 故障矩阵、并发领取、预算、权限、审批与成果完整性检查通过。
 - [ ] 真实模型示例通过显式 opt-in 运行并披露模型/配置/失败次数；若未运行，明确标记未验证。
-- [ ] 原有 LightFlow、Runtime、Session、Knowledge、Policy/Review、取消、Memory、MCP、stream/non-stream 回归通过。
+- [x] 原有 LightFlow、Runtime、Session、Knowledge、Policy/Review、取消、Memory、MCP、stream/non-stream 本地回归通过（319 passed，1 skipped）。
 - [ ] Python 3.10–3.13 CI、compileall、wheel/sdist 构建及干净环境导入验证通过；不新增必需外部服务。
-- [ ] 完成原 v0.11.0 SecurityContext、CapabilityGate、ApprovalToken、ProviderManifest、子权限和 Job 租约验收。
-- [ ] 更新 `docs/lightdag.md`、runtime 文档、API 清单、README 功能边界和 release notes。
-- [ ] 最后更新版本文件与打包元数据；未通过门禁前不标记为已发布。
+- [x] 完成原 v0.11.0 SecurityContext、CapabilityGate、ApprovalToken、ProviderManifest、子权限和 Job 租约验收。
+- [x] 更新 `docs/lightdag.md`、runtime 文档、API 清单、README 功能边界和 release notes。
+- [x] 更新版本文件与打包元数据；当前仍标记为开发版，未标记为已发布。
+
+本地已通过 `compileall`、离线示例、wheel/sdist 构建及 wheel 顶层导入。Python 3.10-3.13 矩阵、完整故障/预算/持久化审批矩阵和可选真实模型验证仍由 PR CI 与后续验收跟踪，因此对应门禁保持未勾选。
 
 ## 12. 兼容、迁移与后续版本
 

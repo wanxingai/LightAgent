@@ -20,6 +20,8 @@ change before v1.0.
 | --- | --- |
 | Runtime | `LightAgent`, `LightSwarm`, `RunResult`, `StreamEvent` |
 | Workflow | `LightFlow`, `LightFlowStep`, `LightFlowStepResult`, `LightFlowResult`, `JsonLightFlowStore` |
+| Dynamic workflow | `LightDAG`, `TaskSpec`, `TaskOutcome`, `DecompositionProposal`, DAG stores, verifiers, and result/status types |
+| Unified security | `SecurityContext`, `CapabilityGate`, `ApprovalToken`, `ProviderManifest` |
 | Tools | `ToolRegistry`, `ToolLoader`, `AsyncToolDispatcher`, Python executor functions |
 | Skills and MCP | `Skill`, `SkillManager`, `create_skill_tools`, `MCPClientManager` |
 | Memory | `MemoryProtocol`, `MemoryScope`, `MemoryPolicy`, `MemoryAdmissionDecision`, `MemoryCandidate`, `MemoryPromotionDecision`, `SharedMemoryPool` |
@@ -65,6 +67,7 @@ provider-specific payload details are excluded from this promise.
 | Optional provider | `example/12.atlas_cloud.py`, model provider guide |
 | Connectors | `example/connectors/local_research`, `example/connectors/enterprise_api` |
 | Human review and evaluation | human review and evaluation guides plus tracked tests |
+| Dynamic DAG and verified artifacts | `example/14.dynamic_dag.py`, `docs/lightdag.md` |
 
 The v1.0 release should review this inventory against `LightAgent.__all__`, the
 generated package wheel, examples, and CI before declaring the stable surface.
