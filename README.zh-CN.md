@@ -55,7 +55,8 @@
 
 ---
 ## 新闻
-- <img src="https://img.alicdn.com/imgextra/i3/O1CN01SFL0Gu26nrQBFKXFR_!!6000000007707-2-tps-500-500.png" alt="new" width="30" height="30"/>**[2026-08-15]** LightAgent v0.10.0 开发版：新增统一的事件溯源 Agent Runtime，支持可持久化 Session、异步执行、Capability Registry 与 Policy、Inbox/Goals/Budgets、上下文压缩与恢复、Jobs/子 Agent、标准化 Skills/MCP 适配器和 SQLite FTS5 检索。
+- <img src="https://img.alicdn.com/imgextra/i3/O1CN01SFL0Gu26nrQBFKXFR_!!6000000007707-2-tps-500-500.png" alt="new" width="30" height="30"/>**[2026-09-14]** LightAgent v0.11.0 开发版：新增可选的持久化动态 DAG 多 Agent 执行、验证通过后才发布的不可变成果、可恢复租约与 fencing，以及统一且只能收窄权限的 `SecurityContext`、能力和审批控制。
+- **[2026-08-15]** LightAgent v0.10.0 正式发布：新增统一的事件溯源 Agent Runtime，支持可持久化 Session、异步执行、Capability Registry 与 Policy、Inbox/Goals/Budgets、上下文压缩与恢复、Jobs/子 Agent、标准化 Skills/MCP 适配器和 SQLite FTS5 检索。
 - **[2026-08-15]** LightAgent v0.9.7 正式发布：新增轻量、零依赖的 Connector 契约及离线校验与示例，强化 Python 执行器安全检查，补充可选的 Mem0 Graph 安全验证矩阵，并通过公共 API 兼容性清单为 v1.0 稳定化做准备。
 - **[2026-07-30]** LightAgent v0.9.6 正式发布：新增生产级 Trace 汇总与导出、确定性评测、工具、handoff 和 LightFlow 的可持久化人工审批，以及共享 Graph Memory 的 fail-closed 写入准入与审计控制。
 - **[2026-07-10]** LightAgent v0.9.3 正式发布：补全 `after_run`、`on_error` 和记忆检索 Hooks 生命周期，新增独立的 `max_tool_iterations` 流式工具循环上限并保持 `max_retry` 向后兼容，同时完善错误收尾、Trace 和回归测试。
@@ -93,6 +94,7 @@
 - **工作流编排** 🔁：LightFlow 将多个 Agent 编排为确定性多步骤工作流，支持显式依赖、步骤输出传递、重试、checkpoint、resume/rerun、审批节点、fallback agent 和可追踪执行。
 - **共享记忆原型** 🧠：SharedMemoryPool 提供带来源元数据和范围检索的追加式内存共享记忆，适合多 Agent 实验。
 - **Guardrails 模板** 🛡️：可复用的输入、工具和输出安全策略模板，可用于隐私拦截、敏感工具确认、高风险参数校验和输出脱敏。
+- **动态验证 DAG**：可选的 LightDAG 持久化运行期图变更，并发执行独立 Worker，只有应用固定的 Verifier 通过后才发布成果，并通过租约和 fencing 实现安全恢复。
 
 ## 🧭 架构速览
 
@@ -129,6 +131,7 @@ LightAgent 保持默认调用路径简单，同时允许逐步加入生产级控
 | 评测 | `LightEvaluator().run(agent, cases)` | 基于结构化 trace 执行确定性行为检查。 |
 | 工具审批 | `LightAgent(..., hooks=[HumanApprovalHook(...)])` | 在选定工具或 handoff 执行前要求人工审核。 |
 | 工作流 | `LightFlow().step(...).run(query)` | 用于确定性多步骤执行。 |
+| 动态工作流 | `LightDAG(...).create_run(...)` | 用于 Worker 需要提出子任务且节点只能由已验证成果完成的场景。 |
 | 持久化 Session | `agent.run(query, session_id="project-42")` | 延续并回放持久化会话。 |
 | 异步调用 | `await agent.arun(query)` | 避免阻塞 asyncio 应用。 |
 
@@ -185,6 +188,7 @@ print(report.to_dict())
 - 确定性回归用例、指标和 CI 方案请查看 [Evaluation Harness](docs/evaluation.md)。
 - 工具/handoff 审批、LightFlow 持久化审核、批量决策和反馈请查看 [Human Review](docs/human_review.md)。
 - 持久化 Session、Capability Provider、Policy、Inbox、Goals、Budgets、Jobs、上下文压缩、子 Agent、Skills/MCP 更新和 SQLite FTS5 检索，请查看 [LightAgent v0.10 Runtime](docs/runtime_v010.md)。
+- 持久化动态图、隔离 Worker、严格验证、不可变成果、租约恢复和统一安全上下文，请查看 [LightDAG](docs/lightdag.md)。
 
 ---
 

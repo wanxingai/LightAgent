@@ -99,6 +99,29 @@ token, so parent cancellation propagates without granting the child authority
 over the parent token. Subagent runs use the same cooperative token contract and
 forward an optional idempotency key when the child API supports it.
 
+As of v0.11.0, a Job may also use `lease_seconds`. Results produced after lease
+expiry are not published; the record becomes `interrupted`. An interrupted Job
+can be resumed with a new operation and incremented fencing epoch, while
+`renew_lease()` rejects stale epochs. This protects runtime state from a late
+worker but cannot roll back an external side effect.
+
+## Unified Security Context
+
+v0.11.0 adds `SecurityContext` as the identity and authority snapshot shared by
+Runtime, Capability Providers, and LightDAG. Child contexts can narrow allowed
+capabilities, resources, risk, network access, sandbox requirements, and
+deadlines, but cannot widen them. `AgentRuntime.open_session(...,
+security_context=context)` binds the context to the opened Session.
+
+`CapabilityGate` applies permissions and Policy before Provider invocation.
+For an approval-required capability, pass an `ApprovalToken` bound to the exact
+operation, canonical arguments, tenant/project/run/task/attempt identity,
+resource, and policy version. Tokens expire and are single-use by default.
+`ProviderManifest` records provider and capability digests without serializing
+raw secret configuration.
+
+See [LightDAG](lightdag.md) for dynamic verified multi-agent execution.
+
 ## Context And Knowledge
 
 `ContextBudget` and `ContextCompactor` provide deterministic trimming,
