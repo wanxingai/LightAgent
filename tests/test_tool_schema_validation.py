@@ -1,3 +1,5 @@
+import pytest
+
 from LightAgent import LightAgent, ToolRegistry
 
 
@@ -99,6 +101,77 @@ def test_registry_does_not_report_same_function_registered_again():
     registry.register_tool(tool)
 
     assert registry.validate_tools() == []
+
+
+def _make_filterable_registry():
+    registry = ToolRegistry()
+    registry.register_tool(make_tool(name="search_database"))
+    registry.register_tool(make_tool(name="get_weather"))
+    return registry
+
+
+def test_filter_tools_accepts_plain_json():
+    registry = _make_filterable_registry()
+
+    result = registry.filter_tools("{\"tools\": [{\"name\": \"get_weather\"}]}")
+
+    names = [s["function"]["name"] for s in result]
+    assert names == ["get_weather"]
+
+
+def test_filter_tools_accepts_json_fenced_markdown_block():
+    registry = _make_filterable_registry()
+
+    result = registry.filter_tools('```json\n{"tools": [{"name": "search_database"}]}\n```')
+
+    names = [s["function"]["name"] for s in result]
+    assert names == ["search_database"]
+
+
+def test_filter_tools_accepts_unlabeled_markdown_code_block():
+    """LLMs frequently wrap JSON in a plain ``` fence without the `json` tag."""
+    registry = _make_filterable_registry()
+
+    result = registry.filter_tools('```\n{"tools": [{"name": "get_weather"}]}\n```')
+
+    names = [s["function"]["name"] for s in result]
+    assert names == ["get_weather"]
+
+
+def test_filter_tools_accepts_fence_with_surrounding_prose():
+    registry = _make_filterable_registry()
+
+    result = registry.filter_tools(
+        'Here are the tools I need:\n```json\n{"tools": [{"name": "search_database"}]}\n```'
+    )
+
+    names = [s["function"]["name"] for s in result]
+    assert names == ["search_database"]
+
+
+def test_filter_tools_accepts_json_embedded_in_prose_without_fence():
+    registry = _make_filterable_registry()
+
+    result = registry.filter_tools(
+        "I need the weather. {\"tools\": [{\"name\": \"get_weather\"}]} Let me fetch it."
+    )
+
+    names = [s["function"]["name"] for s in result]
+    assert names == ["get_weather"]
+
+
+def test_filter_tools_still_reports_truly_invalid_content():
+    registry = _make_filterable_registry()
+
+    with pytest.raises(ValueError):
+        registry.filter_tools("this is not json at all")
+
+
+def test_filter_tools_reports_invalid_content_inside_a_fence():
+    registry = _make_filterable_registry()
+
+    with pytest.raises(ValueError):
+        registry.filter_tools("```\nthis is not json either\n```")
 
 
 def test_lightagent_exposes_registered_tool_diagnostics():

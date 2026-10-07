@@ -23,6 +23,38 @@ from .builtin_tools.python_executor import UNSAFE_PYTHON_TOOL_REASON, is_unsafe_
 _TOOL_NAME_PATTERN = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 _SUPPORTED_TOOL_PARAM_TYPES = {"string", "integer", "number", "boolean", "array", "object"}
 
+_FENCED_JSON_BLOCK = re.compile(
+    r"```(?:json)?\s*(.*?)```", re.DOTALL | re.IGNORECASE
+)
+_JSON_OBJECT = re.compile(r"\{.*\}", re.DOTALL)
+
+
+def _extract_json_payload(text: str) -> str:
+    """Best-effort extraction of a JSON payload from LLM tool-reflection output.
+
+    Models frequently wrap JSON in a fenced code block (with or without the
+    ``json`` tag) or embed it between explanatory prose.  This helper tries the
+    common shapes in order and falls back to the raw text so that
+    ``json.loads`` keeps its documented failure behavior for truly invalid
+    input.
+    """
+    content = text.strip()
+    if not content:
+        return content
+
+    fenced = _FENCED_JSON_BLOCK.search(content)
+    if fenced:
+        candidate = fenced.group(1).strip()
+        if candidate:
+            return candidate
+
+    object_match = _JSON_OBJECT.search(content)
+    if object_match:
+        return object_match.group(0)
+
+    return content
+
+
 
 class ToolRegistry:
     """集中管理工具注册表，避免全局变量"""
@@ -181,9 +213,7 @@ class ToolRegistry:
         """根据内容过滤工具"""
         try:
             # 安全解析可能包含 Markdown 代码块的 JSON
-            refined_content = tool_reflection_result.strip()
-            if refined_content.startswith('```json') and refined_content.endswith('```'):
-                refined_content = refined_content[7:-3].strip()
+            refined_content = _extract_json_payload(tool_reflection_result)
 
             parsed_data = json.loads(refined_content)
             valid_tools = {tool["name"].strip().lower() for tool in parsed_data.get("tools", [])}
