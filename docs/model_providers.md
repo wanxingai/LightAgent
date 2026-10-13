@@ -8,6 +8,8 @@ local runtimes work by setting three values:
   not require authentication
 - `base_url`: the OpenAI-compatible API root, usually ending in `/v1`
 
+Pass the API root, not the full `/chat/completions` path. A plain chat request is only a first check: agents that use tools also need the endpoint to accept the OpenAI `tools` request field and return `tool_calls` in the assistant response. Verify a tool-using run before describing a provider as fully compatible with LightAgent.
+
 ### OpenRouter
 
 ```python
