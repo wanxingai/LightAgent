@@ -33,7 +33,7 @@
   <h1>LightAgent🚀 – small footprint, big potential. 🌟(Open-source Agentic framework)</h1>
 </div>
 
-LightAgent is an ultra‑lightweight, open‑source framework that now natively supports Skills — letting you compose reusable capabilities with persistent memory, tool use, and tree‑of‑thought reasoning. It streamlines multi‑agent collaboration (build self‑learning agents in one step), connects to MCP over stdio and SSE, runs on any modern LLM (OpenAI, DeepSeek, Qwen, and more), and outputs OpenAI‑compatible streaming APIs for instant drop‑in with any chat interface. Small, modular, and skill‑ready — spin it up in five minutes.
+LightAgent is a modular, open-source Python framework with reusable Skills, tools, optional long-term memory, and OpenAI-compatible models and streaming. Use `LightSwarm` for routing, `LightFlow` for known steps, and `LightDAG` for persistent, dynamically verified tasks. Its optional event-sourced runtime adds durable Sessions, async execution, policy, and approvals. MCP supports stdio, SSE, and Streamable HTTP.
 
 ---
 ## News
@@ -86,9 +86,11 @@ Older release notes are available on [GitHub Releases](https://github.com/wanxin
 | Single agent runtime | `LightAgent` | One agent with model calls, tools, memory, streaming, trace, and guardrails. |
 | Durable runtime state | `Session`, `AgentRuntime` | Replayable events, checkpoints, Inbox, Goals, Budgets, Jobs, and context recovery. |
 | Capability layer | `CapabilityRegistry`, `PolicyEngine` | Scoped Providers, permission snapshots, lifecycle, policy, and audit. |
+| Unified security context | `SecurityContext`, `CapabilityGate`, `ApprovalToken` | Identity, narrowing-only permissions, authorization, and operation-bound approval. |
 | Multi-agent routing | `LightSwarm` | Role-based delegation across specialized agents. |
 | Deterministic workflow | `LightFlow` | Ordered DAG workflows, retries, checkpoints, durable approvals, resume, and rerun. |
-| Tools and integrations | `tools`, `ToolRegistry`, MCP | Python tools, generated tools, runtime tool loading, or MCP tool servers. Arbitrary Python execution is opt-in and requires an explicit sandbox boundary. |
+| Dynamic verified workflow | `LightDAG` | Runtime decomposition, Verifiers, artifacts, concurrent Workers, and recovery. |
+| Tools and integrations | `tools`, `ToolRegistry`, MCP | Python tools, generated tools, runtime tool loading, or MCP tool servers. Legacy arbitrary-Python tools are blocked in model/tool dispatch; use `safe_expression` or a custom isolated tool. |
 | Memory boundary | `MemoryPolicy`, `MemoryScope` | Tenant isolation, provenance, trust, expiration, and write admission controls. |
 | Shared memory prototype | `SharedMemoryPool` | In-memory shared memory experiments across agents. |
 | Safety controls | `input_guardrails`, `tool_guardrails`, `output_guardrails` | Privacy blocking, sensitive tool confirmation, high-risk parameter checks, and output redaction. |
@@ -115,7 +117,7 @@ LightAgent keeps the default call path simple while allowing production controls
 | Tool approval | `LightAgent(..., hooks=[HumanApprovalHook(...)])` | Require review before selected tools or handoffs. |
 | Workflow | `LightFlow().step(...).run(query)` | Use for deterministic multi-step execution. |
 | Dynamic workflow | `LightDAG(...).create_run(...)` | Use when Workers must propose tasks and only verified artifacts may complete nodes. |
-| Durable session | `agent.run(query, session_id="project-42")` | Continue and replay a persisted conversation. |
+| Durable session | `agent.run(query, session_id="project-42")` | Configure a persistent SessionStore to continue and replay a conversation. |
 | Async | `await agent.arun(query)` | Keep an asyncio application responsive. |
 
 ### Safe Tool Execution Defaults
@@ -158,6 +160,75 @@ print(report.to_dict())
 Pending approvals can be stored in `JsonReviewStore`; resolve them with an
 `ApprovalDecision`, then rerun with `approval_id=request.request_id`. LightFlow
 also persists step approvals through `flow.approve(...); flow.resume(...)`.
+
+## v0.11.0: Verified Dynamic Workflows
+
+Choose `LightSwarm` for role-based routing, `LightFlow` for a known workflow, and opt-in `LightDAG` when Workers must propose tasks during execution.
+
+- `SqliteTaskGraphStore` persists tasks, attempts, graph changes, events, and recovery state. Independent Worker instances can run concurrently.
+- Workers submit `TaskOutcome.candidate(...)`, `TaskOutcome.decompose(...)`, or `TaskOutcome.blocked(...)`. Only an application-owned Verifier can approve decomposition or publish immutable artifacts.
+- Leases and fencing reject stale attempts during restart recovery. `SecurityContext`, `CapabilityGate`, and operation-bound `ApprovalToken` keep identity, narrowing-only permissions, and approvals explicit.
+
+### Offline LightDAG Example
+
+No model, API key, or network is needed. This example uses a temporary SQLite database and artifact directory, then removes them on exit.
+
+```python
+from pathlib import Path
+from tempfile import TemporaryDirectory
+
+from LightAgent import (
+    CallableVerifier, LightDAG, LocalArtifactStore, PermissionSet,
+    SecurityContext, SqliteTaskGraphStore, TaskOutcome, TaskSpec,
+)
+
+with TemporaryDirectory() as directory:
+    root = Path(directory)
+    store = SqliteTaskGraphStore(root / "dag.sqlite3")
+    try:
+        dag = LightDAG(
+            store=store,
+            artifact_store=LocalArtifactStore(root / "artifacts"),
+            verifiers={"exact": CallableVerifier(
+                "exact", lambda request: request.candidate_content == b"42",
+            )},
+        )
+        dag.register_worker("local", lambda context: TaskOutcome.candidate("42"))
+        dag.create_run([TaskSpec(
+            task_id="answer", goal="42",
+            acceptance_contract={"equals": "42"},
+            worker_key="local", verifier_key="exact",
+        )], run_id="readme-demo", context=SecurityContext(
+            user_id="alice", tenant_id="demo", project_id="readme",
+            permissions=PermissionSet(allowed=frozenset({"dag.task.execute"})),
+        ))
+        result = dag.run("readme-demo")
+        assert result.success
+        print(result.status.value)
+    finally:
+        store.close()
+```
+
+For durable use, keep explicit database/artifact paths instead of a temporary directory. The complete [dynamic decomposition and repair example](example/14.dynamic_dag.py) and [LightDAG guide](docs/lightdag.md) cover dependencies, integration, retries, and recovery.
+
+For durable Sessions, async calls, Capability Providers, Policy, Inbox, Goals, Budgets, and Jobs, see the [runtime guide](docs/runtime_v010.md).
+
+### Compatibility And Safety
+
+- Existing `agent.run(query)`, `stream=True`, and `user_id` remain supported. LightDAG is opt-in and does not replace LightFlow.
+- v0.11.0 is single-host with local SQLite and one active scheduler per run. Execution is at-least-once; external side effects need idempotency. Distributed workers, a Web UI, and built-in code sandboxing are not included.
+- Legacy `execute_python_code`, `execute_python_file`, and `execute_python_code_stream` are blocked in model/tool dispatch even with `enable_unsafe_python=True` or a registered `SandboxProvider`. Use `safe_expression` or a genuinely isolated custom tool; trusted direct utility calls are not security sandboxes.
+- Memory provenance, admission, and promotion policies remain necessary. Framework regression tests do not certify a real shared Graph Memory backend; see the [memory security boundary](docs/memory_security.md).
+
+### Release Versus Current Main
+
+The [v0.11.0 release](https://github.com/wanxingai/LightAgent/releases/tag/v0.11.0) was published on 2026-10-01. The later `main` fixes for tool-selection JSON, MCP SDK 1.x/2.x, and the optional deed.page example were merged after that tag; an installed release may not contain them. The following installs current `main`, not the original release tag:
+
+```bash
+pip install --upgrade "git+https://github.com/wanxingai/LightAgent.git@main"
+```
+
+See the [Tools Guide](docs/tools.md), optional [Memcode adapter](docs/memcode_memory_adapter.md), [deed.page example](docs/deed_page_mcp.md), and [public API compatibility inventory](docs/public_api_compatibility.md). These examples do not require adding their external services to the core runtime.
 
 ## 🧩 Multi-agent troubleshooting (failure map)
 
@@ -209,7 +280,7 @@ For the v1.0 stability proposal, supported Python versions, public imports, and 
 
 For durable Sessions, Capability Providers, Policy, Inbox, Goals, Budgets, Jobs, compaction, subagents, Skills/MCP updates, and SQLite FTS5 retrieval, see [LightAgent v0.10 Runtime](docs/runtime_v010.md).
 
-For persistent dynamic task graphs, isolated Workers, strict verification,
+For persistent dynamic task graphs, independent Workers, strict verification,
 immutable artifacts, leases, restart recovery, and unified security context,
 see [LightDAG](docs/lightdag.md).
 
@@ -217,9 +288,9 @@ For browser-use integration with recent `browser-use` versions, see [browser-use
 
 ---
 
-## 🚧 Coming Soon
+## Roadmap
 
-- **Agent Collaborative Communication** 🛠️: Agents can also share information and transmit messages, achieving complex information communication and task collaboration.
+See the [roadmap](roadmap.md) for delivered milestones and future plans. Inbox, Jobs, and subagents are already available in the opt-in runtime.
 
 
 ---

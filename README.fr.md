@@ -31,15 +31,17 @@
 </div>
 
 <div align="center">
-  <h1>LightAgent🚀 (Next Generation Agentic AI Framework)</h1>
+  <h1>LightAgent : framework d'agents IA de nouvelle génération</h1>
 </div>
 
-**LightAgent** est un cadre agentique actif extrêmement léger avec mémoire (`mem0`), outils (`Tools`), et arbre de pensée (`ToT`), et il est entièrement open source. Il prend en charge une collaboration multi-agents plus simple que OpenAI Swarm, permettant de construire en un seul pas des agents capables d'apprentissage autonome, et prend en charge l'accès au protocole MCP via stdio et sse. Le modèle sous-jacent prend en charge OpenAI, Zhiyu ChatGLM, DeepSeek, Jieyue Xingchen, Qwen Tongyi Qianwen et d'autres grands modèles. De plus, LightAgent prend en charge la sortie de service API au format de flux OpenAI, s'intégrant sans couture aux principaux cadres de chat. 🌟
+**LightAgent** est un framework Python modulaire et open source avec des Skills réutilisables, des outils, une mémoire à long terme optionnelle, ainsi que des modèles et du streaming compatibles OpenAI. `LightSwarm` gère le routage, `LightFlow` les étapes connues et `LightDAG` les tâches dynamiques persistantes et vérifiées. Le runtime optionnel fondé sur les événements ajoute sessions persistantes, exécution asynchrone, politiques et approbations. MCP prend en charge stdio, SSE et Streamable HTTP.
 
 ---
 
 ## Actualités
-- <img src="https://img.alicdn.com/imgextra/i3/O1CN01SFL0Gu26nrQBFKXFR_!!6000000007707-2-tps-500-500.png" alt="new" width="30" height="30"/>**[2026-08-15]** LightAgent v0.9.7 publié : ajoute un contrat Connector léger et sans dépendance avec validation hors ligne et exemples, renforce les contrôles de sécurité de l'exécuteur Python, introduit une matrice de sécurité Mem0 Graph optionnelle et prépare la stabilisation de v1.0 avec un inventaire de compatibilité de l'API publique.
+- <img src="https://img.alicdn.com/imgextra/i3/O1CN01SFL0Gu26nrQBFKXFR_!!6000000007707-2-tps-500-500.png" alt="new" width="30" height="30"/>**[2026-10-01]** LightAgent v0.11.0 publié : ajoute des DAG dynamiques multi-agents persistants et optionnels, des artefacts immuables soumis à vérification, une reprise avec baux et fencing, et un `SecurityContext` unifié avec permissions uniquement réductibles et contrôles d'approbation.
+- **[2026-08-15]** LightAgent v0.10.0 publié : introduit le runtime fondé sur les événements avec sessions persistantes, exécution asynchrone, Capability Registry et Policy, Inbox, Goals, Budgets, Jobs, sous-agents, compactage du contexte et recherche SQLite FTS5.
+- **[2026-08-15]** LightAgent v0.9.7 publié : ajoute un contrat Connector léger et sans dépendance avec validation hors ligne et exemples, renforce les contrôles de sécurité de l'exécuteur Python, introduit une matrice de sécurité Mem0 Graph optionnelle et prépare la stabilisation de v1.0 avec un inventaire de compatibilité de l'API publique.
 - **[2026-07-30]** LightAgent v0.9.6 publié : ajoute des résumés et exportateurs de traces pour la production, une évaluation déterministe, une approbation humaine persistante pour les outils, les handoffs et LightFlow, ainsi qu'une admission d'écriture fail-closed et des contrôles d'audit pour la mémoire graphique partagée.
 - **[2026-06-24]** LightAgent v0.9.0 : ajoute des workflows LightFlow avec checkpoints, reprise/rerun, nœuds d'approbation, états d'étapes plus clairs, métadonnées de trace, modèles Guardrails, contrôles MemoryPolicy et prototype SharedMemoryPool.
 - **[2026-06-14]** LightAgent v0.8.1 : ajoute MemoryScope et les filtres MemoryPolicy par provenance, portée et confiance.
@@ -49,20 +51,22 @@ Les anciennes notes sont disponibles dans [GitHub Releases](https://github.com/w
 
 ---
 
-## ✨ Features
+## ✨ Fonctionnalités
 
-- **Light and Efficient** 🚀: Minimalist design, rapid deployment, suitable for various application scenarios. (No LangChain, No LlamaIndex) 100% implemented in Python, with no extra dependencies, core code only 1000 lines, completely open source. 
-- **Memory Support** 🧠: Supports user-customizable long-term memory for each user, natively supporting `mem0` memory module, automatically managing personalized memory during conversations to make agents smarter.
-- **Autonomous Learning** 📚️: Each agent has independent learning capabilities, and authorized administrators can manage each agent.
-- **Tool Integration** 🛠️: Supports customizable tools (`Tools`), automated tool generation, and flexible expansion to meet diverse needs.  
-- **Complex Goals** 🌳: Built-in reflective Tree of Thought (`ToT`) module supports complex task decomposition and multi-step reasoning, enhancing task processing capabilities.  
-- **Multi-agent Collaboration** 🤖: Multi-agent cooperation that is easier to implement than Swarm, with built-in LightSwarm for intent recognition and task transfer capabilities, intelligently handling user input and transferring tasks to other agents as needed. 
-- **Independent Execution** 🤖: Tasks are completed autonomously without human intervention.  
-- **Multi-model Support** 🔄: Compatible with OpenAI, Zhiyu ChatGLM, Baichuan large models, Jumpshop Star, DeepSeek, Qwen series large models.  
-- **Streaming API** 🌊: Supports OpenAI streaming API service output, seamlessly integrating with mainstream chat frameworks, enhancing user experience.  
-- **Tools Generator** 🚀: Just hand over your API documentation to the [Tools Generator], and it will automatically create your exclusive tools, helping you quickly build hundreds of personalized custom tools in just one hour, enhancing efficiency and unleashing your creative potential.
-- **Agent Self-Learning** 🧠️: Each agent has its own contextual memory capability, enabling self-learning from user conversations.
-- **Adaptive Tools Mechanism** 🛠️: Support for adding unlimited tools, allowing the large model to first select a candidate tool set from tens of thousands of tools, filtering out irrelevant tools before submitting context to the large model, significantly reducing token consumption.
+- **Léger et efficace** : framework Python modulaire et open source, sans LangChain ni LlamaIndex, avec des dépendances ciblées pour les modèles, MCP, la mémoire et les traces.
+- **Runtime fondé sur les événements** : sessions persistantes optionnelles, replay, checkpoints, appels asynchrones, Capability et Policy, Inbox, Goals, Budgets, Jobs, sous-agents, compactage du contexte et recherche SQLite FTS5.
+- **DAG dynamiques vérifiés** : LightDAG persiste les changements du graphe, exécute les Workers indépendants en parallèle et ne publie les artefacts immuables qu'après vérification définie par l'application.
+- **Mémoire** : mémoire à long terme personnalisable par utilisateur, avec intégration optionnelle de `mem0` et contrôle par MemoryPolicy.
+- **Apprentissage** : chaque agent peut exploiter la mémoire de ses échanges, sous le contrôle d'administrateurs autorisés.
+- **Intégration d'outils** : outils Python personnalisés, génération d'outils et intégration MCP.
+- **Objectifs complexes** : le module Tree of Thought (`ToT`) prend en charge la décomposition et le raisonnement en plusieurs étapes.
+- **Collaboration multi-agent** : LightSwarm reconnaît les intentions et délègue aux agents spécialisés.
+- **Exécution autonome** : tâches et outils s'exécutent dans les limites des politiques et approbations configurées.
+- **Modèles multiples** : fournisseurs compatibles OpenAI, dont OpenAI, DeepSeek, Qwen, Zhipu ChatGLM et les serveurs locaux compatibles.
+- **API en streaming** : réponses au format OpenAI pour l'intégration aux interfaces de conversation.
+- **Génération d'outils** : création d'outils à partir de la documentation d'une API ; voir le [guide des outils](docs/tools.md).
+- **Mémoire contextuelle** : conservation des informations pertinentes issues des conversations, selon la politique d'admission.
+- **Sélection adaptative des outils** : sélection d'un sous-ensemble pertinent avant l'envoi au modèle afin de limiter la taille du contexte.
 - **Orchestration de workflows** 🔁 : LightFlow chaîne des agents dans des workflows déterministes avec dépendances explicites, passage de sorties, retries, checkpoints, reprise/rerun, approbations, agents fallback et traçabilité.
 - **Prototype de mémoire partagée** 🧠 : SharedMemoryPool fournit une mémoire partagée en mémoire avec métadonnées de provenance, récupération par portée et résultats compatibles MemoryPolicy.
 - **Modèles Guardrails** 🛡️ : règles réutilisables d'entrée, d'outil et de sortie pour bloquer les données privées, confirmer les outils sensibles, valider les paramètres à risque et masquer les sorties.
@@ -74,8 +78,12 @@ Les anciennes notes sont disponibles dans [GitHub Releases](https://github.com/w
 | Couche | API principale | À utiliser pour |
 | --- | --- | --- |
 | Runtime mono-agent | `LightAgent` | Un agent avec modèle, outils, mémoire, streaming, trace et guardrails. |
+| État persistant du runtime | `Session`, `AgentRuntime` | Replay, checkpoints, Inbox, Goals, Budgets, Jobs et restauration du contexte. |
+| Couche de capacités | `CapabilityRegistry`, `PolicyEngine` | Fournisseurs à portée limitée, politiques, cycle de vie et audit. |
+| Contexte de sécurité unifié | `SecurityContext`, `CapabilityGate`, `ApprovalToken` | Identité, permissions uniquement réductibles, autorisation et approbations liées à une opération. |
 | Routage multi-agent | `LightSwarm` | Délégation par rôle entre agents spécialisés. |
 | Workflow déterministe | `LightFlow` | DAG, retries, checkpoints, approbations, reprise et rerun. |
+| Workflow dynamique vérifié | `LightDAG` | Décomposition dynamique, vérificateurs, artefacts, Workers parallèles et reprise. |
 | Outils et intégrations | `tools`, `ToolRegistry`, MCP | Outils Python, générés, chargement runtime ou serveurs MCP. |
 | Frontière mémoire | `MemoryPolicy`, `MemoryScope` | Isolation de tenant, provenance, confiance, expiration et admission d’écriture. |
 | Mémoire partagée | `SharedMemoryPool` | Expériences de mémoire partagée entre agents. |
@@ -98,6 +106,78 @@ LightAgent garde le chemin d’appel par défaut simple et permet d’ajouter pr
 | Guardrails | `LightAgent(..., input_guardrails=[...])` | Ajoute des politiques d’entrée, outil et sortie. |
 | Runtime hooks | `LightAgent(..., hooks=[fn])` | Observe, remplace ou bloque les payloads du cycle de vie. |
 | Workflow | `LightFlow().step(...).run(query)` | Pour l’exécution déterministe multi-étapes. |
+| Workflow dynamique | `LightDAG(...).create_run(...)` | Proposer des tâches et vérifier les résultats avant publication. |
+| Session persistante | `agent.run(query, session_id="project-42")` | Nécessite un SessionStore persistant configuré pour le replay et la reprise. |
+| Asynchrone | `await agent.arun(query)` | Point d'entrée non bloquant pour les applications asyncio. |
+
+## v0.11.0 : Workflows dynamiques vérifiés
+
+Utilisez `LightSwarm` pour le routage par rôle, `LightFlow` pour des étapes connues et le `LightDAG` optionnel lorsque les Workers doivent proposer de nouvelles tâches pendant l'exécution.
+
+- `SqliteTaskGraphStore` conserve tâches, tentatives, modifications du graphe, événements et état de reprise. Des instances indépendantes de Worker peuvent s'exécuter en parallèle.
+- Les Workers renvoient `TaskOutcome.candidate(...)`, `TaskOutcome.decompose(...)` ou `TaskOutcome.blocked(...)`. Seul un Verifier fixé par l'application peut accepter une décomposition ou publier des artefacts immuables.
+- Les baux et le fencing rejettent les tentatives périmées lors d'une reprise. `SecurityContext`, `CapabilityGate` et les `ApprovalToken` liés à une opération rendent explicites identité, permissions uniquement réductibles et approbations.
+
+### Exemple LightDAG hors ligne
+
+Aucun modèle, clé API ou réseau n'est nécessaire. L'exemple utilise une base SQLite et un répertoire d'artefacts temporaires, supprimés à la fin.
+
+```python
+from pathlib import Path
+from tempfile import TemporaryDirectory
+
+from LightAgent import (
+    CallableVerifier, LightDAG, LocalArtifactStore, PermissionSet,
+    SecurityContext, SqliteTaskGraphStore, TaskOutcome, TaskSpec,
+)
+
+with TemporaryDirectory() as directory:
+    root = Path(directory)
+    store = SqliteTaskGraphStore(root / "dag.sqlite3")
+    try:
+        dag = LightDAG(
+            store=store,
+            artifact_store=LocalArtifactStore(root / "artifacts"),
+            verifiers={"exact": CallableVerifier(
+                "exact", lambda request: request.candidate_content == b"42",
+            )},
+        )
+        dag.register_worker("local", lambda context: TaskOutcome.candidate("42"))
+        dag.create_run([TaskSpec(
+            task_id="answer", goal="42",
+            acceptance_contract={"equals": "42"},
+            worker_key="local", verifier_key="exact",
+        )], run_id="readme-demo", context=SecurityContext(
+            user_id="alice", tenant_id="demo", project_id="readme",
+            permissions=PermissionSet(allowed=frozenset({"dag.task.execute"})),
+        ))
+        result = dag.run("readme-demo")
+        assert result.success
+        print(result.status.value)
+    finally:
+        store.close()
+```
+
+Pour conserver les données, utilisez des chemins explicites et durables plutôt que des répertoires temporaires. L'[exemple complet de décomposition et réparation](example/14.dynamic_dag.py) et le [guide LightDAG](docs/lightdag.md) couvrent dépendances, intégration, nouvelles tentatives et reprise.
+
+Le [guide du runtime](docs/runtime_v010.md) explique les sessions persistantes, appels asynchrones, Capability Providers, Policy, Inbox, Goals, Budgets et Jobs.
+
+### Compatibilité et limites de sécurité
+
+- `agent.run(query)`, `stream=True` et `user_id` restent disponibles. LightDAG est optionnel et ne remplace pas LightFlow.
+- v0.11.0 fonctionne sur un seul hôte, avec SQLite local et un ordonnanceur actif par exécution. L'exécution est au moins une fois ; les effets externes exigent l'idempotence. Workers distribués, interface web et sandbox de code intégrée sont hors périmètre.
+- Les anciens `execute_python_code`, `execute_python_file` et `execute_python_code_stream` sont bloqués dans l'exécution des outils du modèle, même avec `enable_unsafe_python=True` ou un `SandboxProvider` enregistré. Utilisez `safe_expression` ou un outil réellement isolé ; l'appel direct à ces utilitaires ne constitue pas une sandbox de sécurité.
+- Les politiques de provenance, d'admission et de promotion mémoire restent nécessaires. Les tests du framework ne certifient pas un backend réel de mémoire graphique partagée ; voir la [sécurité mémoire](docs/memory_security.md).
+
+### Version publiée et branche main actuelle
+
+[v0.11.0](https://github.com/wanxingai/LightAgent/releases/tag/v0.11.0) a été publiée le 2026-10-01. Les corrections ultérieures du JSON de sélection d'outils, des SDK MCP 1.x/2.x et l'exemple optionnel deed.page ont été intégrés après ce tag et peuvent manquer dans le paquet publié. La commande suivante installe `main` actuel, pas le tag initial :
+
+```bash
+pip install --upgrade "git+https://github.com/wanxingai/LightAgent.git@main"
+```
+
+Consultez [Tools Guide](docs/tools.md), l'[adaptateur Memcode](docs/memcode_memory_adapter.md) optionnel, l'[exemple deed.page](docs/deed_page_mcp.md) et l'[inventaire de compatibilité publique](docs/public_api_compatibility.md). Ces services externes ne sont pas requis par le runtime principal.
 
 ## 📋 Documentation
 
@@ -114,36 +194,36 @@ LightAgent garde le chemin d’appel par défaut simple et permet d’ajouter pr
 - Pour les régressions déterministes, consultez [Evaluation Harness](docs/evaluation.md).
 - Pour l'approbation outil/handoff, la revue persistante et le feedback, consultez [Human Review](docs/human_review.md).
 
-## 🚧 Coming Soon
+## Feuille de route
 
-- **Communication collaborative des agents** 🛠️ : Les agents peuvent également partager des informations et transmettre des messages, réalisant ainsi une communication complexe des informations et une collaboration sur les tâches.
+Consultez la [feuille de route](roadmap.md) pour les étapes livrées et les projets futurs. Inbox, Jobs et sous-agents sont déjà disponibles dans le runtime optionnel.
 
-## 🌟 Why Choose LightAgent?
+## 🌟 Pourquoi choisir LightAgent ?
 
-- **Open Source and Free** 💖: Completely open source, community-driven, continuously updated, contributions welcomed!  
-- **Easy to Get Started** 🎯: Detailed documentation, abundant examples, quick to start, and easy to integrate into your projects.  
-- **Community Support** 👥: An active developer community ready to assist and answer your questions.  
-- **High Performance** ⚡: Optimized design for efficient operation, meeting high concurrency scenario demands.  
+- **Libre et ouvert** : développement communautaire et contributions bienvenues.
+- **Prise en main** : documentation et exemples pour intégrer progressivement le framework.
+- **Communauté** : échanges, questions et suivi des problèmes sur GitHub.
+- **Concurrence** : points d'entrée asynchrones et Workers indépendants pour les tâches parallélisables.
 
 ---
 
-## 🛠️ Quick Start
+## 🛠️ Démarrage rapide
 
-### Install the Latest Version of LightAgent
+### Installer la dernière version de LightAgent
 
 ```bash
 pip install lightagent
 ```
 
-(Optional installation) Install the Mem0 package via pip:
+(Optionnel) Installez le paquet Mem0 avec pip :
 
 ```bash
 pip install mem0ai
 ```
 
-Alternatively, you can use Mem0 on a hosting platform with one-click [click here](https://www.mem0.ai/).
+Vous pouvez aussi utiliser le [service hébergé Mem0](https://www.mem0.ai/).
 
-### Hello World Sample Code
+### Premier exemple
 
 ```python
 from LightAgent import LightAgent
@@ -228,7 +308,7 @@ print(shared_memory.list_records(user_id="tenant-a:alice"))
 ```
 
 
-### Set Agent Self-Recognition Through System Prompts
+### Définir le rôle de l'agent avec un message système
 
 ```python
 from LightAgent import LightAgent
@@ -245,7 +325,7 @@ response = agent.run("May I ask who you are?")
 print(response)
 ```
 
-### Tool Usage Sample Code
+### Exemple d'utilisation d'un outil
 
 ```python
 from LightAgent import LightAgent
@@ -274,13 +354,13 @@ agent = LightAgent(model="qwen-turbo-2024-11-01", api_key="your_api_key", base_u
 response = agent.run("Please help me check the weather condition in Shanghai")
 print(response)
 ```
-Supports custom tools in unlimited quantities.
+Plusieurs outils personnalisés peuvent être enregistrés.
 
-Multiple tool examples: tools = [search_news,get_weather,get_stock_realtime_data,get_stock_kline_data]
+Exemple de liste : `tools = [search_news, get_weather, get_stock_realtime_data, get_stock_kline_data]`.
 
 ---
 
-## Detailed Function Descriptions
+## Fonctionnalités en détail
 
 Le README garde le modèle d’utilisation principal ; les exemples longs, réglages d’adaptateurs et pratiques de production sont dans les docs dédiées.
 
@@ -351,78 +431,78 @@ Consultez [Guardrails](docs/guardrails.md).
 ### 12. SharedMemoryPool
 `SharedMemoryPool` est un prototype en mémoire pour mémoire partagée multi-agent, à combiner avec `MemoryPolicy`.
 
-## Supported Mainstream Agent Models
+## Modèles pris en charge
 
 LightAgent fonctionne avec les endpoints chat completion compatibles OpenAI : OpenAI, OpenRouter, Zhipu ChatGLM, DeepSeek, Qwen, StepFun, Moonshot/Kimi, MiniMax, vLLM, llama.cpp, Ollama et passerelles auto-hébergées.
 
-For provider-specific parameters, base URLs, local model setup, and troubleshooting, see [Model Provider Configuration](docs/model_providers.md).
+Pour les paramètres des fournisseurs, les URL de base, les modèles locaux et le dépannage, consultez la [configuration des modèles](docs/model_providers.md).
 
-## Use Cases
+## Cas d'utilisation
 
-- **Intelligent Customer Service**: Provide efficient customer support through multi-turn conversations and tool integration.
-- **Data Analysis**: Use Tree of Thought and multi-agent collaboration to process complex data analysis tasks.
-- **Automated Tools**: Quickly build customized tools through automated tool generation.
-- **Educational Assistance**: Provide personalized learning experiences through memory modules and streaming APIs.
+- **Service client** : conversations multi-tours et intégration d'outils métier.
+- **Analyse de données** : décomposition des tâches et collaboration entre agents.
+- **Automatisation** : création et intégration d'outils personnalisés.
+- **Assistance pédagogique** : expériences personnalisées avec mémoire et réponses en streaming.
 
 ---
  
-## 🛠️ Contribution Guidelines
+## 🛠️ Contribuer
 
-We welcome contributions of any form! Whether it's code, documentation, testing, or feedback, every bit helps the project immensely. If you have good ideas or find bugs, please submit an issue or pull request. Here are the contribution steps:
+Les contributions au code, à la documentation, aux tests et les retours sont bienvenus. Signalez les problèmes ou proposez vos améliorations dans une issue ou une pull request :
 
-1. **Fork This Project**: Click the `Fork` button in the upper right corner to copy the project to your GitHub repository.
-2. **Create a Branch**: Create your development branch locally:  
+1. **Créer un fork** : copiez le projet vers votre compte avec le bouton `Fork`.
+2. **Créer une branche** : créez une branche locale pour vos modifications :
    ```bash
    git checkout -b feature/YourFeature
    ```
-3. **Submit Changes**: After completing the development, submit your changes:  
+3. **Enregistrer les modifications** : après le développement, créez un commit :
    ```bash
    git commit -m 'Add some feature'
    ```
-4. **Push Branch**: Push the branch to your remote repository:  
+4. **Publier la branche** : envoyez-la vers votre fork :
    ```bash
    git push origin feature/YourFeature
    ```
-5. **Submit Pull Request**: Submit a pull request on GitHub and describe your changes.
+5. **Ouvrir une pull request** : décrivez les changements et les tests sur GitHub.
 
-We will review your contributions as soon as possible. Thank you for your support! ❤️
-
----
-
-## 🙏 Acknowledgments
-
-The development and implementation of LightAgent would not have been possible without the inspiration and support from the following open-source projects, especially the excellent teams behind them:
-
-- **mem0**: Thanks to [mem0](https://github.com/mem0ai/mem0) for providing the memory module, which offers strong support for contextual management in LightAgent.  
-- **Swarm**: Thanks to [Swarm](https://github.com/openai/swarm) for the multi-agent collaborative design ideas that underpin the multi-agent functionality of LightAgent.  
-- **ChatGLM3**: Thanks to [ChatGLM3](https://github.com/THUDM/ChatGLM3) for high-performance Chinese large model support and design inspiration.  
-- **Qwen**: Thanks to [Qwen](https://github.com/QwenLM/Qwen) for high-performance Chinese large model support.  
-- **DeepSeek-V3**: Thanks to [DeepSeek-V3](https://github.com/deepseek-ai/DeepSeek-V3) for high-performance Chinese large model support.  
-- **StepFun**: Thanks to [step](https://www.stepfun.com/) for high-performance Chinese large model support.  
+Nous examinerons votre contribution dès que possible. Merci de votre soutien.
 
 ---
 
-## 📄 License
+## 🙏 Remerciements
 
-LightAgent is licensed under the [Apache 2.0 License](LICENSE). You are free to use, modify, and distribute this project, but please comply with the terms of the license.
+LightAgent s'appuie sur les idées et les contributions des projets open source suivants :
+
+- **mem0** : [module de mémoire](https://github.com/mem0ai/mem0) et gestion du contexte.
+- **Swarm** : [principes de collaboration multi-agent](https://github.com/openai/swarm).
+- **ChatGLM3** : [modèles et inspiration](https://github.com/THUDM/ChatGLM3).
+- **Qwen** : [modèles de langage](https://github.com/QwenLM/Qwen).
+- **DeepSeek-V3** : [modèles de langage](https://github.com/deepseek-ai/DeepSeek-V3).
+- **StepFun** : [modèles de langage](https://www.stepfun.com/).
 
 ---
 
-## 📬 Contact Us
+## 📄 Licence
 
-For any questions or suggestions, feel free to contact us:
+LightAgent est distribué sous [licence Apache 2.0](LICENSE). Vous pouvez l'utiliser, le modifier et le redistribuer dans le respect de cette licence.
 
-- **Email**: service@wanxingai.com  
+---
+
+## 📬 Nous contacter
+
+Pour toute question ou suggestion :
+
+- **Courriel** : service@wanxingai.com
 - **GitHub Issues**: [https://github.com/wanxingai/LightAgent/issues](https://github.com/wanxingai/LightAgent/issues)  
 
-We look forward to your feedback to make LightAgent stronger! 🚀
+Vos retours contribuent à améliorer LightAgent.
 
 
 ---
 
 <p align="center">
-  <strong>LightAgent - Make intelligence lighter and the future simpler.</strong> 🌈
+  <strong>LightAgent - Une intelligence plus légère, un avenir plus simple.</strong>
 </p>
 
  
-**LightAgent** —— A lightweight, flexible, and powerful proactive Agent framework to help you quickly build intelligent applications!
+**LightAgent** : un framework d'agents léger, flexible et modulaire pour construire des applications intelligentes.

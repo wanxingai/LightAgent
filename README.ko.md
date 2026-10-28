@@ -33,12 +33,14 @@
   <h1>LightAgent🚀（차세대 Agentic AI 프레임워크）</h1>
 </div>
 
-**LightAgent**는 기억(`mem0`), 도구(`Tools`), 사고 트리(`ToT`)를 갖춘 극히 경량의 능동형 에이전틱 프레임워크로, 완전 오픈 소스입니다. 이는 OpenAI Swarm보다 더 간단한 다중 에이전트 협업을 지원하며, 단 한 단계로 자기 학습 능력을 갖춘 에이전트를 구축할 수 있고, stdio 및 sse 방식으로 MCP 프로토콜에 접속할 수 있습니다. 기본 모델은 OpenAI, 지프 ChatGLM, DeepSeek, 계단별 별, Qwen 통의 천문 대모델 등을 지원합니다. 또한, LightAgent는 OpenAI 스트림 형식 API 서비스 출력을 지원하여 주요 Chat 프레임워크에 원활하게 접속할 수 있습니다.🌟
+**LightAgent**는 재사용 가능한 Skills, 도구, 선택적 장기 메모리, OpenAI 호환 모델 및 스트리밍을 지원하는 모듈형 오픈 소스 Python 프레임워크입니다. `LightSwarm`은 라우팅, `LightFlow`는 정해진 단계, `LightDAG`는 영속적인 동적 검증 작업을 담당합니다. 선택적 이벤트 소싱 Runtime은 영속 Session, 비동기 실행, 정책 및 승인을 제공합니다. MCP는 stdio, SSE, Streamable HTTP를 지원합니다.
 
 ---
 
 ## 뉴스
-- <img src="https://img.alicdn.com/imgextra/i3/O1CN01SFL0Gu26nrQBFKXFR_!!6000000007707-2-tps-500-500.png" alt="new" width="30" height="30"/>**[2026-08-15]** LightAgent v0.9.7 릴리스: 오프라인 검증과 예제를 포함한 경량 무의존성 Connector 계약을 추가하고, Python executor 보안 검사를 강화했으며, 선택형 Mem0 Graph 보안 검증 매트릭스와 v1.0 안정화를 위한 공개 API 호환성 목록을 도입했습니다.
+- <img src="https://img.alicdn.com/imgextra/i3/O1CN01SFL0Gu26nrQBFKXFR_!!6000000007707-2-tps-500-500.png" alt="new" width="30" height="30"/>**[2026-10-01]** LightAgent v0.11.0 릴리스: 선택형 영속 동적 다중 에이전트 DAG, 검증 후에만 공개되는 불변 산출물, lease와 fencing을 통한 복구, 권한을 축소만 할 수 있는 통합 `SecurityContext` 및 승인 제어를 추가했습니다.
+- **[2026-08-15]** LightAgent v0.10.0 릴리스: 영속 Session, 비동기 실행, Capability Registry와 Policy, Inbox, Goals, Budgets, Jobs, 하위 에이전트, 컨텍스트 압축 및 SQLite FTS5 검색을 갖춘 이벤트 기반 Agent Runtime을 도입했습니다.
+- **[2026-08-15]** LightAgent v0.9.7 릴리스: 오프라인 검증과 예제를 포함한 경량 무의존성 Connector 계약을 추가하고, Python executor 보안 검사를 강화했으며, 선택형 Mem0 Graph 보안 검증 매트릭스와 v1.0 안정화를 위한 공개 API 호환성 목록을 도입했습니다.
 - **[2026-07-30]** LightAgent v0.9.6 릴리스: 프로덕션 Trace 요약 및 내보내기, 결정론적 평가, 도구·handoff·LightFlow의 지속 가능한 사람 승인, 공유 Graph Memory의 fail-closed 쓰기 승인 및 감사 제어를 추가했습니다.
 - **[2026-06-24]** LightAgent v0.9.0: 영속 LightFlow checkpoint, resume/rerun, 승인 노드, 명확한 단계 상태, trace 메타데이터, Guardrails 템플릿, MemoryPolicy 제어, SharedMemoryPool 프로토타입을 추가했습니다.
 - **[2026-06-14]** LightAgent v0.8.1: MemoryScope 규약과 MemoryPolicy 출처/범위/신뢰도 필터를 추가했습니다.
@@ -50,7 +52,9 @@
 
 ## ✨ 특징
 
-- **경량 및 효율성** 🚀: 극단적으로 간단한 디자인, 빠른 배포, 다양한 규모의 애플리케이션에 적합합니다. (No LangChain, No LlamaIndex) 100% 파이썬으로 구현되어 추가 의존성이 필요 없으며, 핵심 코드는 단 1000줄이며 완전히 오픈 소스입니다. 
+- **경량 및 효율성**: LangChain이나 LlamaIndex 없이 사용하는 모듈형 오픈 소스 Python 프레임워크로, 모델, MCP, 메모리, 추적에는 목적별 의존성을 사용합니다.
+- **이벤트 소싱 Runtime**: 선택적 영속 Session, 재생, checkpoint, 비동기 호출, Capability와 Policy, Inbox, Goals, Budgets, Jobs, 하위 Agent, 컨텍스트 압축 및 SQLite FTS5 검색.
+- **동적 검증 DAG**: LightDAG는 그래프 변경을 영속화하고 독립 Worker를 병렬 실행하며, 애플리케이션이 지정한 검증을 통과한 후에만 불변 결과물을 게시합니다.
 - **기억 지원** 🧠: 각 사용자에 대한 맞춤형 장기 기억을 지원하며, 기본적으로 `mem0` 기억 모듈을 지원하여 대화 과정에서 사용자 맞춤 기억을 자동으로 관리하여 에이전트를 더욱 스마트하게 만듭니다.
 - **자율 학습** 📚️: 각 에이전트는 자율 학습 능력을 가지며 권한이 있는 관리자는 각 에이전트를 관리할 수 있습니다.
 - **도구 통합** 🛠️: 사용자 정의 도구(`Tools`)를 지원하며, 자동화 도구 생성을 통해 유연하게 확장 가능하며 다양한 요구를 충족합니다.  
@@ -73,8 +77,12 @@
 | 계층 | 주요 API | 사용 시점 |
 | --- | --- | --- |
 | 단일 Agent 런타임 | `LightAgent` | 모델 호출, 도구, 메모리, 스트리밍, trace, guardrails가 필요한 경우. |
+| 영속 런타임 상태 | `Session`, `AgentRuntime` | 재생, checkpoint, Inbox, Goals, Budgets, Jobs 및 컨텍스트 복구. |
+| 기능 계층 | `CapabilityRegistry`, `PolicyEngine` | 범위가 제한된 Provider, 정책, 수명 주기 및 감사. |
+| 통합 보안 컨텍스트 | `SecurityContext`, `CapabilityGate`, `ApprovalToken` | ID, 축소만 가능한 권한, 인가 및 작업에 연결된 승인. |
 | 다중 Agent 라우팅 | `LightSwarm` | 전문 Agent 간 역할 기반 위임. |
 | 결정적 workflow | `LightFlow` | DAG, 재시도, checkpoint, 승인, resume, rerun. |
+| 동적 검증 워크플로 | `LightDAG` | 동적 분해, Verifier, 결과물, 병렬 Worker 및 복구. |
 | 도구와 통합 | `tools`, `ToolRegistry`, MCP | Python 도구, 생성 도구, 런타임 로딩, MCP 서버. |
 | 메모리 경계 | `MemoryPolicy`, `MemoryScope` | 테넌트 격리, 출처, 신뢰, 만료, 쓰기 승인. |
 | 공유 메모리 | `SharedMemoryPool` | Agent 간 공유 기억 실험. |
@@ -97,6 +105,78 @@ LightAgent는 기본 호출 경로를 단순하게 유지하면서 운영 제어
 | Guardrails | `LightAgent(..., input_guardrails=[...])` | 입력, 도구, 출력 정책을 추가합니다. |
 | Runtime hooks | `LightAgent(..., hooks=[fn])` | 생명주기 payload를 관찰, 교체, 차단합니다. |
 | Workflow | `LightFlow().step(...).run(query)` | 결정적 다단계 실행에 사용합니다. |
+| 동적 워크플로 | `LightDAG(...).create_run(...)` | 작업을 동적으로 제안하고 게시 전에 결과를 검증합니다. |
+| 영속 Session | `agent.run(query, session_id="project-42")` | 이어서 실행하거나 재생하려면 영속 SessionStore를 설정해야 합니다. |
+| 비동기 | `await agent.arun(query)` | asyncio 애플리케이션용 비차단 진입점입니다. |
+
+## v0.11.0: 검증 기반 동적 워크플로
+
+역할 기반 라우팅에는 `LightSwarm`, 정해진 단계에는 `LightFlow`, 실행 중 Worker가 새 작업을 제안해야 할 때는 선택적으로 활성화하는 `LightDAG`를 사용합니다.
+
+- `SqliteTaskGraphStore`는 작업, 시도, 그래프 변경, 이벤트 및 복구 상태를 저장합니다. 독립적인 Worker 인스턴스를 동시에 실행할 수 있습니다.
+- Worker는 `TaskOutcome.candidate(...)`, `TaskOutcome.decompose(...)` 또는 `TaskOutcome.blocked(...)`를 반환합니다. 분해 승인과 불변 산출물 공개는 애플리케이션이 고정한 Verifier만 수행합니다.
+- lease와 fencing은 재시작 시 오래된 시도를 거부합니다. `SecurityContext`, `CapabilityGate`, 작업에 바인딩된 `ApprovalToken`이 신원, 축소만 가능한 권한 및 승인을 명시합니다.
+
+### 오프라인 LightDAG 예제
+
+모델, API 키, 네트워크가 필요하지 않습니다. 임시 SQLite 데이터베이스와 산출물 디렉터리를 사용하고 종료 시 정리합니다.
+
+```python
+from pathlib import Path
+from tempfile import TemporaryDirectory
+
+from LightAgent import (
+    CallableVerifier, LightDAG, LocalArtifactStore, PermissionSet,
+    SecurityContext, SqliteTaskGraphStore, TaskOutcome, TaskSpec,
+)
+
+with TemporaryDirectory() as directory:
+    root = Path(directory)
+    store = SqliteTaskGraphStore(root / "dag.sqlite3")
+    try:
+        dag = LightDAG(
+            store=store,
+            artifact_store=LocalArtifactStore(root / "artifacts"),
+            verifiers={"exact": CallableVerifier(
+                "exact", lambda request: request.candidate_content == b"42",
+            )},
+        )
+        dag.register_worker("local", lambda context: TaskOutcome.candidate("42"))
+        dag.create_run([TaskSpec(
+            task_id="answer", goal="42",
+            acceptance_contract={"equals": "42"},
+            worker_key="local", verifier_key="exact",
+        )], run_id="readme-demo", context=SecurityContext(
+            user_id="alice", tenant_id="demo", project_id="readme",
+            permissions=PermissionSet(allowed=frozenset({"dag.task.execute"})),
+        ))
+        result = dag.run("readme-demo")
+        assert result.success
+        print(result.status.value)
+    finally:
+        store.close()
+```
+
+영속 사용 시에는 임시 디렉터리 대신 명시적인 저장 경로를 유지하세요. [동적 분해와 복구 전체 예제](example/14.dynamic_dag.py) 및 [LightDAG 가이드](docs/lightdag.md)에서 의존성, 통합, 재시도, 복구를 설명합니다.
+
+영속 Session, 비동기 호출, Capability Provider, Policy, Inbox, Goals, Budgets, Jobs 설정은 [Runtime 가이드](docs/runtime_v010.md)를 참고하세요.
+
+### 호환성과 보안 경계
+
+- 기존 `agent.run(query)`, `stream=True`, `user_id`는 계속 지원합니다. LightDAG는 선택 기능이며 LightFlow를 대체하지 않습니다.
+- v0.11.0은 단일 호스트, 로컬 SQLite, 실행당 하나의 활성 스케줄러를 전제로 합니다. 실행은 최소 한 번이며 외부 부작용에는 멱등성이 필요합니다. 분산 Worker, Web UI, 내장 코드 샌드박스는 포함하지 않습니다.
+- `enable_unsafe_python=True` 또는 등록된 `SandboxProvider`가 있어도 기존 `execute_python_code`, `execute_python_file`, `execute_python_code_stream`의 모델/도구 디스패치는 차단됩니다. `safe_expression`이나 실제로 격리된 사용자 정의 도구를 사용하세요. 유틸리티 직접 호출은 보안 샌드박스가 아닙니다.
+- 메모리 출처, 쓰기 승인 및 승격 정책은 여전히 필요합니다. 프레임워크 테스트만으로 실제 공유 그래프 메모리 backend의 보안을 인증할 수 없습니다. [메모리 보안 경계](docs/memory_security.md)를 참고하세요.
+
+### 공개 릴리스와 현재 main
+
+[v0.11.0](https://github.com/wanxingai/LightAgent/releases/tag/v0.11.0)은 2026-10-01에 공개되었습니다. 도구 선택 JSON, MCP SDK 1.x/2.x 및 선택형 deed.page 예제의 후속 변경은 해당 tag 이후 `main`에 병합되었으며 배포 패키지에는 없을 수 있습니다. 다음 명령은 원래 tag가 아닌 현재 `main`을 설치합니다.
+
+```bash
+pip install --upgrade "git+https://github.com/wanxingai/LightAgent.git@main"
+```
+
+[Tools Guide](docs/tools.md), 선택형 [Memcode 어댑터](docs/memcode_memory_adapter.md), [deed.page 예제](docs/deed_page_mcp.md), [공개 API 호환성 목록](docs/public_api_compatibility.md)을 참고하세요. 이러한 외부 서비스는 핵심 런타임의 필수 조건이 아닙니다.
 
 ## 📋 문서
 
@@ -113,9 +193,9 @@ LightAgent는 기본 호출 경로를 단순하게 유지하면서 운영 제어
 - 결정적 회귀 평가는 [Evaluation Harness](docs/evaluation.md)를 참고하세요.
 - 도구/handoff 승인, 영구 검토와 feedback은 [Human Review](docs/human_review.md)를 참고하세요.
 
-## 🚧 곧 출시 예정
+## 로드맵
 
-- **지능형 에이전트 협동 통신** 🛠️: 지능형 에이전트 간에 정보를 공유하고 메시지를 전달하여 복잡한 정보 통신 및 작업 협동을 실현할 수 있습니다.
+완료된 기능과 향후 계획은 [로드맵](roadmap.md)을 참고하세요. Inbox, Jobs, 하위 Agent는 선택적 Runtime에서 이미 사용할 수 있습니다.
 
 
 ## 🌟 왜 LightAgent를 선택해야 하나요?
