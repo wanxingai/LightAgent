@@ -169,6 +169,13 @@ agent can reduce the set of tools visible to the model after an initial
 planning step. The `filter_tools()` method accepts a JSON string listing the
 tools the planner selected and returns only the matching schemas.
 
+Complete JSON is parsed before any Markdown extraction, so code fences inside
+JSON strings are preserved. Otherwise, JSON or unlabelled fenced blocks and
+objects embedded in prose are accepted when they contain a valid `tools` list.
+Unrelated JSON objects are skipped. Conflicting tool selections and malformed
+selection structures raise `ValueError`; an empty selection remains valid.
+Filtering never adds unregistered tools.
+
 ### Creating Custom Tools
 
 #### Basic Custom Tool

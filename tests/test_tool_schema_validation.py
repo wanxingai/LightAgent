@@ -1,3 +1,5 @@
+import json
+
 import pytest
 
 from LightAgent import LightAgent, ToolRegistry
@@ -172,6 +174,53 @@ def test_filter_tools_reports_invalid_content_inside_a_fence():
 
     with pytest.raises(ValueError):
         registry.filter_tools("```\nthis is not json either\n```")
+
+
+def test_filter_tools_preserves_valid_json_with_fences_inside_strings():
+    payload = {"tools": [{"name": "get_weather"}], "note": "```json {} ```"}
+    result = _make_filterable_registry().filter_tools(json.dumps(payload))
+    assert [item["function"]["name"] for item in result] == ["get_weather"]
+
+
+@pytest.mark.parametrize("prefix", ["Context {}. Selection: ", "Context {not JSON}. Selection: "])
+def test_filter_tools_skips_unrelated_braces_before_selection(prefix):
+    text = prefix + json.dumps({"tools": [{"name": "get_weather"}], "note": 'quoted } brace and "text"'})
+    result = _make_filterable_registry().filter_tools(text + " Done.")
+    assert [item["function"]["name"] for item in result] == ["get_weather"]
+
+
+def test_filter_tools_skips_invalid_first_fence():
+    text = '```\nnot JSON\n```\n```json\n{"tools":[{"name":"get_weather"}]}\n```'
+    result = _make_filterable_registry().filter_tools(text)
+    assert [item["function"]["name"] for item in result] == ["get_weather"]
+
+
+def test_filter_tools_rejects_conflicting_selections():
+    text = '{"tools":[{"name":"get_weather"}]} or {"tools":[{"name":"search_database"}]}'
+    with pytest.raises(ValueError, match="Conflicting tool selections"):
+        _make_filterable_registry().filter_tools(text)
+
+
+def test_filter_tools_accepts_repeated_equivalent_selections():
+    text = '{"tools":[{"name":" GET_WEATHER "}]} again {"tools":[{"name":"get_weather"}]}'
+    result = _make_filterable_registry().filter_tools(text)
+    assert [item["function"]["name"] for item in result] == ["get_weather"]
+
+
+@pytest.mark.parametrize("payload", [{}, {"tools": []}])
+def test_filter_tools_preserves_empty_selection_compatibility(payload):
+    assert _make_filterable_registry().filter_tools(json.dumps(payload)) == []
+
+
+@pytest.mark.parametrize("payload", [[], {"tools": None}, {"tools": {}}, {"tools": [None]},
+                                      {"tools": [{}]}, {"tools": [{"name": 42}]}])
+def test_filter_tools_reports_invalid_selection_shapes(payload):
+    with pytest.raises(ValueError):
+        _make_filterable_registry().filter_tools(json.dumps(payload))
+
+
+def test_filter_tools_cannot_add_unregistered_names():
+    assert _make_filterable_registry().filter_tools('{"tools":[{"name":"unregistered"}]}') == []
 
 
 def test_lightagent_exposes_registered_tool_diagnostics():

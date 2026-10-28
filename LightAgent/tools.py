@@ -26,33 +26,64 @@ _SUPPORTED_TOOL_PARAM_TYPES = {"string", "integer", "number", "boolean", "array"
 _FENCED_JSON_BLOCK = re.compile(
     r"```(?:json)?\s*(.*?)```", re.DOTALL | re.IGNORECASE
 )
-_JSON_OBJECT = re.compile(r"\{.*\}", re.DOTALL)
+
+
+def _selected_tool_names(payload: Any) -> frozenset[str]:
+    if not isinstance(payload, dict):
+        raise ValueError("Tool selection must be a JSON object")
+    tools = payload.get("tools", [])
+    if not isinstance(tools, list):
+        raise ValueError("Tool selection 'tools' must be a list")
+    if any(not isinstance(tool, dict) or not isinstance(tool.get("name"), str) for tool in tools):
+        raise ValueError("Each selected tool must have a string name")
+    return frozenset(tool["name"].strip().lower() for tool in tools)
 
 
 def _extract_json_payload(text: str) -> str:
-    """Best-effort extraction of a JSON payload from LLM tool-reflection output.
-
-    Models frequently wrap JSON in a fenced code block (with or without the
-    ``json`` tag) or embed it between explanatory prose.  This helper tries the
-    common shapes in order and falls back to the raw text so that
-    ``json.loads`` keeps its documented failure behavior for truly invalid
-    input.
-    """
+    """Preserve complete JSON, otherwise extract an unambiguous tool selection."""
     content = text.strip()
     if not content:
         return content
 
-    fenced = _FENCED_JSON_BLOCK.search(content)
-    if fenced:
+    try:
+        json.loads(content)
+    except json.JSONDecodeError:
+        pass
+    else:
+        return content
+
+    candidates = []
+
+    def add_candidate(candidate, payload):
+        if isinstance(payload, dict) and "tools" in payload:
+            candidates.append((candidate, _selected_tool_names(payload)))
+
+    for fenced in _FENCED_JSON_BLOCK.finditer(content):
         candidate = fenced.group(1).strip()
-        if candidate:
-            return candidate
+        try:
+            parsed = json.loads(candidate)
+        except json.JSONDecodeError:
+            continue
+        add_candidate(candidate, parsed)
 
-    object_match = _JSON_OBJECT.search(content)
-    if object_match:
-        return object_match.group(0)
+    # raw_decode respects nested objects, quoted braces, and escapes. Skip the
+    # complete decoded object rather than interpreting its children as choices.
+    decoder = json.JSONDecoder()
+    position = 0
+    while (position := content.find("{", position)) >= 0:
+        try:
+            parsed, end = decoder.raw_decode(content, position)
+        except json.JSONDecodeError:
+            position += 1
+            continue
+        add_candidate(content[position:end], parsed)
+        position = end
 
-    return content
+    if not candidates:
+        return content
+    if any(names != candidates[0][1] for _, names in candidates[1:]):
+        raise ValueError("Conflicting tool selections in model output")
+    return candidates[0][0]
 
 
 
@@ -216,14 +247,14 @@ class ToolRegistry:
             refined_content = _extract_json_payload(tool_reflection_result)
 
             parsed_data = json.loads(refined_content)
-            valid_tools = {tool["name"].strip().lower() for tool in parsed_data.get("tools", [])}
+            valid_tools = _selected_tool_names(parsed_data)
 
             return [
                 schema for schema in self.openai_function_schemas
                 if isinstance(schema, dict) and
                    schema.get("function", {}).get("name", "").strip().lower() in valid_tools
             ]
-        except (json.JSONDecodeError, KeyError, AttributeError) as e:
+        except (ValueError, TypeError, AttributeError) as e:
             raise ValueError(f"工具过滤失败: {str(e)}") from e
 
 
