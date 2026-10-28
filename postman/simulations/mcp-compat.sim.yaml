@@ -1,0 +1,6 @@
+simulation: mcp-compat
+routing: path
+mocks:
+  - name: mcp-contract
+    routeKey: remote
+    path: postman/mocks/mcp-contract/config.yaml

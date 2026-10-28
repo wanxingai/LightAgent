@@ -480,8 +480,21 @@ mcp_config["mcpServers"]["remote-http"] = {
 
 Set `transport` explicitly: a server with a `url` but no transport selector
 uses SSE. The aliases `streamable_http` and `http` also select Streamable HTTP.
-The installed MCP SDK must provide `mcp.client.streamable_http.streamablehttp_client`;
-otherwise this transport reports that the installed SDK does not support it.
+The manager supports the 1.x `streamablehttp_client` API and the newer
+`streamable_http_client` API. For the newer API, headers are placed on an
+SDK-created HTTP client that is closed with the session. Tool schemas accept
+both `inputSchema` and the SDK 2.x `input_schema` model field. Unsupported SDKs
+report a transport error without affecting stdio or SSE configuration.
+
+The CI compatibility matrix covers MCP 1.12.4, 1.30.0, and 2.3.0. A local
+stateless HTTP probe is documented in
+[`postman/simulations/mcp-compat.context.md`](../postman/simulations/mcp-compat.context.md);
+it verifies real SDK initialization, tool listing/calling, credential headers,
+and cleanup without contacting a production MCP service.
+The historical 1.12.4 job retains the lock file's Pydantic 2.10.4: that SDK
+imports a private Pydantic function removed in newer releases. This is a
+supported historical dependency combination, not a claim that old MCP SDKs
+work with arbitrary new Pydantic versions. Modern jobs use Pydantic 2.12+.
 
 Header values are sent literally. In this example, Python reads the environment
 variable; LightAgent does not expand environment placeholders inside the header.

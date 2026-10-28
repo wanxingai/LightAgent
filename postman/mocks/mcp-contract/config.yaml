@@ -1,0 +1,9 @@
+version: 1
+name: mcp-contract
+slug: mcp-contract
+protocol: http
+interceptRequests: true
+scenarios:
+  - name: default
+    path: ./default.js
+    default: true
