@@ -173,6 +173,8 @@ For deterministic multi-step workflows, checkpointed run records, resume/rerun, 
 
 For custom tool creation, runtime tools, ToolRegistry, ToolLoader, AsyncToolDispatcher, and MCP tool integration, see [Tools Guide](docs/tools.md).
 
+For an optional example that publishes agent-written pages to deed.page over Streamable HTTP MCP, with token handling and tool filtering, see [Publishing Pages With deed.page Over MCP](docs/deed_page_mcp.md).
+
 For packaging existing Tools, Skills, MCP settings, Hooks, and memory adapters into an offline-validatable extension, see [Lightweight Connectors](docs/connectors.md).
 
 For shared long-term memory or graph memory deployments, review the [Memory Security Guidance](docs/memory_security.md).
