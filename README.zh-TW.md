@@ -34,12 +34,14 @@
   <h1>LightAgent🚀（下一代Agentic AI框架）</h1>
 </div>
 
-**LightAgent** 是一個極其輕量的帶記憶（`mem0`）、工具（`Tools`）、思維樹（`ToT`）的主動式 Agentic Framework（自主性框架），並且完全開源。它支持比Openai Swarm更簡單的多智能體協同，簡單一步即可構建具備自我學習能力的agent，並支持stdio和sse方式接入MCP協議。底層模型支持 OpenAI、智譜 ChatGLM、DeepSeek、階躍星辰、Qwen通義千問大模型等。同時，LightAgent 支持 OpenAI 流格式 API 服務輸出，無縫接入各大主流 Chat 框架。🌟
+**LightAgent** 是模組化、完全開源的 Python 智能體框架，提供可重用的 Skills、工具、可選長期記憶，以及 OpenAI 相容模型與串流輸出。`LightSwarm` 負責路由、`LightFlow` 編排已知步驟，`LightDAG` 則執行可持久化的動態驗證任務。可選的事件溯源 Runtime 支援持久化 Session、非同步執行、策略與審批。MCP 支援 stdio、SSE 和 Streamable HTTP。
 
 ---
 
 ## 新聞
-- <img src="https://img.alicdn.com/imgextra/i3/O1CN01SFL0Gu26nrQBFKXFR_!!6000000007707-2-tps-500-500.png" alt="new" width="30" height="30"/>**[2026-08-15]** LightAgent v0.9.7 正式發布：新增輕量、零依賴的 Connector 契約及離線驗證與範例，強化 Python 執行器安全檢查，補充可選的 Mem0 Graph 安全驗證矩陣，並透過公共 API 相容性清單為 v1.0 穩定化做準備。
+- <img src="https://img.alicdn.com/imgextra/i3/O1CN01SFL0Gu26nrQBFKXFR_!!6000000007707-2-tps-500-500.png" alt="new" width="30" height="30"/>**[2026-10-01]** LightAgent v0.11.0 正式發布：新增可選的持久化動態 DAG 多 Agent 執行、驗證通過後才發布的不可變成果、可恢復租約與 fencing，以及統一且只能收窄權限的 `SecurityContext`、能力與審批控制。
+- **[2026-08-15]** LightAgent v0.10.0 正式發布：新增事件溯源 Agent Runtime，支援持久化 Session、非同步執行、Capability Registry 與 Policy、Inbox、Goals、Budgets、Jobs、子 Agent、內容壓縮與 SQLite FTS5 檢索。
+- **[2026-08-15]** LightAgent v0.9.7 正式發布：新增輕量、零依賴的 Connector 契約及離線驗證與範例，強化 Python 執行器安全檢查，補充可選的 Mem0 Graph 安全驗證矩陣，並透過公共 API 相容性清單為 v1.0 穩定化做準備。
 - **[2026-07-30]** LightAgent v0.9.6 正式發布：新增生產級 Trace 彙總與匯出、確定性評測、工具、handoff 與 LightFlow 的可持久化人工審批，以及共享 Graph Memory 的 fail-closed 寫入准入與稽核控制。
 - **[2026-06-24]** LightAgent v0.9.0 開發版：新增可持久化 LightFlow checkpoint、resume/rerun、審批節點、更清楚的步驟狀態與 trace metadata，並補充 Guardrails 範本、MemoryPolicy 控制與 SharedMemoryPool 原型。
 - **[2026-06-14]** LightAgent v0.8.1 開發版：新增 MemoryScope metadata 約定、MemoryPolicy 來源/範圍/可信度過濾，並說明 Trace、使用者記憶、自我反思記憶與 LightSwarm 委派狀態的邊界。
@@ -51,7 +53,10 @@
 
 ## ✨ 特性
 
-- **輕量高效** 🚀：極簡設計，快速部署，適合各種規模的應用場景。（No LangChain, No LlamaIndex）100% Python 實現，無需額外依賴，核心代碼僅1000行，完全開源。 
+- **輕量高效**：模組化、完全開源的 Python 框架，不依賴 LangChain 或 LlamaIndex，模型、MCP、記憶與追蹤採用對應的依賴套件。
+- **事件溯源 Runtime**：可選的持久化 Session、回放、checkpoint、非同步呼叫、Capability 與 Policy、Inbox、Goals、Budgets、Jobs、子 Agent、上下文壓縮及 SQLite FTS5 檢索。
+- **Runtime Hooks**：透過有序 `hooks=[...]` 中介層觀察、替換或阻斷執行、模型、工具、記憶、handoff 與 LightFlow 步驟；安全策略可使用 `PolicyHook` 在錯誤或逾時時拒絕放行。
+- **動態驗證 DAG**：LightDAG 持久化圖變更，並行執行獨立 Worker，僅在應用指定的驗證通過後才發布不可變成果。
 - **記憶支持** 🧠：支持為每個用戶自定義長期記憶，原生支持 `mem0` 記憶模塊，實現對話過程中自動管理用戶個性化記憶，讓 Agent 更智能。
 - **自主學習** 📚️：每個 agent 擁有自主學習能力，並且擁有權限的管理員可以管理每個 agent。
 - **工具集成** 🛠️：支持自定義工具（`Tools`），自動化工具生成，靈活擴展，滿足多樣化需求。  
@@ -73,9 +78,14 @@
 | 層級 | 主要 API | 適用場景 |
 | --- | --- | --- |
 | 單 Agent 執行時 | `LightAgent` | 一個 Agent 的模型呼叫、工具、記憶、串流輸出、trace 和 guardrails。 |
+| 持久化執行狀態 | `Session`、`AgentRuntime` | 事件回放、checkpoint、Inbox、Goals、Budgets、Jobs 與上下文恢復。 |
+| 能力層 | `CapabilityRegistry`、`PolicyEngine` | 範圍受限的 Provider、策略、生命週期與稽核。 |
+| 統一安全上下文 | `SecurityContext`、`CapabilityGate`、`ApprovalToken` | 身分、只能收窄的權限、授權與綁定操作的審批。 |
 | 多 Agent 路由 | `LightSwarm` | 在多個專業 Agent 之間進行角色化委派。 |
 | 確定性工作流程 | `LightFlow` | DAG 工作流程、重試、checkpoint、審批、resume 和 rerun。 |
+| 動態驗證工作流程 | `LightDAG` | 動態拆解、Verifier、成果、並行 Worker 與恢復。 |
 | 工具與整合 | `tools`、`ToolRegistry`、MCP | Python 工具、生成工具、執行時載入工具或 MCP 工具服務。 |
+| Runtime Hooks | `hooks`、`HookContext`、`HookDecision` | 在生命週期邊界實施策略、稽核、遮蔽與 payload 改寫。 |
 | 記憶邊界 | `MemoryPolicy`、`MemoryScope` | 租戶隔離、來源、可信度、過期和寫入准入控制。 |
 | 共享記憶原型 | `SharedMemoryPool` | 多 Agent 共享記憶實驗。 |
 | 安全控制 | `input_guardrails`、`tool_guardrails`、`output_guardrails` | 隱私攔截、敏感工具確認、高風險參數校驗和輸出脫敏。 |
@@ -95,6 +105,79 @@ LightAgent 保持預設呼叫路徑簡單，同時允許逐步加入生產級控
 | 工具 | `LightAgent(..., tools=[fn])` | 函式應提供 `tool_info` metadata。 |
 | Guardrails | `LightAgent(..., input_guardrails=[...])` | 為 Agent 加入輸入、工具與輸出策略。 |
 | 工作流程 | `LightFlow().step(...).run(query)` | 用於確定性多步驟執行。 |
+| Runtime Hooks | `LightAgent(..., hooks=[fn])` | 觀察、替換或阻斷生命週期 payload。 |
+| 動態工作流程 | `LightDAG(...).create_run(...)` | 動態提出任務，發布前先驗證成果。 |
+| 持久化 Session | `agent.run(query, session_id="project-42")` | 需設定持久化 SessionStore 才能延續與回放。 |
+| 非同步呼叫 | `await agent.arun(query)` | 避免阻塞 asyncio 應用。 |
+
+## v0.11.0：動態驗證工作流程
+
+角色化路由使用 `LightSwarm`，已知步驟的流程使用 `LightFlow`；需要 Worker 在執行期間提出新任務時，選擇明確啟用的 `LightDAG`。
+
+- `SqliteTaskGraphStore` 保存任務、嘗試、圖變更、事件與恢復狀態；獨立 Worker 實例可並行執行。
+- Worker 只能提交 `TaskOutcome.candidate(...)`、`TaskOutcome.decompose(...)` 或 `TaskOutcome.blocked(...)`。拆解與不可變成果的發布必須由應用固定的 Verifier 審核。
+- 租約與 fencing 在重啟恢復時拒絕過期嘗試。`SecurityContext`、`CapabilityGate` 與綁定特定操作的 `ApprovalToken` 明確承載身分、只能收窄的權限與審批資訊。
+
+### 離線 LightDAG 範例
+
+不需要模型、API Key 或網路。範例使用暫存 SQLite 資料庫與成果目錄，結束時清理。
+
+```python
+from pathlib import Path
+from tempfile import TemporaryDirectory
+
+from LightAgent import (
+    CallableVerifier, LightDAG, LocalArtifactStore, PermissionSet,
+    SecurityContext, SqliteTaskGraphStore, TaskOutcome, TaskSpec,
+)
+
+with TemporaryDirectory() as directory:
+    root = Path(directory)
+    store = SqliteTaskGraphStore(root / "dag.sqlite3")
+    try:
+        dag = LightDAG(
+            store=store,
+            artifact_store=LocalArtifactStore(root / "artifacts"),
+            verifiers={"exact": CallableVerifier(
+                "exact", lambda request: request.candidate_content == b"42",
+            )},
+        )
+        dag.register_worker("local", lambda context: TaskOutcome.candidate("42"))
+        dag.create_run([TaskSpec(
+            task_id="answer", goal="42",
+            acceptance_contract={"equals": "42"},
+            worker_key="local", verifier_key="exact",
+        )], run_id="readme-demo", context=SecurityContext(
+            user_id="alice", tenant_id="demo", project_id="readme",
+            permissions=PermissionSet(allowed=frozenset({"dag.task.execute"})),
+        ))
+        result = dag.run("readme-demo")
+        assert result.success
+        print(result.status.value)
+    finally:
+        store.close()
+```
+
+需要持久化時，應使用固定的資料庫與成果路徑，而非暫存目錄。完整的[動態拆解與修復範例](example/14.dynamic_dag.py)及 [LightDAG 指南](docs/lightdag.md)涵蓋依賴、整合、重試與恢復。
+
+持久化 Session、非同步呼叫、Capability Provider、Policy、Inbox、Goals、Budgets 與 Jobs 的設定請查看 [Runtime 指南](docs/runtime_v010.md)。
+
+### 相容性與安全邊界
+
+- 原有 `agent.run(query)`、`stream=True` 與 `user_id` 繼續可用。LightDAG 需要明確啟用，不取代 LightFlow。
+- v0.11.0 採用單機、本地 SQLite、每次執行一個活動排程器的範圍。執行語義為至少一次，外部副作用須自行確保冪等；本版不包含分散式 Worker、Web UI 或內建程式碼沙箱。
+- 即使設定 `enable_unsafe_python=True` 或註冊 `SandboxProvider`，舊的 `execute_python_code`、`execute_python_file`、`execute_python_code_stream` 也不能由模型或工具排程器執行。應使用 `safe_expression` 或真正隔離的自訂工具；可信應用直接呼叫舊工具並不等於安全沙箱。
+- 記憶仍須設定來源、寫入准入與提升策略。框架回歸測試不等於真實共享圖記憶後端的安全認證，詳見[記憶安全邊界](docs/memory_security.md)。
+
+### 已發布版本與目前 main
+
+[v0.11.0](https://github.com/wanxingai/LightAgent/releases/tag/v0.11.0) 於 2026-10-01 發布。工具篩選 JSON、MCP SDK 1.x/2.x 與可選 deed.page 範例的後續修復，是在該 tag 之後合入 `main` 的，已安裝的發布套件不一定包含。以下命令安裝目前 `main`，不是原始發布 tag：
+
+```bash
+pip install --upgrade "git+https://github.com/wanxingai/LightAgent.git@main"
+```
+
+更多內容見 [Tools Guide](docs/tools.md)、可選 [Memcode 配接器](docs/memcode_memory_adapter.md)、[deed.page 範例](docs/deed_page_mcp.md)與[公共 API 相容性清單](docs/public_api_compatibility.md)。這些範例不要求核心執行環境接入對應外部服務。
 
 ## 📋 文件
 
@@ -105,14 +188,15 @@ LightAgent 保持預設呼叫路徑簡單，同時允許逐步加入生產級控
 - SharedMemoryPool 原型請查看 [SharedMemoryPool](docs/shared_memory_pool.md)。
 - 記憶寫入准入、過期檢索與低品質寫入攔截，請查看 [Memory Admission And Mutation Controls](docs/memory_admission.md)。
 - 輸入、工具與輸出安全策略，請查看 [Guardrails](docs/guardrails.md)。
+- 生命週期中介層與安全策略，請查看 [Runtime Hooks](docs/runtime_hooks.md)。
 - OpenRouter、本地模型與 OpenAI 相容設定，請查看 [Model Provider Configuration](docs/model_providers.md)。
 - Trace 可觀測能力請查看 [Trace Observability](docs/tracing.md)。
 - 確定性回歸評測請查看 [Evaluation Harness](docs/evaluation.md)。
 - 工具/handoff 審核、持久化 LightFlow 審批與回饋請查看 [Human Review](docs/human_review.md)。
 
-## 🚧 即將推出
+## 路線圖
 
-- **智能體協同通訊** 🛠️：智能體之間還可以共享資訊和傳遞消息，實現複雜的信息通訊和任務協同。
+已交付能力與後續計畫請查看[路線圖](roadmap.md)。Inbox、Jobs 與子 Agent 已包含在可選 Runtime 中。
 
 
 ## 🌟 為什麼選擇 LightAgent？

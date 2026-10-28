@@ -33,12 +33,14 @@
   <h1>LightAgent🚀（Próxima geração de estrutura de IA Agentic）</h1>
 </div>
 
-**LightAgent** é uma estrutura ativa e autônoma extremamente leve com memória (`mem0`), ferramentas (`Tools`) e árvore de pensamento (`ToT`), e é totalmente de código aberto. Ele suporta uma colaboração multiagente mais simples do que o OpenAI Swarm, permitindo a construção de agentes com capacidade de autoaprendizado em um único passo, e suporta a conexão ao protocolo MCP via stdio e sse. O modelo subjacente suporta OpenAI, Zhiyu ChatGLM, DeepSeek, Jieyue Xingchen, Qwen Tongyi Qianwen e outros grandes modelos. Além disso, o LightAgent suporta a saída de serviços de API em formato de fluxo da OpenAI, integrando-se perfeitamente a várias estruturas de chat populares. 🌟
+**LightAgent** é um framework Python modular e de código aberto com Skills reutilizáveis, ferramentas, memória de longo prazo opcional e modelos e streaming compatíveis com OpenAI. `LightSwarm` cuida do roteamento, `LightFlow` de etapas conhecidas e `LightDAG` de tarefas dinâmicas persistentes e verificadas. O runtime opcional baseado em eventos oferece sessões persistentes, execução assíncrona, políticas e aprovações. MCP suporta stdio, SSE e Streamable HTTP.
 
 ---
 
 ## Notícias
-- <img src="https://img.alicdn.com/imgextra/i3/O1CN01SFL0Gu26nrQBFKXFR_!!6000000007707-2-tps-500-500.png" alt="new" width="30" height="30"/>**[2026-08-15]** LightAgent v0.9.7 lançado: adiciona um contrato Connector leve e sem dependências com validação offline e exemplos, amplia as verificações de segurança do executor Python, introduz uma matriz de segurança opcional para Mem0 Graph e prepara a estabilização da v1.0 com um inventário de compatibilidade da API pública.
+- <img src="https://img.alicdn.com/imgextra/i3/O1CN01SFL0Gu26nrQBFKXFR_!!6000000007707-2-tps-500-500.png" alt="new" width="30" height="30"/>**[2026-10-01]** LightAgent v0.11.0 lançado: adiciona DAGs dinâmicos multiagente persistentes e opcionais, artefatos imutáveis publicados somente após verificação, recuperação com leases e fencing e um `SecurityContext` unificado com permissões que só podem ser reduzidas e controles de aprovação.
+- **[2026-08-15]** LightAgent v0.10.0 lançado: introduz o runtime baseado em eventos com Sessions persistentes, execução assíncrona, Capability Registry e Policy, Inbox, Goals, Budgets, Jobs, subagentes, compactação de contexto e busca SQLite FTS5.
+- **[2026-08-15]** LightAgent v0.9.7 lançado: adiciona um contrato Connector leve e sem dependências com validação offline e exemplos, amplia as verificações de segurança do executor Python, introduz uma matriz de segurança opcional para Mem0 Graph e prepara a estabilização da v1.0 com um inventário de compatibilidade da API pública.
 - **[2026-07-30]** LightAgent v0.9.6 lançado: adiciona resumos e exportadores de trace para produção, avaliação determinística, aprovação humana persistente para ferramentas, handoffs e LightFlow, além de admissão de escrita fail-closed e controles de auditoria para memória gráfica compartilhada.
 - **[2026-06-24]** LightAgent v0.9.0: adiciona workflows LightFlow com checkpoints, resume/rerun, nós de aprovação, estados de etapa mais claros, metadados de trace, modelos Guardrails, controles MemoryPolicy e o protótipo SharedMemoryPool.
 - **[2026-06-14]** LightAgent v0.8.1: adiciona convenções MemoryScope e filtros MemoryPolicy por origem, escopo e confiança.
@@ -50,7 +52,9 @@ Notas antigas estão em [GitHub Releases](https://github.com/wanxingai/LightAgen
 
 ## ✨ Funcionalidades
 
-- **Leve e eficiente** 🚀: Design minimalista, implementação rápida, adequado para vários cenários de aplicação. (Sem LangChain, Sem LlamaIndex) Implementação 100% em Python, sem dependências adicionais, com apenas 1000 linhas de código principal, totalmente open source.
+- **Leve e eficiente**: Framework Python modular e de código aberto, sem LangChain nem LlamaIndex, com dependências específicas para modelos, MCP, memória e rastreamento.
+- **Runtime baseado em eventos**: Sessões persistentes opcionais, replay, checkpoints, chamadas assíncronas, Capability e Policy, Inbox, Goals, Budgets, Jobs, subagentes, compactação do contexto e busca SQLite FTS5.
+- **DAGs dinâmicos verificados**: LightDAG persiste alterações do grafo, executa Workers independentes em paralelo e publica artefatos imutáveis somente após verificação definida pela aplicação.
 - **Suporte a memória** 🧠: Suporte a customização de memória de longo prazo para cada usuário, com o módulo de memória `mem0`, gerenciando automaticamente memórias personalizadas do usuário durante o diálogo, tornando o agente mais inteligente.
 - **Aprendizado autônomo** 📚️: Cada agente tem a capacidade de aprender de forma autônoma, enquanto administradores com permissões podem gerenciar cada agente.
 - **Integração de ferramentas** 🛠️: Suporte a ferramentas personalizadas (`Tools`), geração automatizada de ferramentas, flexibilidade para atender a diversas necessidades.
@@ -73,8 +77,12 @@ Notas antigas estão em [GitHub Releases](https://github.com/wanxingai/LightAgen
 | Camada | API principal | Use quando precisar |
 | --- | --- | --- |
 | Runtime de agente único | `LightAgent` | Um agente com modelo, ferramentas, memória, streaming, trace e guardrails. |
+| Estado persistente do runtime | `Session`, `AgentRuntime` | Replay, checkpoints, Inbox, Goals, Budgets, Jobs e recuperação do contexto. |
+| Camada de capacidades | `CapabilityRegistry`, `PolicyEngine` | Provedores com escopo limitado, políticas, ciclo de vida e auditoria. |
+| Contexto de segurança unificado | `SecurityContext`, `CapabilityGate`, `ApprovalToken` | Identidade, permissões que só podem ser reduzidas, autorização e aprovações vinculadas a uma operação. |
 | Roteamento multiagente | `LightSwarm` | Delegação por papéis entre agentes especializados. |
 | Workflow determinístico | `LightFlow` | DAG, retentativas, checkpoints, aprovações, resume e rerun. |
+| Workflow dinâmico verificado | `LightDAG` | Decomposição dinâmica, verificadores, artefatos, Workers paralelos e recuperação. |
 | Ferramentas e integrações | `tools`, `ToolRegistry`, MCP | Ferramentas Python, geradas, carregamento em runtime ou servidores MCP. |
 | Limite de memória | `MemoryPolicy`, `MemoryScope` | Isolamento de tenants, procedência, confiança, expiração e admissão de escrita. |
 | Memória compartilhada | `SharedMemoryPool` | Experimentos de memória compartilhada entre agentes. |
@@ -97,6 +105,78 @@ LightAgent mantém a chamada padrão simples e permite adicionar controles de pr
 | Guardrails | `LightAgent(..., input_guardrails=[...])` | Adiciona políticas de entrada, ferramenta e saída. |
 | Runtime hooks | `LightAgent(..., hooks=[fn])` | Observa, substitui ou bloqueia payloads do ciclo de vida. |
 | Workflow | `LightFlow().step(...).run(query)` | Para execução determinística multi-etapa. |
+| Workflow dinâmico | `LightDAG(...).create_run(...)` | Propor tarefas e verificar resultados antes da publicação. |
+| Sessão persistente | `agent.run(query, session_id="project-42")` | Exige um SessionStore persistente configurado para replay e continuação. |
+| Assíncrono | `await agent.arun(query)` | Entrada não bloqueante para aplicações asyncio. |
+
+## v0.11.0: Workflows dinâmicos verificados
+
+Use `LightSwarm` para roteamento por papéis, `LightFlow` para etapas conhecidas e o `LightDAG` opcional quando os Workers precisarem propor novas tarefas durante a execução.
+
+- `SqliteTaskGraphStore` persiste tarefas, tentativas, alterações do grafo, eventos e estado de recuperação. Instâncias independentes de Worker podem executar em paralelo.
+- Os Workers retornam `TaskOutcome.candidate(...)`, `TaskOutcome.decompose(...)` ou `TaskOutcome.blocked(...)`. Somente um Verifier definido pela aplicação pode aprovar decomposições ou publicar artefatos imutáveis.
+- Leases e fencing rejeitam tentativas antigas durante a recuperação. `SecurityContext`, `CapabilityGate` e `ApprovalToken` vinculado à operação explicitam identidade, permissões que só podem ser reduzidas e aprovações.
+
+### Exemplo LightDAG offline
+
+Não exige modelo, chave de API nem rede. Usa um banco SQLite e um diretório de artefatos temporários, removidos ao terminar.
+
+```python
+from pathlib import Path
+from tempfile import TemporaryDirectory
+
+from LightAgent import (
+    CallableVerifier, LightDAG, LocalArtifactStore, PermissionSet,
+    SecurityContext, SqliteTaskGraphStore, TaskOutcome, TaskSpec,
+)
+
+with TemporaryDirectory() as directory:
+    root = Path(directory)
+    store = SqliteTaskGraphStore(root / "dag.sqlite3")
+    try:
+        dag = LightDAG(
+            store=store,
+            artifact_store=LocalArtifactStore(root / "artifacts"),
+            verifiers={"exact": CallableVerifier(
+                "exact", lambda request: request.candidate_content == b"42",
+            )},
+        )
+        dag.register_worker("local", lambda context: TaskOutcome.candidate("42"))
+        dag.create_run([TaskSpec(
+            task_id="answer", goal="42",
+            acceptance_contract={"equals": "42"},
+            worker_key="local", verifier_key="exact",
+        )], run_id="readme-demo", context=SecurityContext(
+            user_id="alice", tenant_id="demo", project_id="readme",
+            permissions=PermissionSet(allowed=frozenset({"dag.task.execute"})),
+        ))
+        result = dag.run("readme-demo")
+        assert result.success
+        print(result.status.value)
+    finally:
+        store.close()
+```
+
+Para persistência real, mantenha caminhos explícitos para banco e artefatos em vez de diretórios temporários. O [exemplo completo de decomposição e reparo](example/14.dynamic_dag.py) e o [guia LightDAG](docs/lightdag.md) cobrem dependências, integração, novas tentativas e recuperação.
+
+O [guia do runtime](docs/runtime_v010.md) explica sessões persistentes, chamadas assíncronas, Capability Providers, Policy, Inbox, Goals, Budgets e Jobs.
+
+### Compatibilidade e limites de segurança
+
+- `agent.run(query)`, `stream=True` e `user_id` continuam disponíveis. LightDAG é opcional e não substitui LightFlow.
+- v0.11.0 limita-se a um host, SQLite local e um escalonador ativo por execução. A execução é pelo menos uma vez; efeitos externos exigem idempotência. Workers distribuídos, interface web e sandbox de código integrada não estão incluídos.
+- Os antigos `execute_python_code`, `execute_python_file` e `execute_python_code_stream` são bloqueados na execução de ferramentas pelo modelo, mesmo com `enable_unsafe_python=True` ou um `SandboxProvider` registrado. Use `safe_expression` ou uma ferramenta realmente isolada; chamadas diretas a esses utilitários não são uma sandbox de segurança.
+- As políticas de procedência, admissão e promoção de memória continuam necessárias. Testes do framework não certificam um backend real de memória gráfica compartilhada; consulte [segurança de memória](docs/memory_security.md).
+
+### Versão publicada e main atual
+
+[v0.11.0](https://github.com/wanxingai/LightAgent/releases/tag/v0.11.0) foi publicada em 2026-10-01. Correções posteriores de JSON de seleção de ferramentas, MCP SDK 1.x/2.x e o exemplo opcional deed.page foram integrados após esse tag e podem não estar no pacote publicado. O comando a seguir instala o `main` atual, não o tag original:
+
+```bash
+pip install --upgrade "git+https://github.com/wanxingai/LightAgent.git@main"
+```
+
+Consulte [Tools Guide](docs/tools.md), o [adaptador Memcode](docs/memcode_memory_adapter.md) opcional, o [exemplo deed.page](docs/deed_page_mcp.md) e o [inventário de compatibilidade pública](docs/public_api_compatibility.md). Esses serviços externos não são obrigatórios para o runtime principal.
 
 ## 📋 Documentação
 
@@ -113,9 +193,9 @@ LightAgent mantém a chamada padrão simples e permite adicionar controles de pr
 - Para regressões determinísticas, consulte [Evaluation Harness](docs/evaluation.md).
 - Para aprovação de ferramentas/handoffs, revisão persistente e feedback, consulte [Human Review](docs/human_review.md).
 
-## 🚧 Em breve
+## Roteiro
 
-- **Comunicação colaborativa entre agentes** 🛠️: Os agentes também podem compartilhar informações e transmitir mensagens, realizando comunicações complexas de informações e colaboração em tarefas.
+Consulte o [roteiro](roadmap.md) para os marcos entregues e os planos futuros. Inbox, Jobs e subagentes já estão disponíveis no runtime opcional.
 
 
 ## 🌟 Por que escolher o LightAgent?

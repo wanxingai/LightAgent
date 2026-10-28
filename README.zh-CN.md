@@ -44,9 +44,10 @@
 
 - **Skill 原生支持**：像管理代码一样管理 AI 能力。把 PDF 处理、代码审查、SOP 流程打包成可复用的 Skill，Agent 按需调用 —— 告别 prompt 堆积，迎接工程化 AI。
 - **比 OpenAI Swarm 更简易的多智能体协作**：无需复杂编排，轻松构建“Agent 小分队”，并行拆解复杂任务。
-- **MCP 协议（stdio/sse）开箱即连**：无缝接入外部数据源与工具，Agent 的“手”从此无限延伸。
+- **MCP 协议（stdio/SSE/Streamable HTTP）**：连接外部数据源与工具，按应用配置的权限边界执行。
 - **零成本切换底层模型**：OpenAI、智谱 ChatGLM、DeepSeek、阶跃星辰、通义千问…… 想用哪个用哪个。
 - **开箱即用的 API 服务**：标准 OpenAI 流式输出格式，可直接接入主流 Chat 前端（如 NextChat、LobeChat），秒变生产级应用。
+- **持久化与动态验证**：可选事件溯源 Runtime 提供持久化 Session、异步执行与策略控制；已知步骤使用 `LightFlow`，动态拆解且成果需要验证的任务使用 `LightDAG`。
 
 🌟 **LightAgent = 轻 + 灵 + 可扩展**  
 从个人脚本到企业级 Workflow，它帮你把“聪明的模型”变成“可靠的员工”。  
@@ -103,9 +104,11 @@
 | 单 Agent 运行时 | `LightAgent` | 一个 Agent 的模型调用、工具、记忆、流式输出、trace 和 guardrails。 |
 | 持久化运行状态 | `Session`、`AgentRuntime` | 可回放事件、checkpoint、Inbox、Goals、Budgets、Jobs 和上下文恢复。 |
 | 能力层 | `CapabilityRegistry`、`PolicyEngine` | 分层 Provider、权限快照、生命周期、策略与审计。 |
+| 统一安全上下文 | `SecurityContext`、`CapabilityGate`、`ApprovalToken` | 身份、只能收窄的权限、授权与绑定具体操作的审批。 |
 | 多 Agent 路由 | `LightSwarm` | 在多个专业 Agent 之间进行角色化委托。 |
 | 确定性工作流 | `LightFlow` | DAG 工作流、重试、checkpoint、持久化审批、resume 和 rerun。 |
-| 工具与集成 | `tools`、`ToolRegistry`、MCP | Python 工具、生成工具、运行时加载工具或 MCP 工具服务。任意 Python 执行默认关闭，并要求显式沙箱边界。 |
+| 动态验证工作流 | `LightDAG` | 运行期拆解、Verifier、成果、并行 Worker 与恢复。 |
+| 工具与集成 | `tools`、`ToolRegistry`、MCP | Python 工具、生成工具、运行时加载工具或 MCP 工具服务。旧任意 Python 执行工具在模型/工具调度中被阻断；使用 `safe_expression` 或自定义隔离工具。 |
 | 记忆边界 | `MemoryPolicy`、`MemoryScope` | 租户隔离、来源、可信度、过期和写入准入控制。 |
 | 共享记忆原型 | `SharedMemoryPool` | 多 Agent 共享记忆实验。 |
 | 安全控制 | `input_guardrails`、`tool_guardrails`、`output_guardrails` | 隐私拦截、敏感工具确认、高风险参数校验和输出脱敏。 |
@@ -132,7 +135,7 @@ LightAgent 保持默认调用路径简单，同时允许逐步加入生产级控
 | 工具审批 | `LightAgent(..., hooks=[HumanApprovalHook(...)])` | 在选定工具或 handoff 执行前要求人工审核。 |
 | 工作流 | `LightFlow().step(...).run(query)` | 用于确定性多步骤执行。 |
 | 动态工作流 | `LightDAG(...).create_run(...)` | 用于 Worker 需要提出子任务且节点只能由已验证成果完成的场景。 |
-| 持久化 Session | `agent.run(query, session_id="project-42")` | 延续并回放持久化会话。 |
+| 持久化 Session | `agent.run(query, session_id="project-42")` | 配置持久化 SessionStore 后延续并回放会话。 |
 | 异步调用 | `await agent.arun(query)` | 避免阻塞 asyncio 应用。 |
 
 ### 安全工具默认行为
@@ -175,6 +178,75 @@ print(report.to_dict())
 `approval_id=request.request_id` 重新运行。LightFlow 也可通过
 `flow.approve(...); flow.resume(...)` 持久化并恢复步骤审批。
 
+## v0.11.0：动态验证工作流
+
+角色化路由使用 `LightSwarm`，已知步骤的工作流使用 `LightFlow`；需要 Worker 在执行过程中提出新任务时，选择显式启用的 `LightDAG`。
+
+- `SqliteTaskGraphStore` 保存任务、尝试、图变更、事件和恢复状态；独立 Worker 实例可并发执行。
+- Worker 只能提交 `TaskOutcome.candidate(...)`、`TaskOutcome.decompose(...)` 或 `TaskOutcome.blocked(...)`。拆解和不可变成果的发布必须由应用固定的 Verifier 审核。
+- 租约和 fencing 在重启恢复时拒绝过期尝试。`SecurityContext`、`CapabilityGate` 和绑定具体操作的 `ApprovalToken` 明确承载身份、只能收窄的权限与审批信息。
+
+### 离线 LightDAG 示例
+
+不需要模型、API Key 或网络。示例使用临时 SQLite 数据库和成果目录，退出时清理。
+
+```python
+from pathlib import Path
+from tempfile import TemporaryDirectory
+
+from LightAgent import (
+    CallableVerifier, LightDAG, LocalArtifactStore, PermissionSet,
+    SecurityContext, SqliteTaskGraphStore, TaskOutcome, TaskSpec,
+)
+
+with TemporaryDirectory() as directory:
+    root = Path(directory)
+    store = SqliteTaskGraphStore(root / "dag.sqlite3")
+    try:
+        dag = LightDAG(
+            store=store,
+            artifact_store=LocalArtifactStore(root / "artifacts"),
+            verifiers={"exact": CallableVerifier(
+                "exact", lambda request: request.candidate_content == b"42",
+            )},
+        )
+        dag.register_worker("local", lambda context: TaskOutcome.candidate("42"))
+        dag.create_run([TaskSpec(
+            task_id="answer", goal="42",
+            acceptance_contract={"equals": "42"},
+            worker_key="local", verifier_key="exact",
+        )], run_id="readme-demo", context=SecurityContext(
+            user_id="alice", tenant_id="demo", project_id="readme",
+            permissions=PermissionSet(allowed=frozenset({"dag.task.execute"})),
+        ))
+        result = dag.run("readme-demo")
+        assert result.success
+        print(result.status.value)
+    finally:
+        store.close()
+```
+
+需要持久化时，应使用固定的数据库和成果路径，而非临时目录。完整的[动态拆解与修复示例](example/14.dynamic_dag.py)及 [LightDAG 指南](docs/lightdag.md)涵盖依赖、集成、重试与恢复。
+
+持久化 Session、异步调用、Capability Provider、Policy、Inbox、Goals、Budgets 和 Jobs 的配置请查看 [Runtime 指南](docs/runtime_v010.md)。
+
+### 兼容性与安全边界
+
+- 原有 `agent.run(query)`、`stream=True` 和 `user_id` 继续可用。LightDAG 需要显式启用，不替代 LightFlow。
+- v0.11.0 采用单机、本地 SQLite、每次运行一个活动调度器的边界。执行语义为至少一次，外部副作用必须自行保证幂等；本版不包含分布式 Worker、Web UI 或内置代码沙箱。
+- 即使设置 `enable_unsafe_python=True` 或注册 `SandboxProvider`，旧的 `execute_python_code`、`execute_python_file`、`execute_python_code_stream` 也不能由模型或工具调度器执行。应使用 `safe_expression` 或真正隔离的自定义工具；可信应用直接调用旧工具不等于获得安全沙箱。
+- 记忆仍须配置来源、写入准入和提升策略。框架回归测试不等于真实共享图记忆后端的安全认证，详见[记忆安全边界](docs/memory_security.md)。
+
+### 已发布版本与当前 main
+
+[v0.11.0](https://github.com/wanxingai/LightAgent/releases/tag/v0.11.0) 于 2026-10-01 发布。工具筛选 JSON、MCP SDK 1.x/2.x 和可选 deed.page 示例的后续修复是在该 tag 之后合入 `main` 的，已安装的发布包不一定包含。以下命令安装当前 `main`，不是原始发布 tag：
+
+```bash
+pip install --upgrade "git+https://github.com/wanxingai/LightAgent.git@main"
+```
+
+更多内容见 [Tools Guide](docs/tools.md)、可选 [Memcode 适配器](docs/memcode_memory_adapter.md)、[deed.page 示例](docs/deed_page_mcp.md)与[公共 API 兼容性清单](docs/public_api_compatibility.md)。这些示例不要求核心运行时接入相应外部服务。
+
 ## 📋 文档
 
 - 常见安装、模型、工具、记忆、MCP、Skills、流式输出和 LightSwarm 问题，请查看 [FAQ](docs/FAQ.md)。
@@ -190,13 +262,13 @@ print(report.to_dict())
 - 确定性回归用例、指标和 CI 方案请查看 [Evaluation Harness](docs/evaluation.md)。
 - 工具/handoff 审批、LightFlow 持久化审核、批量决策和反馈请查看 [Human Review](docs/human_review.md)。
 - 持久化 Session、Capability Provider、Policy、Inbox、Goals、Budgets、Jobs、上下文压缩、子 Agent、Skills/MCP 更新和 SQLite FTS5 检索，请查看 [LightAgent v0.10 Runtime](docs/runtime_v010.md)。
-- 持久化动态图、隔离 Worker、严格验证、不可变成果、租约恢复和统一安全上下文，请查看 [LightDAG](docs/lightdag.md)。
+- 持久化动态图、独立 Worker、严格验证、不可变成果、租约恢复和统一安全上下文，请查看 [LightDAG](docs/lightdag.md)。
 
 ---
 
-## 🚧 即将推出
+## 路线图
 
-- **智能体协同通讯** 🛠️：智能体之间还可以共享信息和传递消息，实现复杂的信息通讯和任务协同。
+已交付能力与后续计划请查看[路线图](roadmap.md)。Inbox、Jobs 和子 Agent 已包含在可选 Runtime 中。
 
 
 ---

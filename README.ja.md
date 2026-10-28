@@ -35,12 +35,14 @@
   <h1>LightAgent🚀（次世代エージェンティックAIフレームワーク）</h1>
 </div>
 
-**LightAgent** は、記憶（`mem0`）、ツール（`Tools`）、思考ツリー（`ToT`）を備えた非常に軽量な能動的エージェントフレームワークであり、完全にオープンソースです。これは、OpenAI Swarm よりも簡単なマルチエージェント協調をサポートし、自己学習能力を持つエージェントを簡単に構築でき、stdio および sse 方式で MCP プロトコルに接続できます。基盤モデルは、OpenAI、智谱 ChatGLM、DeepSeek、階跃星辰、Qwen通义千问大モデルなどをサポートしています。同時に、LightAgent は OpenAI ストリーム形式 API サービス出力をサポートし、主要なチャットフレームワークにシームレスに接続できます。🌟
+**LightAgent** は、再利用可能な Skills、ツール、任意の長期メモリ、OpenAI 互換モデルとストリーミングに対応した、モジュール型のオープンソース Python フレームワークです。`LightSwarm` はルーティング、`LightFlow` は既知の手順、`LightDAG` は永続化された動的・検証付きタスクを担当します。任意で有効化するイベントソーシング Runtime は、永続 Session、非同期実行、ポリシーと承認を提供します。MCP は stdio、SSE、Streamable HTTP に対応します。
 
 ---
 
 ## ニュース
-- <img src="https://img.alicdn.com/imgextra/i3/O1CN01SFL0Gu26nrQBFKXFR_!!6000000007707-2-tps-500-500.png" alt="new" width="30" height="30"/>**[2026-08-15]** LightAgent v0.9.7 リリース：オフライン検証とサンプルを備えた軽量かつ依存関係のない Connector 契約、Python executor のセキュリティ検査、オプトインの Mem0 Graph セキュリティ検証マトリクスを追加し、公開 API 互換性一覧によって v1.0 の安定化に備えました。
+- <img src="https://img.alicdn.com/imgextra/i3/O1CN01SFL0Gu26nrQBFKXFR_!!6000000007707-2-tps-500-500.png" alt="new" width="30" height="30"/>**[2026-10-01]** LightAgent v0.11.0 リリース：オプトインの永続的な動的マルチエージェント DAG、検証後にのみ公開する不変成果物、リースと fencing による再開、一方向に権限を制限する統一 `SecurityContext` と承認制御を追加しました。
+- **[2026-08-15]** LightAgent v0.10.0 リリース：永続 Session、非同期実行、Capability Registry と Policy、Inbox、Goals、Budgets、Jobs、サブエージェント、コンテキスト圧縮、SQLite FTS5 検索を備えたイベントベースの Agent Runtime を導入しました。
+- **[2026-08-15]** LightAgent v0.9.7 リリース：オフライン検証とサンプルを備えた軽量かつ依存関係のない Connector 契約、Python executor のセキュリティ検査、オプトインの Mem0 Graph セキュリティ検証マトリクスを追加し、公開 API 互換性一覧によって v1.0 の安定化に備えました。
 - **[2026-07-30]** LightAgent v0.9.6 リリース：本番向け Trace 要約とエクスポーター、決定的評価、ツール・handoff・LightFlow の永続的な人間承認、共有 Graph Memory の fail-closed 書き込み承認と監査制御を追加。
 - **[2026-06-24]** LightAgent v0.9.0：永続化 LightFlow checkpoint、resume/rerun、承認ノード、明確なステップ状態、trace メタデータ、Guardrails テンプレート、MemoryPolicy 制御、SharedMemoryPool プロトタイプを追加。
 - **[2026-06-14]** LightAgent v0.8.1：MemoryScope 規約と MemoryPolicy の出所・範囲・信頼度フィルタを追加。
@@ -52,7 +54,9 @@
 
 ## ✨ 特徴
 
-- **軽量で効率的** 🚀：極限のシンプル設計で迅速なデプロイが可能、あらゆるスケールのアプリケーションシーンに適しています。（No LangChain, No LlamaIndex）100% Pythonで実装され、追加の依存関係は不要、コアコードはわずか1000行、完全にオープンソースです。
+- **軽量で効率的**：LangChain や LlamaIndex を必要としない、モジュール型のオープンソース Python フレームワークです。モデル、MCP、メモリ、トレースには用途別の依存ライブラリを使用します。
+- **イベントソーシング Runtime**：任意の永続 Session、リプレイ、checkpoint、非同期呼び出し、Capability と Policy、Inbox、Goals、Budgets、Jobs、サブ Agent、コンテキスト圧縮、SQLite FTS5 検索。
+- **動的・検証付き DAG**：LightDAG はグラフ変更を永続化し、独立した Worker を並列実行して、アプリケーション側の検証後にのみ不変の成果物を公開します。
 - **メモリサポート** 🧠：各ユーザーのためにカスタマイズ可能な長期メモリをサポートし、対話の過程でユーザーの個性に応じたメモリを自動管理することにより、エージェントをより賢くします。
 - **自主学習** 📚️：各エージェントは自ら学ぶ能力を持ち、アクセス権を持つ管理者はそれぞれのエージェントを管理できます。
 - **ツール統合** 🛠️：カスタマイズ可能なツール（`Tools`）をサポートし、自動ツール生成が可能で、多様なニーズに応えます。
@@ -75,8 +79,12 @@
 | レイヤー | 主な API | 用途 |
 | --- | --- | --- |
 | 単一 Agent 実行 | `LightAgent` | モデル呼び出し、ツール、メモリ、ストリーミング、trace、guardrails。 |
+| 永続 Runtime 状態 | `Session`、`AgentRuntime` | リプレイ、checkpoint、Inbox、Goals、Budgets、Jobs、コンテキスト復元。 |
+| 能力レイヤー | `CapabilityRegistry`、`PolicyEngine` | 範囲を限定した Provider、ポリシー、ライフサイクル、監査。 |
+| 統一セキュリティコンテキスト | `SecurityContext`、`CapabilityGate`、`ApprovalToken` | ID、縮小のみ可能な権限、認可、操作に結び付いた承認。 |
 | マルチ Agent ルーティング | `LightSwarm` | 専門 Agent 間の役割ベース委譲。 |
 | 決定的 workflow | `LightFlow` | DAG、リトライ、checkpoint、承認、resume、rerun。 |
+| 動的・検証付きワークフロー | `LightDAG` | 動的分解、Verifier、成果物、Worker の並列実行、復元。 |
 | ツールと統合 | `tools`、`ToolRegistry`、MCP | Python ツール、生成ツール、実行時ロード、MCP サーバー。 |
 | メモリ境界 | `MemoryPolicy`、`MemoryScope` | テナント分離、出所、信頼、期限、書き込み許可。 |
 | 共有メモリ | `SharedMemoryPool` | Agent 間の共有メモリ実験。 |
@@ -99,6 +107,78 @@ LightAgent はデフォルトの呼び出しを簡単に保ちつつ、本番向
 | Guardrails | `LightAgent(..., input_guardrails=[...])` | 入力、ツール、出力ポリシーを追加します。 |
 | Runtime hooks | `LightAgent(..., hooks=[fn])` | ライフサイクル payload を監視、置換、ブロックします。 |
 | Workflow | `LightFlow().step(...).run(query)` | 決定的な多段階実行に使います。 |
+| 動的ワークフロー | `LightDAG(...).create_run(...)` | タスクを動的に提案し、公開前に結果を検証します。 |
+| 永続 Session | `agent.run(query, session_id="project-42")` | 継続とリプレイには永続 SessionStore の設定が必要です。 |
+| 非同期 | `await agent.arun(query)` | asyncio アプリケーション向けの非ブロッキング入口。 |
+
+## v0.11.0: 検証付き動的ワークフロー
+
+役割ベースの委譲には `LightSwarm`、既知の手順には `LightFlow`、実行中に Worker が新しいタスクを提案する場合にはオプトインの `LightDAG` を使います。
+
+- `SqliteTaskGraphStore` はタスク、試行、グラフ変更、イベント、復旧状態を永続化します。独立した Worker インスタンスを並行実行できます。
+- Worker は `TaskOutcome.candidate(...)`、`TaskOutcome.decompose(...)`、`TaskOutcome.blocked(...)` を返します。分解の承認と不変成果物の公開は、アプリケーションが固定した Verifier のみが行います。
+- リースと fencing は再開時に古い試行を拒否します。`SecurityContext`、`CapabilityGate`、操作に紐づく `ApprovalToken` により、識別情報、縮小のみ可能な権限、承認を明示します。
+
+### オフライン LightDAG サンプル
+
+モデル、API キー、ネットワークは不要です。一時 SQLite データベースと成果物ディレクトリを使い、終了時に削除します。
+
+```python
+from pathlib import Path
+from tempfile import TemporaryDirectory
+
+from LightAgent import (
+    CallableVerifier, LightDAG, LocalArtifactStore, PermissionSet,
+    SecurityContext, SqliteTaskGraphStore, TaskOutcome, TaskSpec,
+)
+
+with TemporaryDirectory() as directory:
+    root = Path(directory)
+    store = SqliteTaskGraphStore(root / "dag.sqlite3")
+    try:
+        dag = LightDAG(
+            store=store,
+            artifact_store=LocalArtifactStore(root / "artifacts"),
+            verifiers={"exact": CallableVerifier(
+                "exact", lambda request: request.candidate_content == b"42",
+            )},
+        )
+        dag.register_worker("local", lambda context: TaskOutcome.candidate("42"))
+        dag.create_run([TaskSpec(
+            task_id="answer", goal="42",
+            acceptance_contract={"equals": "42"},
+            worker_key="local", verifier_key="exact",
+        )], run_id="readme-demo", context=SecurityContext(
+            user_id="alice", tenant_id="demo", project_id="readme",
+            permissions=PermissionSet(allowed=frozenset({"dag.task.execute"})),
+        ))
+        result = dag.run("readme-demo")
+        assert result.success
+        print(result.status.value)
+    finally:
+        store.close()
+```
+
+永続利用では一時ディレクトリではなく明示的な保存先を指定してください。[動的分解と修復の完全なサンプル](example/14.dynamic_dag.py)と [LightDAG ガイド](docs/lightdag.md)で依存関係、統合、再試行、復旧を説明しています。
+
+永続 Session、非同期呼び出し、Capability Provider、Policy、Inbox、Goals、Budgets、Jobs の設定は [Runtime ガイド](docs/runtime_v010.md)を参照してください。
+
+### 互換性とセキュリティ境界
+
+- `agent.run(query)`、`stream=True`、`user_id` は引き続き利用できます。LightDAG は明示的に有効化する機能で、LightFlow を置き換えません。
+- v0.11.0 は単一ホスト、ローカル SQLite、実行ごとに一つのアクティブなスケジューラーを前提とします。実行は at-least-once で、外部副作用には冪等性が必要です。分散 Worker、Web UI、組み込みコードサンドボックスは含みません。
+- 旧 `execute_python_code`、`execute_python_file`、`execute_python_code_stream` は、`enable_unsafe_python=True` や登録済み `SandboxProvider` があってもモデルのツール実行ではブロックされます。`safe_expression` または実際に隔離されたカスタムツールを使ってください。ユーティリティの直接呼び出しは安全なサンドボックスではありません。
+- メモリの出所、書き込み許可、昇格ポリシーは引き続き必要です。フレームワークのテストだけで実際の共有グラフメモリ backend の安全性は認証できません。[メモリの安全境界](docs/memory_security.md)を参照してください。
+
+### 公開リリースと現在の main
+
+[v0.11.0](https://github.com/wanxingai/LightAgent/releases/tag/v0.11.0) は 2026-10-01 に公開されました。ツール選択 JSON、MCP SDK 1.x/2.x、オプションの deed.page サンプルに関する後続変更は、その tag より後に `main` へ統合されており、公開済みパッケージに含まれるとは限りません。次のコマンドは元の tag ではなく現在の `main` をインストールします。
+
+```bash
+pip install --upgrade "git+https://github.com/wanxingai/LightAgent.git@main"
+```
+
+[Tools Guide](docs/tools.md)、オプションの [Memcode アダプター](docs/memcode_memory_adapter.md)、[deed.page サンプル](docs/deed_page_mcp.md)、[公開 API 互換性一覧](docs/public_api_compatibility.md)も参照してください。これらの外部サービスはコア実行環境の必須条件ではありません。
 
 ## 📋 ドキュメント
 
@@ -115,9 +195,9 @@ LightAgent はデフォルトの呼び出しを簡単に保ちつつ、本番向
 - 決定的な回帰評価については [Evaluation Harness](docs/evaluation.md) を参照してください。
 - ツール/handoff 承認、永続レビュー、feedback については [Human Review](docs/human_review.md) を参照してください。
 
-## 🚧 近日公開
+## ロードマップ
 
-- **エージェント協調通信** 🛠️：エージェント間で情報を共有し、メッセージを伝達することができ、複雑な情報通信とタスク協調を実現します。
+実装済みの機能と今後の計画は[ロードマップ](roadmap.md)を参照してください。Inbox、Jobs、サブ Agent は任意で有効化する Runtime ですでに利用できます。
 
 ## 🌟 なぜLightAgentを選ぶのか？
 
