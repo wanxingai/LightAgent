@@ -128,6 +128,44 @@ def test_rag_like_fallback_reports_degraded_health_and_searches(tmp_path):
     provider.reindex()  # A degraded provider keeps the source tables intact.
 
 
+def test_rag_search_treats_punctuation_and_operators_as_text(tmp_path):
+    provider = SqliteFTSRetrievalProvider(tmp_path / "rag.sqlite3", chunk_size=400, chunk_overlap=0)
+    provider.ingest(RetrievalDocument(document_id="cpp", content="Use C++ for parsers"))
+    provider.ingest(RetrievalDocument(document_id="hello", content="hello world"))
+    provider.ingest(RetrievalDocument(document_id="both", content="foo OR bar"))
+    provider.ingest(RetrievalDocument(document_id="only", content="foo only"))
+    provider.ingest(RetrievalDocument(document_id="percent", content="score is 100%"))
+    provider.ingest(RetrievalDocument(document_id="thousand", content="score is 1000 points"))
+    provider.ingest(RetrievalDocument(
+        document_id="apart",
+        content="checkpoint " + ("x" * 40) + " recovery",
+    ))
+
+    assert [item.document_id for item in provider.search("C++")] == ["cpp"]
+    assert [item.document_id for item in provider.search('hello"')] == ["hello"]
+    assert [item.document_id for item in provider.search("foo OR")] == ["both"]
+    assert [item.document_id for item in provider.search("100%")] == ["percent"]
+    assert [item.document_id for item in provider.search("checkpoint recovery")] == ["apart"]
+    assert provider.search("*") == []
+    assert provider.search("NOT") == []
+    assert provider.search("a:b") == []
+    assert provider.search("(") == []
+
+
+def test_rag_like_fallback_escapes_wildcards(tmp_path):
+    provider = SqliteFTSRetrievalProvider(tmp_path / "rag.sqlite3", chunk_size=200, chunk_overlap=0)
+    provider.ingest(RetrievalDocument(document_id="percent", content="score is 100% done"))
+    provider.ingest(RetrievalDocument(document_id="thousand", content="score is 1000 points"))
+    provider.ingest(RetrievalDocument(document_id="literal", content="file a_b.txt"))
+    provider.ingest(RetrievalDocument(document_id="wild", content="file axb.txt"))
+    provider.ingest(RetrievalDocument(document_id="slash", content=r"path a\b end"))
+    provider._fts5 = False
+
+    assert [item.document_id for item in provider.search("100%")] == ["percent"]
+    assert [item.document_id for item in provider.search("a_b")] == ["literal"]
+    assert [item.document_id for item in provider.search(r"a\b")] == ["slash"]
+
+
 def test_session_search_is_case_insensitive_bounded_and_handles_empty_query():
     store = InMemorySessionStore()
     for index in range(3):
