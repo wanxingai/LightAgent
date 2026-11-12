@@ -116,6 +116,77 @@ def run_async_safely(coro: Coroutine[Any, Any, T]) -> T:
         future = executor.submit(asyncio.run, coro)
         return future.result()
 
+
+_MESSAGE_FIELDS = ("role", "content", "reasoning_content", "tool_calls", "function_call")
+
+
+def _message_to_dict(message: Any) -> Dict[str, Any]:
+    """Return a JSON-native copy of a provider message or message part.
+
+    Handles dicts, Pydantic/SDK models (``model_dump``/``to_dict``) and plain
+    attribute objects, so a provider response never leaks into ``chat_params``
+    as an opaque object.
+    """
+    if isinstance(message, dict):
+        return dict(message)
+    for dumper in ("to_dict", "model_dump"):
+        method = getattr(message, dumper, None)
+        if callable(method):
+            try:
+                dumped = method()
+            except TypeError:
+                continue
+            if isinstance(dumped, dict):
+                return dict(dumped)
+    try:
+        attributes = vars(message)
+    except TypeError:
+        attributes = {}
+    if attributes:
+        return {
+            key: value
+            for key, value in attributes.items()
+            if not key.startswith("_")
+        }
+    return {
+        field: getattr(message, field)
+        for field in _MESSAGE_FIELDS
+        if getattr(message, field, None) is not None
+    }
+
+
+def _coerce_assistant_message(message: Any) -> Dict[str, Any]:
+    """Normalize a provider assistant message into the OpenAI wire format."""
+    data = _message_to_dict(message)
+    payload: Dict[str, Any] = {
+        "role": data.get("role") or "assistant",
+        "content": data.get("content") or "",
+    }
+    reasoning_content = data.get("reasoning_content")
+    if reasoning_content is not None:
+        payload["reasoning_content"] = reasoning_content
+
+    tool_calls = []
+    for tool_call in data.get("tool_calls") or []:
+        call = _message_to_dict(tool_call)
+        function = _message_to_dict(call.get("function") or {})
+        arguments = function.get("arguments", "")
+        if arguments is None:
+            arguments = ""
+        elif not isinstance(arguments, str):
+            arguments = json.dumps(arguments, ensure_ascii=False)
+        tool_calls.append({
+            "id": call.get("id"),
+            "type": call.get("type") or "function",
+            "function": {
+                "name": function.get("name"),
+                "arguments": arguments,
+            },
+        })
+    if tool_calls:
+        payload["tool_calls"] = tool_calls
+    return payload
+
 # openai.langfuse_auth_check()
 
 class LightAgent:
@@ -2220,7 +2291,11 @@ class LightAgent:
                 tool_calls = response.choices[0].message.tool_calls
                 self.log("DEBUG", "non_stream tool_calls", {"tool_calls": tool_calls})
                 # 将工具调用和响应添加到消息列表中
-                self.chat_params["messages"].append(response.choices[0].message)
+                # 归一化为 dict：provider 返回的对象不一定是 JSON 原生类型，
+                # 直接存入让 context_budget / 事件序列化拿到不可序列化对象
+                self.chat_params["messages"].append(
+                    _coerce_assistant_message(response.choices[0].message)
+                )
 
                 # 遍历所有工具调用
                 for tool_call in tool_calls:
