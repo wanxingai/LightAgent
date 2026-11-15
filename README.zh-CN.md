@@ -299,13 +299,23 @@ pip install --upgrade "git+https://github.com/wanxingai/LightAgent.git@main"
 
 ### 安装 LightAgent
 
-安装 PyPI 上提供的包：
+从 PyPI 按需选择一种安装方式：
 
 ```bash
-pip install lightagent
+pip install lightagent             # 基础包
+pip install 'lightagent[mcp,mem0]'  # 基础包 + 指定集成
+pip install 'lightagent[all]'       # 基础包 + 全部可选 Python SDK
 ```
 
-从 GitHub 安装指定的 v1.0.0 版本：
+基础包已包含原生 Agent 调用、Python 工具、Skills（含 PyYAML）、核心工作流和本地 Trace。
+`[all]` 安装的是同一个 LightAgent 包，同时装齐可选依赖：`mcp`（MCP）、
+`mem0`（Mem0 记忆）、`langfuse`（外部追踪）、`litellm`（模型路由）、
+`oss` 或 `nos`（通过 boto3 接入对象存储）和 `signing`（Provider 验签）。
+建议只安装实际用到的 extras。安装不会自动启用集成、配置凭据，也不会安装外部服务、
+Codex CLI、Docker 或 LightResearch。需要锁定 PyPI 全量安装版本时，使用
+`pip install 'lightagent[all]==1.0.0'`。
+
+也可以从 GitHub 源码安装 v1.0.0（需要 Git）：
 
 ```bash
 python -m pip install 'git+https://github.com/wanxingai/LightAgent.git@v1.0.0'
@@ -320,8 +330,7 @@ python -m pip install '.[mem0]'
 python -m pip install '.[langfuse]'
 ```
 
-使用 `python -m pip install '.[all]'` 可一次装齐 MCP、Mem0、Langfuse、LiteLLM、
-OSS/NOS 和 Provider 验签所需的 Python 依赖，不包含独立的 LightResearch 或 Codex CLI。
+从本地源码进行等效的全量安装，使用 `python -m pip install '.[all]'`。
 
 基础安装已包含 Skills 和 PyYAML。默认仍扫描 `skills/`，也支持原有的 `skills_directories`。不需要扫描技能时可设置 `auto_discover_skills=False`。
 
@@ -340,6 +349,20 @@ agent = LightAgent(model="gpt-4.1", api_key="your_api_key", base_url= "your_base
 response = agent.run("你好，你是谁？")
 print(response)
 ```
+
+### 查看 Token 用量
+
+复用上面 Hello world 示例中的 Agent：
+
+```python
+result = agent.run("用一句话介绍 LightAgent。", result_format="object")
+if result.error:
+    raise RuntimeError(result.error)
+print(result.usage if result.usage else "模型服务未上报 Token 用量。")
+```
+
+原生模型上报的用量包括输入（`prompt_tokens`）、输出（`completion_tokens`）和总 Token 数。
+未上报不等于零。费用估算、流式调用、Codex 和任务预算见 [用量统计指南](https://github.com/wanxingai/LightAgent/wiki/V1-Usage-and-Cost)。
 
 ### 使用 Codex 作为 Agent 后端
 
