@@ -20,6 +20,18 @@ from .capabilities import (
 from .session import SessionStore, _utc_now
 
 
+def _literal_fts_query(query: str) -> str:
+    """Match the user's words without treating them as FTS5 syntax."""
+    terms = query.split()
+    return " AND ".join('"' + term.replace('"', '""') + '"' for term in terms)
+
+
+def _literal_like_pattern(query: str) -> str:
+    """Escape LIKE metacharacters so the query is a literal substring."""
+    escaped = query.lower().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    return f"%{escaped}%"
+
+
 @dataclass
 class RetrievalDocument:
     content: str
@@ -216,7 +228,7 @@ class SqliteFTSRetrievalProvider(BaseCapabilityProvider):
                     ORDER BY rank
                     LIMIT ?
                     """,
-                    (query, max(limit * 10, limit)),
+                    (_literal_fts_query(query), max(limit * 10, limit)),
                 ).fetchall()
             else:
                 rows = connection.execute(
@@ -224,11 +236,11 @@ class SqliteFTSRetrievalProvider(BaseCapabilityProvider):
                     SELECT c.*, d.payload, NULL AS rank
                     FROM rag_chunks c
                     JOIN rag_documents d ON d.document_id = c.document_id
-                    WHERE lower(c.content) LIKE ?
+                    WHERE lower(c.content) LIKE ? ESCAPE '\\'
                     ORDER BY c.rowid
                     LIMIT ?
                     """,
-                    (f"%{query.lower()}%", max(limit * 10, limit)),
+                    (_literal_like_pattern(query), max(limit * 10, limit)),
                 ).fetchall()
         results = []
         for row in rows:

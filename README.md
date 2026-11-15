@@ -13,6 +13,7 @@
     <a href="https://pypi.org/project/lightagent/"><img src="https://img.shields.io/pypi/dm/lightagent.svg" alt="Downloads"></a>
     <a href="https://pypi.org/project/lightagent/"><img src="https://img.shields.io/pypi/pyversions/lightagent.svg" alt="Python Version"></a>
     <a href="https://arxiv.org/abs/2509.09292"><img src="https://img.shields.io/badge/arXiv-Paper-B31B1B?logo=arxiv&logoColor=white" alt="Code Style"></a>
+    <a href="https://github.com/NipunaRanasinghe/awesome-ai-agents"><img src="https://img.shields.io/badge/Featured_in-Awesome_AI_Agents-2ea44f" alt="Featured in Awesome AI Agents"></a>
   </p>
 </div>
 <div align="center">
