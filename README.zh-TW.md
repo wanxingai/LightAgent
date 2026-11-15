@@ -39,7 +39,8 @@
 ---
 
 ## 新聞
-- <img src="https://img.alicdn.com/imgextra/i3/O1CN01SFL0Gu26nrQBFKXFR_!!6000000007707-2-tps-500-500.png" alt="new" width="30" height="30"/>**[2026-10-01]** LightAgent v0.11.0 正式發布：新增可選的持久化動態 DAG 多 Agent 執行、驗證通過後才發布的不可變成果、可恢復租約與 fencing，以及統一且只能收窄權限的 `SecurityContext`、能力與審批控制。
+- <img src="https://img.alicdn.com/imgextra/i3/O1CN01SFL0Gu26nrQBFKXFR_!!6000000007707-2-tps-500-500.png" alt="new" width="30" height="30"/>**[2026-11-15]** LightAgent v1.0.0 已合併至 `main`（[#128](https://github.com/wanxingai/LightAgent/pull/128)），尚未正式發布：新增可重新連線的持久執行、統一的 Job/Subagent 生命週期、交易式復原與選用的 Provider 簽章驗證。
+- **[2026-10-01]** LightAgent v0.11.0 正式發布：新增可選的持久化動態 DAG 多 Agent 執行、驗證通過後才發布的不可變成果、可恢復租約與 fencing，以及統一且只能收窄權限的 `SecurityContext`、能力與審批控制。
 - **[2026-08-15]** LightAgent v0.10.0 正式發布：新增事件溯源 Agent Runtime，支援持久化 Session、非同步執行、Capability Registry 與 Policy、Inbox、Goals、Budgets、Jobs、子 Agent、內容壓縮與 SQLite FTS5 檢索。
 - **[2026-08-15]** LightAgent v0.9.7 正式發布：新增輕量、零依賴的 Connector 契約及離線驗證與範例，強化 Python 執行器安全檢查，補充可選的 Mem0 Graph 安全驗證矩陣，並透過公共 API 相容性清單為 v1.0 穩定化做準備。
 - **[2026-07-30]** LightAgent v0.9.6 正式發布：新增生產級 Trace 彙總與匯出、確定性評測、工具、handoff 與 LightFlow 的可持久化人工審批，以及共享 Graph Memory 的 fail-closed 寫入准入與稽核控制。
@@ -109,6 +110,15 @@ LightAgent 保持預設呼叫路徑簡單，同時允許逐步加入生產級控
 | 動態工作流程 | `LightDAG(...).create_run(...)` | 動態提出任務，發布前先驗證成果。 |
 | 持久化 Session | `agent.run(query, session_id="project-42")` | 需設定持久化 SessionStore 才能延續與回放。 |
 | 非同步呼叫 | `await agent.arun(query)` | 避免阻塞 asyncio 應用。 |
+
+## v1.0.0：通用持久執行與復原
+
+- **可重新連線的任務：** `ExecutionService` 透過宿主註冊的後端執行一般任務，重啟後可用 `ExecutionHandle` 重新連線並查詢狀態。
+- **狀態管理與復原：** Job 和 Subagent 共用生命週期與協作式取消。SQLite 交易保護訊息和預算紀錄；執行結果不明時，必須由宿主核對，不會自動重播外部操作。
+- **安全與安裝：** 已簽章的 Provider 可要求宿主明確核准，並仍受執行期政策約束。基礎安裝包含 Skills 和 PyYAML；MCP、Mem0、Langfuse、LiteLLM、OSS/NOS 與簽章驗證可按需安裝。
+- **相容性：** 一般 `run()` 和串流行為不變。研究功能移至獨立的 LightResearch 擴充套件；舊的 `mode="persistent"` 需明確註冊後再使用。
+
+[執行指南](docs/durable_execution.zh-CN.md) · [Job 與歷史遷移](docs/jobs_history_migration.zh-CN.md) · [離線範例](example/15.durable_execution.py)
 
 ## v0.11.0：動態驗證工作流程
 

@@ -57,8 +57,9 @@
 ---
 ## 新闻
 
+- <img src="https://img.alicdn.com/imgextra/i3/O1CN01SFL0Gu26nrQBFKXFR_!!6000000007707-2-tps-500-500.png" alt="new" width="30" height="30"/>**[2026-11-15]** LightAgent v1.0.0 已合入 `main`（[#128](https://github.com/wanxingai/LightAgent/pull/128)），正式发布待定：新增可重连的持久执行、统一 Job/Subagent 生命周期、事务化恢复和可选的 Provider 签名验证。
 - **[2026-10-04] v0.12.0 源码已实现（尚未发布）**：持久研究服务、目录驱动的 DAG 实验、消息与独立聊天、参考面板、版本评估/采用/回滚。默认普通调用不变；后台模式需显式启用。见 [持续研究指南](docs/persistent_research.zh-CN.md)。
-- <img src="https://img.alicdn.com/imgextra/i3/O1CN01SFL0Gu26nrQBFKXFR_!!6000000007707-2-tps-500-500.png" alt="new" width="30" height="30"/>**[2026-10-01]** LightAgent v0.11.0 正式发布：新增可选的持久化动态 DAG 多 Agent 执行、验证通过后才发布的不可变成果、可恢复租约与 fencing，以及统一且只能收窄权限的 `SecurityContext`、能力和审批控制。
+- **[2026-10-01]** LightAgent v0.11.0 正式发布：新增可选的持久化动态 DAG 多 Agent 执行、验证通过后才发布的不可变成果、可恢复租约与 fencing，以及统一且只能收窄权限的 `SecurityContext`、能力和审批控制。
 - **[2026-08-15]** LightAgent v0.10.0 正式发布：新增统一的事件溯源 Agent Runtime，支持可持久化 Session、异步执行、Capability Registry 与 Policy、Inbox/Goals/Budgets、上下文压缩与恢复、Jobs/子 Agent、标准化 Skills/MCP 适配器和 SQLite FTS5 检索。
 - **[2026-08-15]** LightAgent v0.9.7 正式发布：新增轻量、零依赖的 Connector 契约及离线校验与示例，强化 Python 执行器安全检查，补充可选的 Mem0 Graph 安全验证矩阵，并通过公共 API 兼容性清单为 v1.0 稳定化做准备。
 - **[2026-07-30]** LightAgent v0.9.6 正式发布：新增生产级 Trace 汇总与导出、确定性评测、工具、handoff 和 LightFlow 的可持久化人工审批，以及共享 Graph Memory 的 fail-closed 写入准入与审计控制。
@@ -181,13 +182,14 @@ print(report.to_dict())
 `approval_id=request.request_id` 重新运行。LightFlow 也可通过
 `flow.approve(...); flow.resume(...)` 持久化并恢复步骤审批。
 
-## v1.0.0 开发边界
+## v1.0.0：通用持久执行与恢复
 
-此分支的目标版本为 `1.0.0`，尚未发布。普通持久任务使用 [ExecutionService](docs/durable_execution.zh-CN.md)；研究契约、评估、版本晋升、历史选择和可选调试面板位于同级的可选 LightResearch 项目，见[安装与迁移指南](docs/persistent_research.zh-CN.md)。LightAgent 默认 CI 不依赖扩展。旧 `mode="persistent"` 保持研究语义，需显式调用 `LightResearch.enable_legacy_api()`。核心不提供正式产品 UI，剩余发布门槛见 [v1.0.0 计划](docs/lightagent_v100_development_plan.zh-CN.md)。
+- **可重连任务：** [`ExecutionService`](docs/durable_execution.zh-CN.md) 通过宿主注册的后端执行普通任务，不要求研究契约。重启后可用 `ExecutionHandle` 重连，查询状态、事件和回执。见[离线示例](example/15.durable_execution.py)。
+- **状态与恢复：** Job 和 Subagent 共用生命周期、租约和协作式取消。SQLite 事务保护 Session 状态、消息和预算记账。Subagent 冷重连后需由宿主显式绑定；外部操作结果不明时，由宿主核对后决定是否重试，不自动重放。见 [Job/历史迁移指南](docs/jobs_history_migration.zh-CN.md)和[离线迁移示例](example/16.jobs_and_history.py)。
+- **安全与安装：** 可选的 [Provider 签名与重授信](docs/provider_supply_chain.zh-CN.md)要求验证发布者签名和宿主显式批准，不替代运行时权限控制。基础安装包含 Skills 和 PyYAML；MCP、Mem0、Langfuse、LiteLLM、OSS/NOS 和验签依赖按需安装。
+- **兼容性：** 普通 `run()` 和流式调用保持不变。研究契约、评估、版本晋升和调试面板位于独立的 LightResearch 扩展；旧 `mode="persistent"` 保持研究语义，需显式调用 `LightResearch.enable_legacy_api()`。见[研究迁移指南](docs/persistent_research.zh-CN.md)。
 
-Subagent 执行现统一使用 Job，冷重连后需宿主显式绑定实例。状态、取消及历史回退边界见 [Job/历史迁移指南](docs/jobs_history_migration.zh-CN.md)和[离线示例](example/16.jobs_and_history.py)。
-
-可选的 [Provider 签名与重授信](docs/provider_supply_chain.zh-CN.md)要求发布者验签和宿主显式批准，不替代运行时权限与敏感操作审批。
+实现已合入 `main`，尚未正式发布。核心不提供正式产品 UI，默认 CI 不依赖 LightResearch。剩余发布门槛见 [v1.0.0 计划](docs/lightagent_v100_development_plan.zh-CN.md)。
 
 ## v0.11.0：动态验证工作流
 
@@ -300,17 +302,17 @@ pip install --upgrade "git+https://github.com/wanxingai/LightAgent.git@main"
 pip install lightagent
 ```
 
-v1.0.0 开发版将 MCP、Mem0 和 Langfuse 设为可选依赖，按需安装：
+要体验 `main` 中尚未正式发布的 v1.0.0，请从源码仓库根目录安装，并按需选择 extras：
 
 ```bash
-pip install 'lightagent[mcp]'
-pip install 'lightagent[mem0]'
-pip install 'lightagent[langfuse]'
+python -m pip install .
+python -m pip install '.[mcp]'
+python -m pip install '.[mem0]'
+python -m pip install '.[langfuse]'
 ```
 
-使用 `pip install 'lightagent[all]'` 可一次装齐 MCP、Mem0、Langfuse、LiteLLM、
+使用 `python -m pip install '.[all]'` 可一次装齐 MCP、Mem0、Langfuse、LiteLLM、
 OSS/NOS 和 Provider 验签所需的 Python 依赖，不包含独立的 LightResearch 或 Codex CLI。
-基础安装 `pip install lightagent` 不会启用任何 extra。
 
 基础安装已包含 Skills 和 PyYAML。默认仍扫描 `skills/`，也支持原有的 `skills_directories`。不需要扫描技能时可设置 `auto_discover_skills=False`。
 
