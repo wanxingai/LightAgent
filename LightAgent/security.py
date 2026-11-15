@@ -354,13 +354,15 @@ class ProviderManifest:
             name: provider.capabilities[name].to_dict()
             for name in capabilities
         }
+        binding = getattr(provider, "attestation_state", None)
+        metadata = {"binding_digest": canonical_digest(_secret_safe(binding()))} if callable(binding) else {}
         return cls(
             name=str(provider.name),
             version=str(provider.version),
             capabilities=capabilities,
             configuration_digest=canonical_digest(safe_config),
             capability_digest=canonical_digest(capability_payload),
-            metadata={},
+            metadata=metadata,
         )
 
     def to_dict(self) -> dict[str, Any]:

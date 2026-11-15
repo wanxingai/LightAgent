@@ -59,7 +59,6 @@ from .cancellation import CancellationToken
 from .flow import JsonLightFlowStore, LightFlow, LightFlowResult, LightFlowStep, LightFlowStepResult
 from .shared_memory import SharedMemoryPool, SharedMemoryRecord
 from .logger import LoggerManager
-from .mcp_client_manager import MCPClientManager
 from .skills import SkillManager, Skill
 from .skill_tools import create_skill_tools
 from .connectors import (
@@ -187,8 +186,16 @@ from .builtin_tools.python_executor import (
     execute_python_code_stream
 )
 from .builtin_tools.nos import upload_file_to_oss
+from .backends import AgentBackend, BackendCapabilities, BackendError, BackendEvent, BackendProbe, BackendRequest, BackendResult, BackendSessionStore, CodexBackend
+from .workspace import LocalWorkspaceProvider, WorkspaceExecutionProvider, WorkspaceSession
+from .backends.native import NativeBackend
+from .backends.worker import BackendWorkerAdapter
 
 __all__ = [
+    "AgentBackend", "BackendCapabilities", "BackendError", "BackendEvent",
+    "BackendRequest", "BackendResult", "CodexBackend", "NativeBackend",
+    "BackendProbe", "BackendSessionStore",
+    "BackendWorkerAdapter", "LocalWorkspaceProvider", "WorkspaceExecutionProvider", "WorkspaceSession",
     "__version__",
     "LightAgent",
     "LightSwarm",
@@ -359,3 +366,34 @@ __all__ = [
     "evaluate_safe_expression",
     "safe_expression",
 ]
+
+from .persistent import AgentService, AgentHandle, ChatHandle, ServiceStartupError, BackendFailure, RetryPolicy
+__all__ += ["AgentService", "AgentHandle", "ChatHandle", "ServiceStartupError", "BackendFailure", "RetryPolicy"]
+
+
+def __getattr__(name):
+    if name == "MCPClientManager":
+        from .mcp_client_manager import MCPClientManager
+        return MCPClientManager
+    if name in ("ResearchContract", "ResearchEvaluator", "PromotionPolicy", "AgentVersion"):
+        from .extensions import legacy_export
+        return legacy_export(name)
+    raise AttributeError(name)
+
+from .backends import CodexAppServerBackend, MCPToolBridge
+__all__ += ["CodexAppServerBackend", "MCPToolBridge"]
+from .persistent import (ExecutionService, ExecutionHandle, ExecutionLimits, ExecutionRequirements,
+                         BudgetLedger, LedgerLimitExceeded, ControlStore, EXECUTION_SCHEMA_VERSION)
+from .session import SequenceConflict
+__all__ += ["ExecutionService", "ExecutionHandle", "ExecutionLimits", "ExecutionRequirements",
+            "BudgetLedger", "LedgerLimitExceeded", "ControlStore", "EXECUTION_SCHEMA_VERSION", "SequenceConflict"]
+from .persistent.interactions import InteractionRequests, INTERACTION_SCHEMA_VERSION
+from .persistent.wakeups import WakeupScheduler, WAKEUP_SCHEMA_VERSION
+__all__ += ["InteractionRequests", "INTERACTION_SCHEMA_VERSION", "WakeupScheduler", "WAKEUP_SCHEMA_VERSION"]
+from .history import HistoryBundle
+from .job_lifecycle import JobConflict
+__all__ += ["HistoryBundle", "JobConflict"]
+from .supply_chain import (ProviderAttestation, ProviderTrustStore, AttestedProvider,
+                           TrustError, artifact_digest, SUPPLY_CHAIN_SCHEMA_VERSION)
+__all__ += ["ProviderAttestation", "ProviderTrustStore", "AttestedProvider", "TrustError",
+            "artifact_digest", "SUPPLY_CHAIN_SCHEMA_VERSION"]

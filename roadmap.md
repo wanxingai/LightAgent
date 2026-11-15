@@ -1,6 +1,6 @@
 # LightAgent Roadmap
 
-Last updated: 2026-09-14
+Last updated: 2026-11-15
 
 LightAgent should continue to evolve as a lightweight, low-dependency agent
 framework rather than a broad replacement for LangChain, LangGraph, CrewAI, or
@@ -10,7 +10,8 @@ The product direction remains:
 
 **Lightweight core + event-sourced Sessions + composable capability Providers +
 reliable tool execution + unified Policy + safe memory + deterministic
-workflows + OpenAI-compatible model ecosystem.**
+workflows + persistent research + pluggable Agent backends + OpenAI-compatible
+model ecosystem.**
 
 ## Current Status
 
@@ -85,8 +86,18 @@ workflows + OpenAI-compatible model ecosystem.**
 
 ### In Development
 
-- **v0.12.0**: Trusted Data and Supply Chain is the next planned feature line;
-  it has not been declared implemented or released.
+- **v1.0.0**: the former v0.13.0 scope is now the v1.0.0 release target.
+  See the [development plan](docs/lightagent_v100_development_plan.zh-CN.md)
+  and [validation record](docs/v100_validation.zh-CN.md) for remaining gates.
+
+- **v0.12.0**: P0–P4 implemented in source: bounded native/Codex execution,
+  single-host persistent service, verified research DAGs, durable interaction,
+  independent chat, reference panel, immutable versions and bounded recursive
+  improvement. App Server steering and the controlled tool bridge are experimental.
+  Small-scale acceptance replaces the 24-hour soak for this development task;
+  this is not a published release or a production uptime claim. See the
+  [usage guide](docs/persistent_research.zh-CN.md) and
+  [validation report](docs/v012_validation.zh-CN.md).
 
 ### Current Feature Release
 
@@ -1046,29 +1057,175 @@ Unified security work:
   inheritance, independent sessions, workspaces, budgets, and credentials.
 - Add Job leases and cancellation tokens with parent-to-child propagation.
 
-### v0.12.0: Trusted Data And Supply Chain
+### v0.12.0: Persistent Agents And Automated Research
 
-Goal: prevent external content and untrusted extensions from changing runtime
-authority.
+Status: P0–P4 implemented with small-scale local acceptance; v0.12.0 is not
+published. The detailed scope, API,
+milestones, and release gates are maintained in the
+[v0.12.0 development plan (Chinese)](docs/lightagent_v012_development_plan.zh-CN.md).
 
-- Wrap web, RAG, PDF, uploaded files, Memory, Skills, MCP results, and child
-  reports as untrusted data rather than executable instructions.
-- Make Memory and RAG admission, provenance, trust, TTL, source hash, and
-  citation tracking default behavior.
-- Prevent low-trust facts from replacing high-trust facts without explicit
-  approval, and support rollback of unsafe writes.
-- Add Skill/MCP version locks, content digests, publisher metadata, capability
-  declarations, signature verification, and upgrade re-trust.
-- Add MCP namespace isolation, network egress allowlists, and default-deny
-  dynamic installation.
+Goal: let developers start a persistent researcher with a goal and a workspace,
+then inspect its work, add instructions, converse with it, and evaluate its
+improvements while a managed service owns execution and recovery.
 
-### v0.13.0: Recovery And Adversarial Security
+- Reuse the native model/tool loop with a minimal workspace execution preset:
+  expose `shell` and `edit_file`, allowing the model to search, read, inspect
+  data, and run project scripts through commands. Dedicated list/search/read
+  tools and prebuilt workspace indexes are not prerequisites. Keep ordinary
+  chat free of automatically granted execution permissions.
+- Add a shared `AgentBackend` execution contract and optional `backend="codex"`.
+  Invoke the local `codex` command through PATH; do not require an executable
+  path or an independently configured model client for that backend. Use bounded
+  `codex exec` tasks for the Codex adapter; rich App Server interaction is an
+  experimental adapter. The native path works without Codex installed.
+- Add `run(..., mode="persistent", workspace=...)`, a reconnectable
+  `AgentHandle`, and a single-host `AgentService`. Preserve ordinary run/arun,
+  streaming, and existing model-provider behavior.
+- Read workspace instructions, existing data, acquisition scripts, and previous
+  experiments on demand. Do not require a separate `data_provider` or mandatory
+  WorkspaceProvider retrieval layer. SQLite, vector retrieval, and incremental
+  file indexes remain optional enhancements; bind experiments to identifiable
+  input snapshots regardless of indexing.
+- Keep timeout, bounded output, cancellation, process cleanup, event recording,
+  and permissions in the execution runtime. Isolate concurrent shell sessions;
+  do not equate persistent shell state with restart recovery or a working
+  directory with a sandbox. Preserve the existing executor restrictions.
+- Reuse LightDAG, Sessions, Jobs, artifacts, retrieval, budgets, and security
+  contracts. Bring atomic Inbox claims and durable Job recovery forward from
+  v0.13.0 because continuous operation depends on them.
+- Implement event-driven research cycles with bounded tasks, persisted waiting,
+  leases, restart reconciliation, backoff, resource limits, and explicit unknown
+  outcomes. Do not claim exactly-once external side effects.
+- Separate Verifier, Evaluator, and PromotionPolicy; record hypotheses,
+  experiments, baselines, metrics, evidence, and unsuccessful candidates.
+- Add immutable researcher versions, candidate archives, adoption and rollback.
+  Keep task dependencies separate from version lineage. Ship bounded recursive
+  improvement as an opt-in experimental example with fixed evaluation and
+  total-budget accounting, not a guarantee of increasing intelligence.
+- Add durable message receipts, next-boundary application, independent chat,
+  event/query APIs, and an optional reference panel for tasks, experiments,
+  artifacts, publications, and version changes.
+- Provide an optional controlled MCP bridge for registered tools. Map backend
+  permissions explicitly; native Codex tools do not automatically pass through
+  LightAgent's Python CapabilityGate.
+
+Trusted-data and supply-chain requirements retained in this version:
+
+- Keep workspace data, web/RAG content, tool results, and candidate changes from
+  altering runtime authority. Preserve Memory/RAG admission, provenance, source
+  hashes, trust boundaries, and rollback of unsafe writes.
+- Pin candidate and extension versions/digests, preserve capability declarations
+  and namespace isolation, and recheck permissions after upgrades.
+- Enforce supported network, installation, credential, and sandbox policies;
+  reject execution when required boundaries cannot be enforced.
+- Broader publisher/signature verification and cross-backend supply-chain
+  governance move to v0.13.0; execution-critical controls cannot be deferred.
+
+Ordered internal milestones: P0 native Shell/editor and optional Codex backend
+integration; P1 persistent
+service/recovery; P2 research/evaluation; P3 interaction/reference panel;
+P4 versioned and bounded recursive improvement. Release acceptance requires
+both backend paths sharing the research/control contracts, fault-injection
+coverage, compatibility checks, a detached native fixture run, and real
+Codex end-to-end/recovery acceptance. A 24-hour soak was not run; the user
+authorized small-scale validation for this development task. The native file-discovery gate must pass
+without Codex or a prebuilt search index. The minimal tool design draws on
+[DeepSeek Harness sdk-minimal](https://deepseek-harness.github.io/deepseek-harness/guide/python-sdk);
+LightAgent retains its own durable control and execution-policy contracts.
+
+### v1.0.0: General Execution Kernel And Boundary Stabilization
+
+Status: in development as `1.0.0`; not released. The former v0.13.0 scope was
+renamed to v1.0.0. The first extraction and
+execution-contract slice, Runtime Job/Subagent adapters, and frozen-v0.12 local
+history migration/rollback rehearsal are implemented. See the [development plan](docs/lightagent_v100_development_plan.zh-CN.md)
+and [durable execution guide](docs/durable_execution.zh-CN.md) for exact boundaries.
+
+- Keep ordinary run/arun, streaming, tools, memory, Hooks, Guardrails, Swarm, Flow,
+  DAG, approvals and artifacts in the core.
+- Move research contracts, evaluation, version promotion, history selection and
+  the debugging panel to the independently versioned optional LightResearch
+  package. Formal product UI and tool environments belong to LightWorker.
+- Keep LightResearch in a sibling checkout. Default CI tests the core without it;
+  [joint acceptance](docs/clean_environment_acceptance.zh-CN.md) takes an explicit
+  research checkout or wheel.
+- Provide ordinary durable execution, transactional Session append/CAS, immutable
+  history checks, shared budget reservation/settlement, interaction correlation,
+  wakeup delivery, and fail-closed host capability mapping.
+- Preserve old persistent research semantics behind explicit registration;
+  never silently reinterpret them as plain execution or rewrite historical digests.
+- Runtime coroutine and external Jobs share lifecycle/fencing rules; Subagent
+  runs, capacity and cancellation use Jobs rather than a second state machine.
+- Offline history bundles, explicit legacy Session anchoring and an old-wheel
+  rollback-read rehearsal preserve events, receipts, artifacts and pinned profiles.
+  See [Job/history migration](docs/jobs_history_migration.zh-CN.md).
+- Worker now supplies an optional real Docker workspace adapter. Docker-only,
+  exact approval/replay rejection, parent cancellation and independent-process
+  child-session resume pass real-container acceptance with scripted model responses.
+- Signed Provider attestations and explicit host trust bind complete local bundles,
+  capabilities/configuration, Skill paths and MCP connections. Persistent key
+  revocation, release downgrade rejection and resource/path adversarial matrices
+  are covered; Worker strict composition rejects unapproved Skill/MCP groups.
+- Local clean Python 3.10.22/3.11.18/3.12.16/3.13.18 acceptance passes the
+  complete suite: 770 passed and 8 explicit opt-in skips per version, plus
+  dependency checks, installed core/research wheels and 39 supplemental HEAD
+  tests. Containers do not inherit host packages and run tests offline. See the
+  [acceptance record](docs/v100_validation.zh-CN.md) and
+  [reproduction guide](docs/clean_environment_acceptance.zh-CN.md).
+- Clean/load acceptance fixes Python 3.10 SQLite constant compatibility and
+  hot rollback-journal recovery after real process death. SQL reads remain
+  query-only without reserving the writer slot. Deadline/lease tests isolate
+  preparation from execution; no runtime fencing or timeout policy is weakened.
+- Research-cycle steering and experiment report search now live in LightResearch.
+  The core retains generic paging and explicit registration-based compatibility
+  entry points. Existing SQLite history, receipts and version-1 cursors are preserved.
+- LightResearch owns research chat admission, inbox-triggered research wakeups
+  and the chat/steering work included in shutdown draining. The core retains
+  atomic inbox writes, idempotency, budgets and generic shutdown coordination.
+  Receipt, wakeup and event writes share one transaction; detached recovery
+  never replays an already delivered chat with an unknown outcome.
+- LightResearch declares immutable research record kinds and projects research
+  contracts into the generic `limits` of new owner records. Core enforces
+  immutability, CAS, and saved resource limits. A frozen compatibility reader
+  preserves old immutable kinds and `contract` capacities, including in
+  detached Jobs with no research package; existing rows are not rewritten.
+- Mem0 and Langfuse are optional `mem0` and `langfuse` extras. The existing
+  SDK import, memory adapter, and `tracetools` configuration paths remain
+  available. Built-in traces and custom memory adapters require neither SDK.
+  The [validation record](docs/v100_validation.zh-CN.md#mem0-与-langfuse-可选依赖复测2026-11-14)
+  covers the full suite without either SDK and both wheel installation paths.
+- MCP is an optional `mcp` extra. Existing imports and transport configuration
+  remain compatible. Codex dynamic tools depend directly on `jsonschema`, not
+  on the MCP SDK; only MCP transport operations require that extra.
+  Example-only dependencies are no longer required by the core. The
+  [acceptance record](docs/v100_validation.zh-CN.md#mcp-可选依赖与工具桥复测2026-11-14)
+  covers installed-wheel checks and the MCP 1.12.4, 1.30.0, and 2.3.0 matrix.
+- Skills ship with the base package, including PyYAML. Existing imports and
+  automatic discovery are unchanged. No separate Skills extra is needed;
+  `all` includes Skills through the base dependencies.
+- CI now shares the full verifier, uploads evidence on success/failure and
+  offers an opt-in 15-minute soak. These changes are local, not proof of remote
+  GitHub Actions passing. Existing memory-promotion UTC deprecation warnings
+  remain non-blocking follow-up work; serialized timestamp compatibility must
+  be preserved when replacing the deprecated calls.
+- The same snapshot passes a bounded 900.483-second offline soak: 310 rounds,
+  1,240 completed tasks, 15 real process-death reconciliations and 15 supervisor
+  restarts, with no duplicate effects/budget charges or OOM. Warm RSS growth
+  is 4.289 MiB; final threads/FDs settle to 1/4. This uses a deterministic
+  backend, not real-model billing, peak-throughput or 24-hour production proof.
+- Remaining gates include production-scale migration, deployment-specific remote
+  MCP service/identity validation, actual remote supported-Python/MCP CI and
+  deployment-specific longer/larger live-service load validation.
+  Optional adapters do not silently replace the default Worker product runtime.
 
 Goal: validate security and recovery behavior under interruption, concurrency,
 malicious content, and resource pressure.
 
 - Add Session hash chains and integrity verification.
-- Add atomic Inbox claim/release and durable Job recovery.
+- Broaden the atomic Inbox, durable Job recovery, and restart reconciliation
+  delivered as prerequisites of v0.12.0.
+- Add general Skill/MCP publisher and signature verification, upgrade re-trust,
+  and cross-backend supply-chain governance beyond the v0.12.0 minimum.
 - Add prompt-injection, malicious MCP/Skill, child-agent privilege, resource
   exhaustion, and concurrent-write test suites.
 - Verify that restart does not repeat side effects and that replay preserves
@@ -1076,10 +1233,11 @@ malicious content, and resource pressure.
 - Publish sanitized security evaluation results and operational configuration
   guidance.
 
-### v1.0.0: Stable Runtime And Ecosystem
+#### Remaining Stable Runtime And Ecosystem Work
 
-Goal: freeze the runtime and security contracts only after v0.10.1-v0.13.0 have
-survived compatibility, fault, concurrency, and adversarial validation.
+Goal: freeze the runtime and security contracts only after the stabilization
+work through the v1.0.0 candidate passes compatibility, fault, concurrency, and
+adversarial validation.
 
 Planned work:
 
@@ -1100,7 +1258,7 @@ Planned work:
 Release gates:
 
 - Public contracts have passed the complete v0.10.0 milestone suite and the
-  v0.10.1-v0.13.0 security stabilization cycle.
+  security stabilization cycle through the v1.0.0 candidate.
 - Event schemas support forward migration and deterministic replay.
 - Long-task interruption recovery passes in deterministic test environments.
 - Multi-Agent, approval, compaction, MCP, and Provider lifecycle paths pass
@@ -1150,8 +1308,8 @@ Suggested release cadence:
 | v0.10.1 | Security boundary and runtime hardening | P0 patch release |
 | v0.10.2 | LightFlow runtime hardening | After v0.10.1 |
 | v0.11.0 | Dynamic DAG Multi-Agent and unified security context | After v0.10.2; gated by the development plan |
-| v0.12.0-v0.13.0 | Trusted data, supply chain, and broader recovery hardening | Milestone-driven |
-| v1.0.0 | API freeze and production hardening | After security gates |
+| v0.12.0 | Native Shell/editor, optional Codex, persistent research, and versioned improvement | Gated by the development plan |
+| v1.0.0 | General execution kernel, supply-chain and recovery hardening, API stabilization | After release gates |
 | v1.1.0 | Optional enterprise integration | Post-v1.0 feedback-driven |
 
 ## Reference Directions From Other Agent Frameworks
@@ -1598,8 +1756,9 @@ compatibility, replay, recovery, security, and stabilization gates.
 - Continue #39 shared Graph Memory validation as an independent security gate,
   including the opt-in matrix against the exact Mem0 Graph version and storage
   configuration used in production-like deployments.
-- Complete PR and release-gate review for the shared `SecurityContext`,
-  capability-gating contracts, and opt-in persistent LightDAG implementation.
+- Preserve the released v0.11.0 `SecurityContext`, capability-gating, and
+  persistent LightDAG contracts while implementing the v0.12.0 backend and
+  durable-service milestones.
 - Keep `agent.run("hello")`, `stream=True`, existing Tools, Hooks, Memory,
   LightSwarm, and LightFlow compatibility behavior stable.
 
@@ -1614,24 +1773,35 @@ compatibility, replay, recovery, security, and stabilization gates.
 
 ### P3
 
-- Implement v0.12.0 trusted data and supply-chain controls for Prompt
-  Injection, Memory/RAG provenance, Skill/MCP signatures, namespaces, and
-  network egress.
-- Implement v0.13.0 Session integrity, atomic Inbox claims, Job recovery,
-  adversarial security tests, and resource-exhaustion tests.
-- Keep visual trace UI, distributed worker coordination, and hosted services
-  as upper-layer or post-protocol work.
+- Validate deployments of the implemented v0.12.0 research loop, durable
+  interaction, reference panel, version adoption/rollback, and bounded recursive
+  improvement example under application-specific workload and isolation policies. Retain execution-critical
+  provenance, namespace, egress, and supply-chain controls throughout.
+- Extend recovery, Session integrity, signature verification, adversarial
+  security, and resource-exhaustion coverage in v1.0.0. Atomic Inbox claims and
+  persistent Job recovery are v0.12.0 prerequisites, not deferred features.
+- Keep the reference panel optional and distributed coordination and hosted
+  services outside the required core package.
 
 ## Next Development Recommendation
 
-After the v0.11.0 release, the next planned feature target is **v0.12.0 Trusted
-Data And Supply Chain**. Preserve LightDAG's single-host concurrency, recovery,
-verification, and security contracts while extending untrusted-content,
-Memory/RAG provenance, Skill/MCP trust, namespace, and egress controls.
+After the v0.11.0 release, **v0.12.0 Persistent Agents And Automated Research**
+is implemented in source and awaits publication. Use the
+[v0.12.0 development plan](docs/lightagent_v012_development_plan.zh-CN.md): start
+with the native model/tool loop, `shell` and `edit_file`, a goal, and a workspace;
+offer `backend="codex"` as an alternative using the same persistent task and
+research contracts. Build the durable service before adding research cycles,
+user interaction, and evaluated version improvements. The entry point requires
+neither a Codex installation path nor a separate data provider or prebuilt
+workspace index. Workspace documentation and existing acquisition scripts
+define the research environment; specialized retrieval remains opt-in.
+
 The v0.11.0 [development plan](docs/lightdag_v011_development_plan.zh-CN.md)
-remains the acceptance reference for the shipped DAG layer. v0.13.0 continues
-with broader adversarial recovery and integrity work; neither future milestone
-is declared implemented by the v0.11.0 release.
+remains the acceptance reference for the shipped DAG layer. Its single-host
+concurrency, verification, recovery, and security contracts remain in force.
+Trusted-data and supply-chain work supports the v0.12.0 scope; the current
+v1.0.0 candidate extends integrity and adversarial validation. This roadmap
+does not announce a release.
 
 Reasoning:
 
@@ -1644,7 +1814,7 @@ Reasoning:
   duplicate side effects in long-running workflows.
 - Security decisions need durable identity, policy version, approval binding,
   provenance, and audit records so they remain verifiable after restart.
-- The staged v0.10.1-v0.13.0 plan keeps the lightweight core while making
+- The staged plan through v1.0.0 keeps the lightweight core while making
   security and recovery contracts independently reviewable and testable.
 - Optional stores and Providers preserve the lightweight core and let
   LightWorker or other products supply Browser, Docker, WebUI, and business

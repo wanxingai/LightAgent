@@ -4,7 +4,6 @@
 from mem0 import Memory
 from LightAgent import LightAgent
 import os
-from loguru import logger
 
 class CustomMemory:
     def __init__(self):
@@ -50,9 +49,9 @@ agent = LightAgent(
 # Memory-enabled test & if tools need to be added, you can add tools to the agent for memory-enabled tool calls
 
 user_id = "user_01"
-logger.info("\n=========== next conversation ===========")
+print("\n=========== next conversation ===========")
 query = "Introduce me to the attractions in Sanya. Many of my friends have traveled to Sanya, and I want to visit too."
 print(agent.run(query, stream=False, user_id=user_id))
-logger.info("\n=========== next conversation ===========")
+print("\n=========== next conversation ===========")
 query = "Where should I travel?"
 print(agent.run(query, stream=False, user_id=user_id))

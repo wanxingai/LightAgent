@@ -5,6 +5,12 @@ on:
     branches: [main]
   push:
     branches: [main]
+  workflow_dispatch:
+    inputs:
+      run-soak:
+        description: Run the 15-minute persistent-runtime soak after the clean matrix
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -13,6 +19,11 @@ jobs:
   test:
     name: Python ${{ matrix.python-version }}
     runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      POETRY_VIRTUALENVS_IN_PROJECT: "true"
+      PYTHONNOUSERSITE: "1"
+      LANGFUSE_TRACING_ENABLED: "false"
     strategy:
       fail-fast: false
       matrix:
@@ -32,13 +43,70 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install poetry==2.4.1
-          poetry install --with dev
+          poetry install --with dev --no-interaction
+          poetry run python -m pip install "cryptography>=41,<52"
 
       - name: Build package
-        run: poetry build --format wheel
+        run: poetry build --format wheel --output "$RUNNER_TEMP/lightagent-wheels"
 
-      - name: Run full test suite
-        run: PYTHONPATH=. poetry run pytest -q
+      - name: Verify base install with Skills and without MCP
+        run: |
+          poetry run python -c "from importlib.util import find_spec; import yaml; assert find_spec('mcp') is None"
+          poetry run python -m pytest -q tests/test_optional_dependencies.py tests/test_optional_skills.py tests/test_v012_app_server.py -k 'not real_mcp_stdio'
+          poetry run python tests/wheel_smoke.py "$RUNNER_TEMP"/lightagent-wheels/*.whl
+
+      - name: Install MCP extra for the core suite
+        run: poetry install --with dev -E mcp --no-interaction
+
+      - name: Verify clean environment, core suite, and installed wheel
+        run: |
+          poetry run python tests/acceptance/verify.py \
+            --output "$RUNNER_TEMP/acceptance" \
+            --core-wheel "$RUNNER_TEMP"/lightagent-wheels/*.whl
+
+      - name: Upload acceptance evidence, including failures
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: acceptance-python-${{ matrix.python-version }}
+          path: ${{ runner.temp }}/acceptance
+          if-no-files-found: warn
+          retention-days: 14
+
+  persistent-soak:
+    name: Persistent runtime soak (15 minutes)
+    if: github.event_name == 'workflow_dispatch' && inputs.run-soak
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      POETRY_VIRTUALENVS_IN_PROJECT: "true"
+      PYTHONNOUSERSITE: "1"
+      LANGFUSE_TRACING_ENABLED: "false"
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install locked dependencies
+        run: |
+          python -m pip install poetry==2.4.1
+          poetry install --with dev --no-interaction
+          poetry run python -m pip check
+      - name: Exercise persistent work, restart, approval, and process death
+        run: |
+          PYTHONPATH=. poetry run python tests/acceptance/soak.py \
+            --output "$RUNNER_TEMP/persistent-soak" --seconds 900 \
+            --concurrency 4 --interval 2 --fault-interval 60 --min-rounds 100
+      - name: Upload soak evidence, including failures
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: persistent-soak-python-3.11
+          path: ${{ runner.temp }}/persistent-soak
+          if-no-files-found: warn
+          retention-days: 14
 
   mcp-compatibility:
     name: MCP ${{ matrix.mcp-version }}
@@ -60,6 +128,6 @@ jobs:
           python-version: "3.11"
           cache: pip
       - name: Install project and selected MCP SDK
-        run: python -m pip install -e . pytest "mcp==${{ matrix.mcp-version }}" "${{ matrix.pydantic }}"
+        run: python -m pip install -e '.[mcp]' pytest "mcp==${{ matrix.mcp-version }}" "${{ matrix.pydantic }}"
       - name: Test MCP compatibility
-        run: PYTHONPATH=. python -m pytest -q tests/test_mcp_client_manager.py
+        run: PYTHONPATH=. python -m pytest -q tests/test_mcp_client_manager.py tests/test_v012_app_server.py -k 'mcp or streamable_http'
