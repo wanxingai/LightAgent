@@ -56,12 +56,29 @@ class RegistryWorkerFactory:
         self.register(key, factory)
         self.factories.add(key)
 
+    @staticmethod
+    def _invoke_factory(factory: Callable[..., Any], context: TaskContext) -> Any:
+        try:
+            parameters = inspect.signature(factory).parameters
+        except (TypeError, ValueError):
+            return factory()
+
+        parameter = parameters.get("context")
+        if parameter is not None:
+            if parameter.kind in (inspect.Parameter.POSITIONAL_ONLY, inspect.Parameter.VAR_POSITIONAL):
+                return factory(context)
+            if parameter.kind in (inspect.Parameter.POSITIONAL_OR_KEYWORD, inspect.Parameter.KEYWORD_ONLY):
+                return factory(context=context)
+        if any(parameter.kind == inspect.Parameter.VAR_KEYWORD for parameter in parameters.values()):
+            return factory(context=context)
+        return factory()
+
     async def create(self, worker_key: str, context: TaskContext) -> DAGWorker:
         if worker_key not in self.registrations:
             raise LookupError(f"worker `{worker_key}` is not registered")
         registration = self.registrations[worker_key]
         if worker_key in self.factories:
-            value = registration(context) if accepts_keyword(registration, "context") else registration()
+            value = self._invoke_factory(registration, context)
             if inspect.isawaitable(value):
                 value = await value
         else:
