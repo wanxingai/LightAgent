@@ -324,13 +324,24 @@ See the [roadmap](roadmap.md) for delivered milestones and future plans. Inbox, 
 
 ### Install LightAgent
 
-Install the package available on PyPI:
+Choose one of these PyPI installs:
 
 ```bash
-pip install lightagent
+pip install lightagent             # base package
+pip install 'lightagent[mcp,mem0]'  # base plus selected integrations
+pip install 'lightagent[all]'       # base plus every optional Python SDK
 ```
 
-To install the exact v1.0.0 release from GitHub:
+The base package includes native Agent calls, Python tools, Skills (with PyYAML),
+core workflows, and local tracing. `[all]` installs the same LightAgent package
+plus the optional integration dependencies: `mcp` (MCP), `mem0` (Mem0),
+`langfuse` (external tracing), `litellm` (model routing), `oss` or `nos`
+(object storage through boto3), and `signing` (Provider signature verification).
+Install only the extras you use. Installing them neither activates integrations
+nor sets up credentials, external services, the Codex CLI, Docker, or LightResearch.
+To pin the full PyPI install, use `pip install 'lightagent[all]==1.0.0'`.
+
+Alternatively, install v1.0.0 from GitHub source (requires Git):
 
 ```bash
 python -m pip install 'git+https://github.com/wanxingai/LightAgent.git@v1.0.0'
@@ -346,9 +357,7 @@ python -m pip install '.[mem0]'      # from mem0 import Memory; pass it as memor
 python -m pip install '.[langfuse]'  # keep the existing tracetools configuration
 ```
 
-Use `python -m pip install '.[all]'` to install all optional Python dependencies
-for MCP, Mem0, Langfuse, LiteLLM, OSS/NOS, and Provider signature verification.
-This does not install LightResearch or the Codex CLI.
+Use `python -m pip install '.[all]'` for the equivalent full install from local source.
 
 Skills and their PyYAML dependency are included in the base install. Discovery
 still scans `skills/` (or the configured `skills_directories`). Set
@@ -368,6 +377,22 @@ agent = LightAgent(model="gpt-4.1", api_key="your_api_key", base_url="your_base_
 response = agent.run("Hello, who are you?")
 print(response)
 ```
+
+### Check Token Usage
+
+Reuse the Agent from the Hello World example:
+
+```python
+result = agent.run("Summarize LightAgent in one sentence.", result_format="object")
+if result.error:
+    raise RuntimeError(result.error)
+print(result.usage if result.usage else "Token usage was not reported.")
+```
+
+For a native model, reported usage includes input (`prompt_tokens`), output
+(`completion_tokens`), and total tokens. Missing usage does not mean zero.
+See the [usage and cost guide](https://github.com/wanxingai/LightAgent/wiki/V1-Usage-and-Cost-en)
+for cost estimates, streaming, Codex, and task budgets.
 
 ### Use Codex as the Agent Backend
 
