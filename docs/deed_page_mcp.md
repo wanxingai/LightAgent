@@ -3,7 +3,8 @@
 [deed.page](https://deed.page) is a static hosting service with a remote MCP
 server at `https://deed.page/mcp` (Streamable HTTP). With LightAgent's existing
 `transport: "streamable-http"` support, an agent can write an HTML page or a
-small set of files and get back a public URL, without any new dependency.
+small set of files and get back a public URL. With LightAgent v1.0.0, install
+`lightagent[mcp]` before running this example.
 
 > Affiliation: this example is contributed by the deed.page team (Avatar 8 LLC),
 > which operates the service. Service documentation: https://deed.page/docs.

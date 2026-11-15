@@ -1,4 +1,4 @@
-import requests
+import httpx
 def get_weather(
     city_name: str
 ) -> str:
@@ -12,7 +12,7 @@ def get_weather(
         "current_condition": ["temp_C", "FeelsLikeC", "humidity", "weatherDesc", "observation_time"],
     }
     try:
-        resp = requests.get(f"https://wttr.in/{city_name}?format=j1")
+        resp = httpx.get(f"https://wttr.in/{city_name}?format=j1", timeout=10.0)
         resp.raise_for_status()
         resp = resp.json()
         ret = {k: {_v: resp[k][0][_v] for _v in v} for k, v in key_selection.items()}
