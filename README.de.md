@@ -38,7 +38,8 @@
 ---
 
 ## Neuigkeiten
-- <img src="https://img.alicdn.com/imgextra/i3/O1CN01SFL0Gu26nrQBFKXFR_!!6000000007707-2-tps-500-500.png" alt="new" width="30" height="30"/>**[2026-10-01]** LightAgent v0.11.0 veröffentlicht: ergänzt opt-in persistente dynamische Multi-Agenten-DAGs, verifikationsgebundene unveränderliche Artefakte, Wiederanlauf mit Leases und Fencing sowie einen einheitlichen `SecurityContext` mit ausschließlich einschränkbarer Berechtigung und Freigabekontrollen.
+- <img src="https://img.alicdn.com/imgextra/i3/O1CN01SFL0Gu26nrQBFKXFR_!!6000000007707-2-tps-500-500.png" alt="new" width="30" height="30"/>**[2026-11-15]** LightAgent v1.0.0 wurde in `main` integriert ([#128](https://github.com/wanxingai/LightAgent/pull/128)); die offizielle Veröffentlichung steht noch aus. Neu sind wiederverbindbare Ausführung, ein gemeinsamer Job-/Subagent-Lebenszyklus, transaktionale Wiederherstellung und optionale Provider-Signaturen.
+- **[2026-10-01]** LightAgent v0.11.0 veröffentlicht: ergänzt opt-in persistente dynamische Multi-Agenten-DAGs, verifikationsgebundene unveränderliche Artefakte, Wiederanlauf mit Leases und Fencing sowie einen einheitlichen `SecurityContext` mit ausschließlich einschränkbarer Berechtigung und Freigabekontrollen.
 - **[2026-08-15]** LightAgent v0.10.0 veröffentlicht: führt die ereignisbasierte Agent Runtime mit persistenten Sessions, asynchroner Ausführung, Capability Registry und Policy, Inbox, Goals, Budgets, Jobs, Subagenten, Kontextkomprimierung und SQLite-FTS5-Suche ein.
 - **[2026-08-15]** LightAgent v0.9.7 veröffentlicht: ergänzt einen leichtgewichtigen, abhängigkeitsfreien Connector-Vertrag mit Offline-Validierung und Beispielen, erweitert die Sicherheitsprüfungen des Python-Executors, fügt eine optionale Mem0-Graph-Sicherheitsmatrix hinzu und bereitet mit einer öffentlichen API-Kompatibilitätsübersicht die Stabilisierung von v1.0 vor.
 - **[2026-07-30]** LightAgent v0.9.6 veröffentlicht: ergänzt produktionsreife Trace-Zusammenfassungen und Exporte, deterministische Evaluation, dauerhafte menschliche Freigaben für Tools, Handoffs und LightFlow sowie ausfallsichere Schreibfreigaben und Audit-Kontrollen für gemeinsam genutzten Graph-Speicher.
@@ -108,6 +109,15 @@ LightAgent hält den Standardaufruf einfach und erlaubt Produktionskontrollen sc
 | Dynamischer Workflow | `LightDAG(...).create_run(...)` | Aufgaben dynamisch vorschlagen und Ergebnisse vor Veröffentlichung prüfen. |
 | Persistente Session | `agent.run(query, session_id="project-42")` | Erfordert einen konfigurierten persistenten SessionStore für Replay und Fortsetzung. |
 | Asynchron | `await agent.arun(query)` | Nicht blockierender Einstieg für asyncio-Anwendungen. |
+
+## v1.0.0: Persistente Ausführung und Wiederherstellung
+
+- **Aufgaben wieder aufnehmen:** `ExecutionService` startet gewöhnliche Aufgaben über einen vom Host registrierten Backend-Adapter. Mit `ExecutionHandle` lassen sich laufende Aufgaben nach einem Neustart wieder verbinden und abfragen.
+- **Zustand und Wiederherstellung:** Jobs und Subagenten nutzen einen gemeinsamen Lebenszyklus mit kooperativem Abbruch. SQLite-Transaktionen sichern Nachrichten und Budgetbuchungen; bei unklarem Ausgang ist eine Prüfung durch den Host nötig, bevor externe Aktionen wiederholt werden.
+- **Sicherheit und Installation:** Signierte Providers können eine ausdrückliche Freigabe durch den Host verlangen; Laufzeitrichtlinien bleiben wirksam. Skills und PyYAML gehören zur Basisinstallation. MCP, Mem0, Langfuse, LiteLLM, OSS/NOS und Signaturprüfung sind optional.
+- **Kompatibilität:** Normale `run()`- und Streaming-Aufrufe bleiben unverändert. Forschung ist eine separate LightResearch-Erweiterung; der alte Modus `mode="persistent"` braucht eine ausdrückliche Registrierung.
+
+[Ausführungsleitfaden](docs/durable_execution.zh-CN.md) · [Job- und Verlaufsmigration](docs/jobs_history_migration.zh-CN.md) · [Offline-Beispiel](example/15.durable_execution.py)
 
 ## v0.11.0: Verifizierte dynamische Workflows
 

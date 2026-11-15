@@ -1,5 +1,10 @@
 # Enterprise API Connector Skeleton
 
+**v1.0.0 update (2026-11-15):** Merged into `main`; official release pending.
+The core now supports [optional Provider signature verification](../../../docs/provider_supply_chain.zh-CN.md)
+and explicit host approval. This connector remains unsigned unless the host
+configures that trust policy. See the [v1.0.0 overview](../../../README.md#v100-durable-execution-and-recovery).
+
 This example keeps provider transport outside the LightAgent core. The default
 `FakeTicketClient` is deterministic and makes no network request. Production
 applications should inject a client that reads credentials from their secret
