@@ -40,7 +40,7 @@
 ---
 
 ## ニュース
-- <img src="https://img.alicdn.com/imgextra/i3/O1CN01SFL0Gu26nrQBFKXFR_!!6000000007707-2-tps-500-500.png" alt="new" width="30" height="30"/>**[2026-11-15]** LightAgent v1.0.0 を `main` にマージしました（[#128](https://github.com/wanxingai/LightAgent/pull/128)）。正式リリースは未公開です。再接続可能な実行、Job とサブエージェントの統一ライフサイクル、トランザクションによる復旧、オプションの Provider 署名検証を追加しました。
+- <img src="https://img.alicdn.com/imgextra/i3/O1CN01SFL0Gu26nrQBFKXFR_!!6000000007707-2-tps-500-500.png" alt="new" width="30" height="30"/>**[2026-11-15]** [LightAgent v1.0.0](https://github.com/wanxingai/LightAgent/releases/tag/v1.0.0) を GitHub で正式にリリースしました。再接続可能な実行、Job とサブエージェントの統一ライフサイクル、トランザクションによる復旧、オプションの Provider 署名検証を追加しました。
 - **[2026-10-01]** LightAgent v0.11.0 リリース：オプトインの永続的な動的マルチエージェント DAG、検証後にのみ公開する不変成果物、リースと fencing による再開、一方向に権限を制限する統一 `SecurityContext` と承認制御を追加しました。
 - **[2026-08-15]** LightAgent v0.10.0 リリース：永続 Session、非同期実行、Capability Registry と Policy、Inbox、Goals、Budgets、Jobs、サブエージェント、コンテキスト圧縮、SQLite FTS5 検索を備えたイベントベースの Agent Runtime を導入しました。
 - **[2026-08-15]** LightAgent v0.9.7 リリース：オフライン検証とサンプルを備えた軽量かつ依存関係のない Connector 契約、Python executor のセキュリティ検査、オプトインの Mem0 Graph セキュリティ検証マトリクスを追加し、公開 API 互換性一覧によって v1.0 の安定化に備えました。

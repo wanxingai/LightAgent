@@ -39,7 +39,7 @@
 ---
 
 ## 新聞
-- <img src="https://img.alicdn.com/imgextra/i3/O1CN01SFL0Gu26nrQBFKXFR_!!6000000007707-2-tps-500-500.png" alt="new" width="30" height="30"/>**[2026-11-15]** LightAgent v1.0.0 已合併至 `main`（[#128](https://github.com/wanxingai/LightAgent/pull/128)），尚未正式發布：新增可重新連線的持久執行、統一的 Job/Subagent 生命週期、交易式復原與選用的 Provider 簽章驗證。
+- <img src="https://img.alicdn.com/imgextra/i3/O1CN01SFL0Gu26nrQBFKXFR_!!6000000007707-2-tps-500-500.png" alt="new" width="30" height="30"/>**[2026-11-15]** [LightAgent v1.0.0](https://github.com/wanxingai/LightAgent/releases/tag/v1.0.0) 已在 GitHub 正式發布：新增可重新連線的持久執行、統一的 Job/Subagent 生命週期、交易式復原與選用的 Provider 簽章驗證。
 - **[2026-10-01]** LightAgent v0.11.0 正式發布：新增可選的持久化動態 DAG 多 Agent 執行、驗證通過後才發布的不可變成果、可恢復租約與 fencing，以及統一且只能收窄權限的 `SecurityContext`、能力與審批控制。
 - **[2026-08-15]** LightAgent v0.10.0 正式發布：新增事件溯源 Agent Runtime，支援持久化 Session、非同步執行、Capability Registry 與 Policy、Inbox、Goals、Budgets、Jobs、子 Agent、內容壓縮與 SQLite FTS5 檢索。
 - **[2026-08-15]** LightAgent v0.9.7 正式發布：新增輕量、零依賴的 Connector 契約及離線驗證與範例，強化 Python 執行器安全檢查，補充可選的 Mem0 Graph 安全驗證矩陣，並透過公共 API 相容性清單為 v1.0 穩定化做準備。

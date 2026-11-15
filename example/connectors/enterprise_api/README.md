@@ -1,6 +1,6 @@
 # Enterprise API Connector Skeleton
 
-**v1.0.0 update (2026-11-15):** Merged into `main`; official release pending.
+**v1.0.0 (2026-11-15):** [Released on GitHub](https://github.com/wanxingai/LightAgent/releases/tag/v1.0.0).
 The core now supports [optional Provider signature verification](../../../docs/provider_supply_chain.zh-CN.md)
 and explicit host approval. This connector remains unsigned unless the host
 configures that trust policy. See the [v1.0.0 overview](../../../README.md#v100-durable-execution-and-recovery).

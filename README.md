@@ -38,7 +38,7 @@ LightAgent is a modular, open-source Python framework with reusable Skills, tool
 ---
 ## News
 
-- <img src="https://img.alicdn.com/imgextra/i3/O1CN01SFL0Gu26nrQBFKXFR_!!6000000007707-2-tps-500-500.png" alt="new" width="30" height="30"/>**[2026-11-15]** LightAgent v1.0.0 merged into `main` ([#128](https://github.com/wanxingai/LightAgent/pull/128)); official release pending. Adds reconnectable execution, a shared Job/Subagent lifecycle, transactional recovery and optional signed Providers.
+- <img src="https://img.alicdn.com/imgextra/i3/O1CN01SFL0Gu26nrQBFKXFR_!!6000000007707-2-tps-500-500.png" alt="new" width="30" height="30"/>**[2026-11-15]** [LightAgent v1.0.0](https://github.com/wanxingai/LightAgent/releases/tag/v1.0.0) released on GitHub. Adds reconnectable execution, a shared Job/Subagent lifecycle, transactional recovery and optional signed Providers.
 - **[2026-10-04] v0.12.0 implemented in source (not yet published)**: opt-in persistent research, verified DAG experiments, durable inbox, independent chat, a local reference panel, and evaluated version adoption/rollback. See the [research service guide](docs/persistent_research.zh-CN.md).
 - **[2026-10-01]** LightAgent v0.11.0 Released: Adds opt-in persistent Dynamic DAG multi-agent execution, verification-gated immutable artifacts, restart-safe leases and fencing, and a unified narrowing-only `SecurityContext` with capability and approval controls.
 - **[2026-08-15]** LightAgent v0.10.0 Released: Adds the unified event-sourced Agent Runtime with durable Sessions, async execution, Capability Registry and Policy, Inbox/Goals/Budgets, compaction and recovery, Jobs/subagents, standardized Skills/MCP adapters, and SQLite FTS5 retrieval.
@@ -88,7 +88,7 @@ Older release notes are available on [GitHub Releases](https://github.com/wanxin
 | --- | --- | --- |
 | Single agent runtime | `LightAgent` | One agent with model calls, tools, memory, streaming, trace, and guardrails. |
 | Durable runtime state | `Session`, `AgentRuntime` | Replayable events, checkpoints, Inbox, Goals, Budgets, Jobs, and context recovery. |
-| Durable execution (v1.0.0 development) | `ExecutionService`, `ExecutionHandle` | Ordinary reconnectable tasks without a research contract; explicit host backend and security context. |
+| Durable execution (v1.0.0) | `ExecutionService`, `ExecutionHandle` | Ordinary reconnectable tasks without a research contract; explicit host backend and security context. |
 | Capability layer | `CapabilityRegistry`, `PolicyEngine` | Scoped Providers, permission snapshots, lifecycle, policy, and audit. |
 | Unified security context | `SecurityContext`, `CapabilityGate`, `ApprovalToken` | Identity, narrowing-only permissions, authorization, and operation-bound approval. |
 | Multi-agent routing | `LightSwarm` | Role-based delegation across specialized agents. |
@@ -172,8 +172,8 @@ also persists step approvals through `flow.approve(...); flow.resume(...)`.
 - **Safety and installation:** Optional [signed Provider bindings](docs/provider_supply_chain.zh-CN.md) verify publisher signatures and require explicit host approval without replacing runtime policy. Skills and PyYAML remain in the base install. MCP, Mem0, Langfuse, LiteLLM, OSS/NOS, and signature verification are optional.
 - **Compatibility:** Ordinary `run()` and streaming behavior are unchanged. Research contracts, evaluation, version promotion, and the debug panel live in the separate LightResearch extension. Legacy `mode="persistent"` keeps its research semantics and requires `LightResearch.enable_legacy_api()`. See the [research migration guide](docs/persistent_research.zh-CN.md).
 
-The implementation is on `main`; the official release is pending. See the
-[v1.0.0 plan](docs/lightagent_v100_development_plan.zh-CN.md) for remaining release gates.
+See the [GitHub Release](https://github.com/wanxingai/LightAgent/releases/tag/v1.0.0)
+for release notes and the [validation record](docs/v100_validation.zh-CN.md) for the scope of testing.
 The core ships no production UI, and default CI does not require LightResearch.
 
 ## v0.11.0: Verified Dynamic Workflows
@@ -320,13 +320,21 @@ See the [roadmap](roadmap.md) for delivered milestones and future plans. Inbox, 
 
 ## 🛠️ Quick Start
 
-### Install the latest version of LightAgent
+### Install LightAgent
+
+Install the package available on PyPI:
 
 ```bash
 pip install lightagent
 ```
 
-For the v1.0.0 source on `main`, run the following from the checkout root.
+To install the exact v1.0.0 release from GitHub:
+
+```bash
+python -m pip install 'git+https://github.com/wanxingai/LightAgent.git@v1.0.0'
+```
+
+For a local v1.0.0 checkout, run the following from its root.
 Install only the extras you need:
 
 ```bash

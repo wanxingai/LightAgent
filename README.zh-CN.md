@@ -57,7 +57,7 @@
 ---
 ## 新闻
 
-- <img src="https://img.alicdn.com/imgextra/i3/O1CN01SFL0Gu26nrQBFKXFR_!!6000000007707-2-tps-500-500.png" alt="new" width="30" height="30"/>**[2026-11-15]** LightAgent v1.0.0 已合入 `main`（[#128](https://github.com/wanxingai/LightAgent/pull/128)），正式发布待定：新增可重连的持久执行、统一 Job/Subagent 生命周期、事务化恢复和可选的 Provider 签名验证。
+- <img src="https://img.alicdn.com/imgextra/i3/O1CN01SFL0Gu26nrQBFKXFR_!!6000000007707-2-tps-500-500.png" alt="new" width="30" height="30"/>**[2026-11-15]** [LightAgent v1.0.0](https://github.com/wanxingai/LightAgent/releases/tag/v1.0.0) 已在 GitHub 正式发布：新增可重连的持久执行、统一 Job/Subagent 生命周期、事务化恢复和可选的 Provider 签名验证。
 - **[2026-10-04] v0.12.0 源码已实现（尚未发布）**：持久研究服务、目录驱动的 DAG 实验、消息与独立聊天、参考面板、版本评估/采用/回滚。默认普通调用不变；后台模式需显式启用。见 [持续研究指南](docs/persistent_research.zh-CN.md)。
 - **[2026-10-01]** LightAgent v0.11.0 正式发布：新增可选的持久化动态 DAG 多 Agent 执行、验证通过后才发布的不可变成果、可恢复租约与 fencing，以及统一且只能收窄权限的 `SecurityContext`、能力和审批控制。
 - **[2026-08-15]** LightAgent v0.10.0 正式发布：新增统一的事件溯源 Agent Runtime，支持可持久化 Session、异步执行、Capability Registry 与 Policy、Inbox/Goals/Budgets、上下文压缩与恢复、Jobs/子 Agent、标准化 Skills/MCP 适配器和 SQLite FTS5 检索。
@@ -106,7 +106,7 @@
 | --- | --- | --- |
 | 单 Agent 运行时 | `LightAgent` | 一个 Agent 的模型调用、工具、记忆、流式输出、trace 和 guardrails。 |
 | 持久化运行状态 | `Session`、`AgentRuntime` | 可回放事件、checkpoint、Inbox、Goals、Budgets、Jobs 和上下文恢复。 |
-| 持久执行（v1.0.0 开发中） | `ExecutionService`、`ExecutionHandle` | 普通可重连任务，不要求研究契约；显式指定宿主后端与安全上下文。 |
+| 持久执行（v1.0.0） | `ExecutionService`、`ExecutionHandle` | 普通可重连任务，不要求研究契约；显式指定宿主后端与安全上下文。 |
 | 能力层 | `CapabilityRegistry`、`PolicyEngine` | 分层 Provider、权限快照、生命周期、策略与审计。 |
 | 统一安全上下文 | `SecurityContext`、`CapabilityGate`、`ApprovalToken` | 身份、只能收窄的权限、授权与绑定具体操作的审批。 |
 | 多 Agent 路由 | `LightSwarm` | 在多个专业 Agent 之间进行角色化委托。 |
@@ -189,7 +189,7 @@ print(report.to_dict())
 - **安全与安装：** 可选的 [Provider 签名与重授信](docs/provider_supply_chain.zh-CN.md)要求验证发布者签名和宿主显式批准，不替代运行时权限控制。基础安装包含 Skills 和 PyYAML；MCP、Mem0、Langfuse、LiteLLM、OSS/NOS 和验签依赖按需安装。
 - **兼容性：** 普通 `run()` 和流式调用保持不变。研究契约、评估、版本晋升和调试面板位于独立的 LightResearch 扩展；旧 `mode="persistent"` 保持研究语义，需显式调用 `LightResearch.enable_legacy_api()`。见[研究迁移指南](docs/persistent_research.zh-CN.md)。
 
-实现已合入 `main`，尚未正式发布。核心不提供正式产品 UI，默认 CI 不依赖 LightResearch。剩余发布门槛见 [v1.0.0 计划](docs/lightagent_v100_development_plan.zh-CN.md)。
+发布说明见 [GitHub Release](https://github.com/wanxingai/LightAgent/releases/tag/v1.0.0)，测试范围见[验收记录](docs/v100_validation.zh-CN.md)。核心不提供正式产品 UI，默认 CI 不依赖 LightResearch。
 
 ## v0.11.0：动态验证工作流
 
@@ -296,13 +296,21 @@ pip install --upgrade "git+https://github.com/wanxingai/LightAgent.git@main"
 
 ## 🛠️ 快速开始
 
-### 安装LightAgent最新版本
+### 安装 LightAgent
+
+安装 PyPI 上提供的包：
 
 ```bash
 pip install lightagent
 ```
 
-要体验 `main` 中尚未正式发布的 v1.0.0，请从源码仓库根目录安装，并按需选择 extras：
+从 GitHub 安装指定的 v1.0.0 版本：
+
+```bash
+python -m pip install 'git+https://github.com/wanxingai/LightAgent.git@v1.0.0'
+```
+
+从本地 v1.0.0 源码安装时，请在仓库根目录运行，并按需选择 extras：
 
 ```bash
 python -m pip install .
