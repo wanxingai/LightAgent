@@ -86,6 +86,7 @@
 - **多智能体协同** 🤖：比Swarm更简单的多智能体协同，内置的LightSwarm实现意图判断和任务转移功能，能够更智能地处理用户输入，并根据需要将任务转移给其他代理。 
 - **独立执行** 🤖：无人为干预自主完成任务工具调用。  
 - **多模型支持** 🔄：兼容 OpenAI、智谱 ChatGLM、百川大模型、阶跃星辰、DeepSeek、Qwen 系列大模型。  
+- **可选 Codex Agent 后端**：通过 `LightAgent(backend="codex")` 使用本机 Codex CLI 执行工作区任务。默认 LightAgent 后端无需 Codex。
 - **流式 API输出** 🌊：支持 OpenAI 流格式 API 服务输出，无缝接入主流 Chat 框架，提升用户体验。  
 - **Trace 可观测性** 🔎：通过 `trace=True` 可选开启结构化运行轨迹，记录运行开始/结束、模型请求摘要、工具调用、工具结果和错误，同时保持默认字符串返回行为不变。  
 - **评测框架** 📊：`LightEvaluator` 可对 Agent 或 LightFlow 执行确定性回归用例，检查输出、工具选择、策略事件、恢复能力、延迟、usage 和预估成本。
@@ -339,6 +340,31 @@ agent = LightAgent(model="gpt-4.1", api_key="your_api_key", base_url= "your_base
 response = agent.run("你好，你是谁？")
 print(response)
 ```
+
+### 使用 Codex 作为 Agent 后端
+
+在 POSIX 主机上单独安装并登录 Codex CLI，确保 `PATH` 中可以找到 `codex`。
+v1.0.0 的适配器支持 CLI 的 `0.160.x` 协议。LightAgent 复用 CLI 认证，
+不需要传入 `api_key` 或 `base_url`。运行示例前，请先创建独立的 `./workspace` 目录：
+
+```python
+from LightAgent import LightAgent
+
+agent = LightAgent(name="codex-assistant", backend="codex")
+result = agent.run(
+    "概述当前工作区的文件，不要修改它们。",
+    workspace="./workspace",
+    execution_timeout=120,
+    result_format="object",
+)
+if result.error:
+    raise RuntimeError(result.error)
+print(result.content)
+```
+
+这种方式由 `codex exec` 执行任务，不是为 LightAgent 原生循环更换模型端点。
+该适配器不桥接 LightAgent 的 Python 工具、记忆或逐工具 Guardrails。
+沙箱设置、后端事件和会话恢复见[工作区执行文档](docs/workspace_execution.zh-CN.md)。
 
 ### 查看运行 Trace（v0.7.0）
 

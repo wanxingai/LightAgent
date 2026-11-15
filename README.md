@@ -70,6 +70,7 @@ Older release notes are available on [GitHub Releases](https://github.com/wanxin
 - **Shared Memory Prototype** 🧠: SharedMemoryPool provides append-first in-memory shared memory with provenance metadata, scoped retrieval, and MemoryPolicy-compatible results for multi-agent experiments.
 - **Independent Execution** 🤖: Tasks and tool calls are completed autonomously without human intervention.  
 - **Multi-Model Support** 🔄: Compatible with OpenAI-style providers such as OpenAI, OpenRouter, Zhipu ChatGLM, Baichuan, StepFun, DeepSeek, Qwen, vLLM, llama.cpp, and other OpenAI-compatible endpoints.  
+- **Optional Codex Agent Backend**: Use the local Codex CLI to run workspace tasks with `LightAgent(backend="codex")`. The default LightAgent backend does not require Codex.
 - **Streaming API** 🌊: Supports OpenAI streaming format API service output, seamlessly integrates with mainstream chat frameworks, enhancing user experience.  
 - **Trace Observability** 🔎: Opt-in `trace=True` run traces record structured run lifecycle, model request summaries, tool calls, tool results, and errors without changing the default string return value.  
 - **Evaluation Harness** 📊: `LightEvaluator` runs deterministic agent or LightFlow regression cases for output, tool choice, policy events, recovery, latency, usage, and estimated cost.
@@ -366,6 +367,33 @@ agent = LightAgent(model="gpt-4.1", api_key="your_api_key", base_url="your_base_
 response = agent.run("Hello, who are you?")
 print(response)
 ```
+
+### Use Codex as the Agent Backend
+
+On a POSIX host, install and authenticate the Codex CLI separately and make sure
+`codex` is on `PATH`. The v1.0.0 adapter supports the CLI's `0.160.x` protocol.
+LightAgent reuses CLI authentication; do not pass `api_key` or `base_url`.
+Create a dedicated `./workspace` directory before running this example:
+
+```python
+from LightAgent import LightAgent
+
+agent = LightAgent(name="codex-assistant", backend="codex")
+result = agent.run(
+    "Summarize the files in this workspace without changing them.",
+    workspace="./workspace",
+    execution_timeout=120,
+    result_format="object",
+)
+if result.error:
+    raise RuntimeError(result.error)
+print(result.content)
+```
+
+This uses `codex exec` to run the task, not a model endpoint in LightAgent's
+native loop. The adapter does not bridge LightAgent Python tools, memory, or
+per-tool guardrails. See [workspace execution](docs/workspace_execution.zh-CN.md)
+for sandbox settings, backend events, and session resumption.
 
 ### Inspect a Run Trace (v0.7.0)
 
