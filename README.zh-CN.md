@@ -33,7 +33,9 @@
 </div>
 
 <div align="center">
-  <h1>LightAgent🚀 超轻量、可“成长”的智能体框架，现已原生支持Skill</h1>
+  <h1>LightAgent：用 Python 构建你的第一个 AI 智能体</h1>
+  <p>用几行 Python 就能起步，再按需添加工具、记忆和工作流。</p>
+  <p><strong><a href="https://github.com/wanxingai/LightAgent/wiki/V1-Getting-Started">试试快速开始</a></strong></p>
 </div>
 
 

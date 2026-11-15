@@ -31,7 +31,9 @@
   </p>
 </div>
 <div align="center">
-  <h1>LightAgent🚀 – small footprint, big potential. 🌟(Open-source Agentic framework)</h1>
+  <h1>LightAgent: Build Your First AI Agent in Python</h1>
+  <p>Start with a few lines of Python. Add tools, memory, and workflows when you need them.</p>
+  <p><strong><a href="https://github.com/wanxingai/LightAgent/wiki/V1-Getting-Started-en">Try the Quick Start</a></strong></p>
 </div>
 
 LightAgent is a modular, open-source Python framework with reusable Skills, tools, optional long-term memory, and OpenAI-compatible models and streaming. Use `LightSwarm` for routing, `LightFlow` for known steps, and `LightDAG` for persistent, dynamically verified tasks. Its optional event-sourced runtime adds durable Sessions, async execution, policy, and approvals. MCP supports stdio, SSE, and Streamable HTTP.
