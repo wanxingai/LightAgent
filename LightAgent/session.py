@@ -7,6 +7,7 @@ import os
 import sqlite3
 import threading
 import hashlib
+from contextlib import contextmanager
 from copy import deepcopy
 from dataclasses import asdict, dataclass, field, is_dataclass
 from datetime import datetime, timezone
@@ -518,127 +519,241 @@ class JsonlSessionStore:
             return True
 
 
+class SequenceConflict(ValueError):
+    """A stale save, mutated event, or idempotency collision was rejected."""
+
+
+_session_transactions = threading.local()
+
+
 class SqliteSessionStore:
-    """Standard-library SQLite SessionStore with transactional saves."""
+    """Append-only SQLite history with cross-instance transactions and CAS."""
 
     def __init__(self, path: str | os.PathLike[str]):
-        self.path = str(path)
+        self.path = str(Path(path).expanduser().resolve())
         Path(self.path).parent.mkdir(parents=True, exist_ok=True)
         self._lock = threading.RLock()
         self._initialize()
 
-    def _connect(self) -> sqlite3.Connection:
+    def _connect(self):
         connection = sqlite3.connect(self.path, timeout=30)
         connection.row_factory = sqlite3.Row
+        connection.execute("PRAGMA foreign_keys=ON")
         return connection
 
-    def _initialize(self) -> None:
+    def _initialize(self):
         with self._connect() as connection:
             connection.execute("PRAGMA journal_mode=WAL")
-            connection.execute(
-                """
-                CREATE TABLE IF NOT EXISTS sessions (
-                    session_id TEXT PRIMARY KEY,
-                    metadata TEXT NOT NULL,
-                    created_at TEXT NOT NULL,
-                    updated_at TEXT NOT NULL,
-                    schema_version INTEGER NOT NULL
-                )
-                """
-            )
-            connection.execute(
-                """
-                CREATE TABLE IF NOT EXISTS session_events (
-                    session_id TEXT NOT NULL,
-                    sequence INTEGER NOT NULL,
-                    event_id TEXT NOT NULL UNIQUE,
-                    payload TEXT NOT NULL,
-                    PRIMARY KEY (session_id, sequence),
-                    FOREIGN KEY (session_id) REFERENCES sessions(session_id) ON DELETE CASCADE
-                )
-                """
-            )
+            connection.execute("CREATE TABLE IF NOT EXISTS sessions (session_id TEXT PRIMARY KEY, "
+                               "metadata TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, schema_version INTEGER NOT NULL)")
+            connection.execute("CREATE TABLE IF NOT EXISTS session_events (session_id TEXT NOT NULL, "
+                               "sequence INTEGER NOT NULL, event_id TEXT NOT NULL UNIQUE, payload TEXT NOT NULL, "
+                               "PRIMARY KEY (session_id, sequence), FOREIGN KEY (session_id) REFERENCES sessions(session_id) ON DELETE CASCADE)")
+            connection.execute("CREATE TABLE IF NOT EXISTS session_anchors (session_id TEXT PRIMARY KEY, seed TEXT NOT NULL, "
+                               "FOREIGN KEY(session_id) REFERENCES sessions(session_id) ON DELETE CASCADE)")
+            connection.execute("CREATE TABLE IF NOT EXISTS session_integrity (session_id TEXT NOT NULL, sequence INTEGER NOT NULL, "
+                               "digest TEXT NOT NULL, PRIMARY KEY(session_id,sequence), "
+                               "FOREIGN KEY(session_id) REFERENCES sessions(session_id) ON DELETE CASCADE)")
 
-    def create(self, session: Session | None = None, *, metadata: dict[str, Any] | None = None) -> Session:
+    @contextmanager
+    def transaction(self):
+        connections = getattr(_session_transactions, "connections", None)
+        if connections is None:
+            connections = _session_transactions.connections = {}
+        connection = connections.get(self.path)
+        nested = connection is not None
+        savepoint = "nested_" + uuid4().hex
+        if nested:
+            connection.execute("SAVEPOINT " + savepoint)
+        else:
+            connection = self._connect()
+            connection.execute("BEGIN IMMEDIATE")
+            connections[self.path] = connection
+        try:
+            yield connection
+            if nested:
+                connection.execute("RELEASE " + savepoint)
+            else:
+                connection.commit()
+        except BaseException:
+            if nested:
+                connection.execute("ROLLBACK TO " + savepoint)
+                connection.execute("RELEASE " + savepoint)
+            else:
+                connection.rollback()
+            raise
+        finally:
+            if not nested:
+                connections.pop(self.path, None)
+                connection.close()
+
+    @staticmethod
+    def _load(connection, session_id):
+        row = connection.execute("SELECT * FROM sessions WHERE session_id=?", (session_id,)).fetchone()
+        if row is None:
+            return None
+        events = connection.execute("SELECT payload FROM session_events WHERE session_id=? ORDER BY sequence",
+                                    (session_id,)).fetchall()
+        payloads = [json.loads(event["payload"]) for event in events]
+        SqliteSessionStore._verify_chain(connection, session_id, events)
+        return Session.from_dict(dict(session_id=session_id, metadata=json.loads(row["metadata"]),
+            created_at=row["created_at"], updated_at=row["updated_at"], schema_version=row["schema_version"],
+            events=payloads))
+
+    @staticmethod
+    def _chain_digest(previous, payload):
+        serialized = json.dumps(json.loads(payload), ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False)
+        return hashlib.sha256((previous + serialized).encode()).hexdigest()
+
+    @staticmethod
+    def _verify_chain(connection, session_id, events):
+        anchor = connection.execute("SELECT seed FROM session_anchors WHERE session_id=?", (session_id,)).fetchone()
+        if anchor is None:
+            return None
+        rows = connection.execute("SELECT sequence,digest FROM session_integrity WHERE session_id=? ORDER BY sequence", (session_id,)).fetchall()
+        if len(rows) != len(events):
+            raise SequenceConflict("session integrity chain length mismatch")
+        previous = anchor["seed"]
+        for sequence, (row, event) in enumerate(zip(rows, events), 1):
+            current = SqliteSessionStore._chain_digest(previous, event["payload"])
+            if row["sequence"] != sequence or row["digest"] != current:
+                raise SequenceConflict("session integrity hash mismatch")
+            previous = current
+        return previous
+
+    def integrity(self, session_id):
+        with self.transaction() as connection:
+            if self._load(connection, session_id) is None:
+                raise KeyError(session_id)
+            events = connection.execute("SELECT payload FROM session_events WHERE session_id=? ORDER BY sequence", (session_id,)).fetchall()
+            head = self._verify_chain(connection, session_id, events)
+            return dict(status="verified" if head is not None else "legacy_unanchored", head=head, sequence=len(events))
+
+    def history_digest(self, session_id):
+        session = self.get(session_id)
+        if session is None:
+            raise KeyError(session_id)
+        return hashlib.sha256(json.dumps(session.to_dict(), ensure_ascii=False, sort_keys=True,
+                                        separators=(",", ":"), allow_nan=False).encode()).hexdigest()
+
+    def anchor_legacy(self, session_id, *, expected_digest, note):
+        """Explicitly anchor inspected history, without certifying its prior trust."""
+        if not isinstance(note, str) or not note.strip() or len(note.encode()) > 4096:
+            raise ValueError("legacy anchoring requires a host note of at most 4096 bytes")
+        with self.transaction() as connection:
+            session = self._load(connection, session_id)
+            if session is None:
+                raise KeyError(session_id)
+            if self.history_digest(session_id) != expected_digest:
+                raise SequenceConflict("legacy history changed since inspection")
+            if connection.execute("SELECT 1 FROM session_anchors WHERE session_id=?", (session_id,)).fetchone():
+                raise SequenceConflict("session already anchored")
+            seed = hashlib.sha256(("legacy:" + expected_digest).encode()).hexdigest()
+            connection.execute("INSERT INTO session_anchors VALUES (?,?)", (session_id, seed))
+            previous = seed
+            for event in session.events:
+                previous = self._chain_digest(previous, json.dumps(event.to_dict(), ensure_ascii=False))
+                connection.execute("INSERT INTO session_integrity VALUES (?,?,?)", (session_id, event.sequence, previous))
+            connection.execute("CREATE TABLE IF NOT EXISTS session_migrations (session_id TEXT PRIMARY KEY, "
+                               "source_digest TEXT NOT NULL, note TEXT NOT NULL, anchored_at TEXT NOT NULL)")
+            connection.execute("INSERT INTO session_migrations VALUES (?,?,?,?)",
+                               (session_id, expected_digest, note, _utc_now()))
+            return self.integrity(session_id)
+
+    def create(self, session=None, *, metadata=None):
         value = session or Session(metadata=metadata or {})
-        with self._lock, self._connect() as connection:
-            existing = connection.execute(
-                "SELECT 1 FROM sessions WHERE session_id = ?", (value.session_id,)
-            ).fetchone()
-            if existing:
-                raise ValueError(f"session already exists: {value.session_id}")
-        self.save(value)
+        with self.transaction() as connection:
+            if self._load(connection, value.session_id) is not None:
+                raise ValueError("session already exists: " + value.session_id)
+            self.save(value)
         return deepcopy(value)
 
-    def get(self, session_id: str) -> Session | None:
-        with self._lock, self._connect() as connection:
-            row = connection.execute(
-                "SELECT * FROM sessions WHERE session_id = ?", (str(session_id),)
-            ).fetchone()
-            if row is None:
-                return None
-            event_rows = connection.execute(
-                "SELECT payload FROM session_events WHERE session_id = ? ORDER BY sequence",
-                (str(session_id),),
-            ).fetchall()
-        return Session(
-            session_id=row["session_id"],
-            metadata=json.loads(row["metadata"]),
-            events=[SessionEvent.from_dict(json.loads(event_row["payload"])) for event_row in event_rows],
-            created_at=row["created_at"],
-            updated_at=row["updated_at"],
-            schema_version=row["schema_version"],
-        )
+    def get(self, session_id):
+        with self.transaction() as connection:
+            return self._load(connection, str(session_id))
 
-    def save(self, session: Session) -> None:
+    def save(self, session, *, expected_sequence=None):
         session.validate()
-        with self._lock, self._connect() as connection:
-            connection.execute("PRAGMA foreign_keys=ON")
-            connection.execute(
-                """
-                INSERT INTO sessions(session_id, metadata, created_at, updated_at, schema_version)
-                VALUES (?, ?, ?, ?, ?)
-                ON CONFLICT(session_id) DO UPDATE SET
-                    metadata=excluded.metadata,
-                    updated_at=excluded.updated_at,
-                    schema_version=excluded.schema_version
-                """,
-                (
-                    session.session_id,
-                    json.dumps(session.metadata, ensure_ascii=False),
-                    session.created_at,
-                    session.updated_at,
-                    session.schema_version,
-                ),
-            )
-            connection.execute("DELETE FROM session_events WHERE session_id = ?", (session.session_id,))
-            connection.executemany(
-                "INSERT INTO session_events(session_id, sequence, event_id, payload) VALUES (?, ?, ?, ?)",
-                [
-                    (
-                        session.session_id,
-                        event.sequence,
-                        event.event_id,
-                        json.dumps(event.to_dict(), ensure_ascii=False),
-                    )
-                    for event in session.events
-                ],
-            )
+        with self.transaction() as connection:
+            persisted = self._load(connection, session.session_id)
+            previous = persisted.events if persisted else []
+            if expected_sequence is not None and len(previous) != expected_sequence:
+                raise SequenceConflict("session sequence changed")
+            known = {event.event_id: event for event in previous}
+            merged = deepcopy(persisted) if persisted else Session(session_id=session.session_id,
+                metadata=deepcopy(session.metadata), created_at=session.created_at,
+                schema_version=session.schema_version)
+            additions = []
+            for event in session.events:
+                if event.event_id in known:
+                    if event.to_dict() != known[event.event_id].to_dict():
+                        raise SequenceConflict("persisted event content is immutable")
+                    continue
+                value = deepcopy(event)
+                value.sequence = merged.next_sequence
+                value.data = _json_safe(value.data)
+                merged.events.append(value)
+                additions.append(value)
+            current_prefix = [event.event_id for event in session.events[:len(previous)]] == [event.event_id for event in previous]
+            if persisted and not current_prefix and _json_safe(session.metadata) != persisted.metadata:
+                raise SequenceConflict("stale session cannot overwrite metadata")
+            if persisted and not additions and len(session.events) < len(previous):
+                raise SequenceConflict("cannot save an older event sequence")
+            merged.metadata = _json_safe(session.metadata)
+            merged.updated_at = max(merged.updated_at, session.updated_at)
+            merged.validate()
+            connection.execute("INSERT INTO sessions VALUES(?,?,?,?,?) ON CONFLICT(session_id) "
+                "DO UPDATE SET metadata=excluded.metadata, updated_at=excluded.updated_at",
+                (merged.session_id, json.dumps(merged.metadata, ensure_ascii=False), merged.created_at,
+                 merged.updated_at, merged.schema_version))
+            if persisted is None:
+                seed = hashlib.sha256(json.dumps([merged.session_id, merged.created_at, merged.schema_version]).encode()).hexdigest()
+                connection.execute("INSERT INTO session_anchors VALUES (?,?)", (merged.session_id, seed))
+            anchor = connection.execute("SELECT seed FROM session_anchors WHERE session_id=?", (merged.session_id,)).fetchone()
+            if anchor is not None:
+                last = connection.execute("SELECT digest FROM session_integrity WHERE session_id=? ORDER BY sequence DESC LIMIT 1", (merged.session_id,)).fetchone()
+                previous = last["digest"] if last else anchor["seed"]
+                for event in additions:
+                    previous = self._chain_digest(previous, json.dumps(event.to_dict(), ensure_ascii=False))
+                    connection.execute("INSERT INTO session_integrity VALUES (?,?,?)", (merged.session_id, event.sequence, previous))
+            connection.executemany("INSERT INTO session_events VALUES(?,?,?,?)",
+                [(merged.session_id, event.sequence, event.event_id, json.dumps(event.to_dict(), ensure_ascii=False))
+                 for event in additions])
+            session.events = deepcopy(merged.events)
+            session.metadata = deepcopy(merged.metadata)
+            session.updated_at = merged.updated_at
 
-    def list(self, *, limit: int = 100) -> list[Session]:
+    def append_if_sequence(self, session_id, event_type, data=None, *, expected_sequence=None,
+                           idempotency_key=None, **fields):
+        if idempotency_key is not None and (not isinstance(idempotency_key, str) or not 1 <= len(idempotency_key) <= 256):
+            raise ValueError("invalid event idempotency key")
+        payload = _json_safe(dict(data or {}))
+        with self.transaction() as connection:
+            session = self._load(connection, session_id) or Session(session_id=session_id)
+            if idempotency_key is not None:
+                payload["idempotency_key"] = idempotency_key
+                for event in session.events:
+                    if event.data.get("idempotency_key") == idempotency_key:
+                        if (event.type != event_type or event.data != payload
+                                or any(getattr(event, key) != value for key, value in fields.items())):
+                            raise SequenceConflict("event idempotency key reused for different content")
+                        return deepcopy(event)
+            if expected_sequence is not None and len(session.events) != expected_sequence:
+                raise SequenceConflict("session sequence changed")
+            event = session.append(event_type, payload, **fields)
+            self.save(session)
+            return deepcopy(event)
+
+    def list(self, *, limit=100):
         if limit < 1:
             raise ValueError("limit must be at least 1")
-        with self._lock, self._connect() as connection:
-            rows = connection.execute(
-                "SELECT session_id FROM sessions ORDER BY updated_at DESC LIMIT ?", (int(limit),)
-            ).fetchall()
-        return [session for row in rows if (session := self.get(row["session_id"])) is not None]
+        with self.transaction() as connection:
+            rows = connection.execute("SELECT session_id FROM sessions ORDER BY updated_at DESC LIMIT ?", (int(limit),)).fetchall()
+            return [self._load(connection, row["session_id"]) for row in rows]
 
-    def delete(self, session_id: str) -> bool:
-        with self._lock, self._connect() as connection:
-            connection.execute("PRAGMA foreign_keys=ON")
-            cursor = connection.execute("DELETE FROM sessions WHERE session_id = ?", (str(session_id),))
-            return cursor.rowcount > 0
+    def delete(self, session_id):
+        with self.transaction() as connection:
+            return connection.execute("DELETE FROM sessions WHERE session_id=?", (str(session_id),)).rowcount > 0
 
 
 class ContextProjector:

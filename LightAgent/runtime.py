@@ -2,18 +2,20 @@
 
 from __future__ import annotations
 
-import asyncio
-import inspect
+import threading
+from contextlib import contextmanager, nullcontext
 from copy import deepcopy
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timedelta, timezone
 from enum import Enum
-from typing import Any, Awaitable, Callable, Iterable
+from typing import Any, Callable, Iterable
 from uuid import uuid4
 
-from .cancellation import CancellationToken, accepts_keyword
 from .capabilities import CapabilityRegistry, PermissionSet, RuntimeContext
 from .session import InMemorySessionStore, Session, SessionCheckpoint, SessionStore, _utc_now
+from .runtime_jobs import JobManager, JobRecord, JobStatus
+from .runtime_subagents import SubagentManager, SubagentRecord
+
+_runtime_store_lock = threading.RLock()
 
 
 class InboxMessageType(str, Enum):
@@ -431,469 +433,6 @@ class ProgressTracker:
             self._event_sink(event_type, {"reason": reason, "state": asdict(self.state)})
 
 
-class JobStatus(str, Enum):
-    PENDING = "pending"
-    RUNNING = "running"
-    SUCCESS = "success"
-    FAILED = "failed"
-    CANCELLED = "cancelled"
-    INTERRUPTED = "interrupted"
-
-
-@dataclass
-class JobRecord:
-    name: str
-    job_id: str = field(default_factory=lambda: uuid4().hex)
-    status: JobStatus = JobStatus.PENDING
-    owner_agent_id: str | None = None
-    created_at: str = field(default_factory=_utc_now)
-    started_at: str | None = None
-    completed_at: str | None = None
-    result: Any = None
-    error: str | None = None
-    idempotency_key: str | None = None
-    cancellation_token_id: str | None = None
-    lease_owner: str | None = None
-    lease_epoch: int = 0
-    lease_expires_at: str | None = None
-    metadata: dict[str, Any] = field(default_factory=dict)
-    output: list[Any] = field(default_factory=list)
-
-    def to_dict(self) -> dict[str, Any]:
-        value = asdict(self)
-        value["status"] = self.status.value
-        return value
-
-
-class JobManager:
-    """Manage cancellable background coroutines and persist their state."""
-
-    def __init__(
-            self,
-            event_sink: Callable[[str, dict[str, Any]], Any] | None = None,
-            inbox: AgentInbox | None = None,
-    ):
-        self._records: dict[str, JobRecord] = {}
-        self._tasks: dict[str, asyncio.Task[Any]] = {}
-        self._cancellations: dict[str, CancellationToken] = {}
-        self._idempotency_keys: dict[str, str] = {}
-        self.manager_id = uuid4().hex
-        self._event_sink = event_sink
-        self._inbox = inbox
-
-    def start(
-            self,
-            name: str,
-            operation: Callable[..., Any] | Awaitable[Any],
-            *,
-            owner_agent_id: str | None = None,
-            metadata: dict[str, Any] | None = None,
-            idempotency_key: str | None = None,
-            cancellation_token: CancellationToken | None = None,
-            lease_seconds: float | None = None,
-    ) -> JobRecord:
-        loop = asyncio.get_running_loop()
-        if lease_seconds is not None and lease_seconds <= 0:
-            raise ValueError("lease_seconds must be positive")
-        if idempotency_key is not None and not str(idempotency_key).strip():
-            raise ValueError("idempotency_key must not be empty")
-        if idempotency_key is not None and idempotency_key in self._idempotency_keys:
-            return deepcopy(self._records[self._idempotency_keys[idempotency_key]])
-        token = cancellation_token.child() if cancellation_token else CancellationToken()
-        record = JobRecord(
-            name=name,
-            owner_agent_id=owner_agent_id,
-            metadata=deepcopy(metadata or {}),
-            idempotency_key=idempotency_key,
-            cancellation_token_id=token.token_id,
-            lease_owner=self.manager_id if lease_seconds is not None else None,
-            lease_epoch=1 if lease_seconds is not None else 0,
-            lease_expires_at=(
-                (datetime.now(timezone.utc) + timedelta(seconds=lease_seconds)).isoformat()
-                if lease_seconds is not None
-                else None
-            ),
-        )
-        self._records[record.job_id] = record
-        self._cancellations[record.job_id] = token
-        if idempotency_key is not None:
-            self._idempotency_keys[idempotency_key] = record.job_id
-        self._emit("job.created", record)
-        self._tasks[record.job_id] = loop.create_task(self._execute(record.job_id, operation))
-        return deepcopy(record)
-
-    async def _execute(self, job_id: str, operation: Callable[..., Any] | Awaitable[Any]) -> None:
-        record = self._records[job_id]
-        token = self._cancellations[job_id]
-        record.status = JobStatus.RUNNING
-        record.started_at = _utc_now()
-        self._emit("job.started", record)
-        try:
-            if token.cancelled:
-                raise asyncio.CancelledError
-            if self._lease_expired(record):
-                record.status = JobStatus.INTERRUPTED
-                record.error = "job lease expired before execution"
-                record.completed_at = _utc_now()
-                self._emit("job.interrupted", record)
-                return
-            if callable(operation):
-                if accepts_keyword(operation, "cancellation_token"):
-                    value = operation(cancellation_token=token)
-                else:
-                    value = operation()
-            else:
-                value = operation
-            if inspect.isawaitable(value):
-                value = await value
-            if token.cancelled:
-                raise asyncio.CancelledError
-            if self._lease_expired(record):
-                record.status = JobStatus.INTERRUPTED
-                record.error = "job lease expired before result publication"
-                record.completed_at = _utc_now()
-                self._emit("job.interrupted", record)
-                return
-            record.result = value
-            record.status = JobStatus.SUCCESS
-            record.completed_at = _utc_now()
-            self._emit("job.completed", record)
-        except asyncio.CancelledError:
-            record.status = JobStatus.CANCELLED
-            record.error = token.reason or "cancelled"
-            record.completed_at = _utc_now()
-            self._emit("job.cancelled", record)
-            raise
-        except Exception as error:
-            record.status = JobStatus.FAILED
-            record.error = f"{type(error).__name__}: {error}"
-            record.completed_at = _utc_now()
-            self._emit("job.failed", record)
-        finally:
-            if record.completed_at is None:
-                record.completed_at = _utc_now()
-            if self._inbox:
-                self._inbox.enqueue(
-                    InboxMessageType.CONTEXT,
-                    {"job": record.to_dict()},
-                    correlation_id=record.job_id,
-                    metadata={"kind": "job_completion"},
-                )
-
-    async def wait(self, job_id: str) -> JobRecord:
-        if job_id not in self._records:
-            raise KeyError(job_id)
-        task = self._tasks.get(job_id)
-        if task is not None:
-            try:
-                await task
-            except asyncio.CancelledError:
-                pass
-        return deepcopy(self._records[job_id])
-
-    def cancel(self, job_id: str, reason: str | None = None) -> bool:
-        task = self._tasks.get(job_id)
-        if task is None or task.done():
-            return False
-        token = self._cancellations.get(job_id)
-        if token:
-            token.cancel(reason or "job cancellation requested")
-        return task.cancel()
-
-    def cancellation_token(self, job_id: str) -> CancellationToken:
-        if job_id not in self._records:
-            raise KeyError(job_id)
-        token = self._cancellations.get(job_id)
-        if token is None:
-            raise RuntimeError(f"job `{job_id}` is not active")
-        return token
-
-    def renew_lease(
-            self,
-            job_id: str,
-            lease_seconds: float,
-            *,
-            owner: str | None = None,
-            expected_epoch: int | None = None,
-    ) -> JobRecord:
-        if lease_seconds <= 0:
-            raise ValueError("lease_seconds must be positive")
-        record = self._records.get(job_id)
-        if record is None:
-            raise KeyError(job_id)
-        resolved_owner = owner or self.manager_id
-        if record.lease_owner != resolved_owner:
-            raise PermissionError("job lease belongs to another owner")
-        if expected_epoch is not None and record.lease_epoch != expected_epoch:
-            raise RuntimeError("job lease epoch is stale")
-        if record.status not in {JobStatus.PENDING, JobStatus.RUNNING}:
-            raise RuntimeError("only active jobs can renew a lease")
-        record.lease_expires_at = (
-            datetime.now(timezone.utc) + timedelta(seconds=lease_seconds)
-        ).isoformat()
-        self._emit("job.lease_renewed", record)
-        return deepcopy(record)
-
-    def resume(
-            self,
-            job_id: str,
-            operation: Callable[..., Any] | Awaitable[Any],
-            *,
-            lease_seconds: float = 60.0,
-    ) -> JobRecord:
-        loop = asyncio.get_running_loop()
-        if lease_seconds <= 0:
-            raise ValueError("lease_seconds must be positive")
-        record = self._records.get(job_id)
-        if record is None:
-            raise KeyError(job_id)
-        if record.status != JobStatus.INTERRUPTED:
-            raise RuntimeError("only interrupted jobs can be resumed")
-        token = CancellationToken()
-        record.status = JobStatus.PENDING
-        record.started_at = None
-        record.completed_at = None
-        record.error = None
-        record.lease_owner = self.manager_id
-        record.lease_epoch += 1
-        record.lease_expires_at = (
-            datetime.now(timezone.utc) + timedelta(seconds=lease_seconds)
-        ).isoformat()
-        record.cancellation_token_id = token.token_id
-        self._cancellations[job_id] = token
-        self._emit("job.resumed", record)
-        self._tasks[job_id] = loop.create_task(self._execute(job_id, operation))
-        return deepcopy(record)
-
-    def emit_output(self, job_id: str, value: Any) -> JobRecord:
-        record = self._records.get(job_id)
-        if record is None:
-            raise KeyError(job_id)
-        record.output.append(deepcopy(value))
-        self._emit("job.output", record)
-        return deepcopy(record)
-
-    def get(self, job_id: str) -> JobRecord:
-        if job_id not in self._records:
-            raise KeyError(job_id)
-        return deepcopy(self._records[job_id])
-
-    def list(self) -> list[JobRecord]:
-        return deepcopy(list(self._records.values()))
-
-    def mark_interrupted(self) -> None:
-        for record in self._records.values():
-            if record.status in {JobStatus.PENDING, JobStatus.RUNNING}:
-                record.status = JobStatus.INTERRUPTED
-                record.completed_at = _utc_now()
-                self._emit("job.interrupted", record)
-
-    @staticmethod
-    def _lease_expired(record: JobRecord) -> bool:
-        if record.lease_expires_at is None:
-            return False
-        expires = datetime.fromisoformat(record.lease_expires_at.replace("Z", "+00:00"))
-        if expires.tzinfo is None:
-            expires = expires.replace(tzinfo=timezone.utc)
-        return datetime.now(timezone.utc) >= expires.astimezone(timezone.utc)
-
-    def restore(self, session: Session) -> None:
-        records: dict[str, JobRecord] = {}
-        for event in session.events:
-            if not event.type.startswith("job."):
-                continue
-            value = event.data.get("job")
-            if not isinstance(value, dict):
-                continue
-            payload = dict(value)
-            payload["status"] = JobStatus(payload.get("status", "pending"))
-            record = JobRecord(**payload)
-            records[record.job_id] = record
-        self._records = records
-        self._tasks = {}
-        self._cancellations = {}
-        self._idempotency_keys = {
-            record.idempotency_key: record.job_id
-            for record in records.values()
-            if record.idempotency_key is not None
-        }
-
-    def _emit(self, event_type: str, record: JobRecord) -> None:
-        if self._event_sink:
-            self._event_sink(event_type, {"job": record.to_dict()})
-
-
-@dataclass
-class SubagentRecord:
-    agent_id: str
-    name: str
-    parent_agent_id: str | None
-    depth: int
-    permissions: PermissionSet
-    persistent: bool = False
-    status: str = "ready"
-    metadata: dict[str, Any] = field(default_factory=dict)
-
-
-class SubagentManager:
-    def __init__(
-            self,
-            *,
-            max_depth: int = 2,
-            max_agents: int = 8,
-            max_concurrency: int = 4,
-            event_sink: Callable[[str, dict[str, Any]], Any] | None = None,
-    ):
-        self.max_depth = max_depth
-        self.max_agents = max_agents
-        self.max_concurrency = max_concurrency
-        self._event_sink = event_sink
-        self._agents: dict[str, tuple[Any, SubagentRecord]] = {}
-        self._running = 0
-        self._cancellations: dict[str, set[CancellationToken]] = {}
-
-    def register(
-            self,
-            agent: Any,
-            *,
-            parent_agent_id: str | None = None,
-            parent_permissions: PermissionSet | None = None,
-            allowed_capabilities: Iterable[str] | None = None,
-            max_risk: Any = None,
-            persistent: bool = False,
-            metadata: dict[str, Any] | None = None,
-    ) -> SubagentRecord:
-        if len(self._agents) >= self.max_agents:
-            raise RuntimeError("subagent limit reached")
-        parent_record = self._agents.get(parent_agent_id, (None, None))[1] if parent_agent_id else None
-        depth = parent_record.depth + 1 if parent_record else 1
-        if depth > self.max_depth:
-            raise RuntimeError("subagent depth limit reached")
-        base_permissions = parent_permissions or (parent_record.permissions if parent_record else PermissionSet())
-        permissions = base_permissions.narrow(
-            allowed=allowed_capabilities,
-            max_risk=max_risk,
-        )
-        agent_id = uuid4().hex
-        record = SubagentRecord(
-            agent_id=agent_id,
-            name=str(getattr(agent, "name", agent_id)),
-            parent_agent_id=parent_agent_id,
-            depth=depth,
-            permissions=permissions,
-            persistent=persistent,
-            metadata=deepcopy(metadata or {}),
-        )
-        self._agents[agent_id] = (agent, record)
-        self._emit("subagent.created", record)
-        return deepcopy(record)
-
-    async def run(
-            self,
-            agent_id: str,
-            query: str,
-            *,
-            cancellation_token: CancellationToken | None = None,
-            idempotency_key: str | None = None,
-            **kwargs: Any,
-    ) -> Any:
-        if agent_id not in self._agents:
-            raise KeyError(agent_id)
-        agent, record = self._agents[agent_id]
-        if self._running >= self.max_concurrency:
-            raise RuntimeError("subagent concurrency limit reached")
-        token = cancellation_token.child() if cancellation_token else CancellationToken()
-        self._cancellations.setdefault(agent_id, set()).add(token)
-        self._running += 1
-        record.status = "running"
-        self._emit("subagent.started", record)
-        try:
-            if token.cancelled:
-                raise asyncio.CancelledError
-            arun = getattr(agent, "arun", None)
-            if callable(arun):
-                if accepts_keyword(arun, "cancellation_token"):
-                    kwargs["cancellation_token"] = token
-                if idempotency_key is not None and accepts_keyword(arun, "idempotency_key"):
-                    kwargs["idempotency_key"] = idempotency_key
-                result = await arun(query, **kwargs)
-            else:
-                if accepts_keyword(agent.run, "cancellation_token"):
-                    kwargs["cancellation_token"] = token
-                if idempotency_key is not None and accepts_keyword(agent.run, "idempotency_key"):
-                    kwargs["idempotency_key"] = idempotency_key
-                result = await asyncio.to_thread(agent.run, query, **kwargs)
-            if token.cancelled:
-                raise asyncio.CancelledError
-            record.status = "success"
-            self._emit("subagent.completed", record, result=result)
-            return result
-        except asyncio.CancelledError:
-            record.status = "cancelled"
-            self._emit("subagent.cancelled", record, error=token.reason or "cancelled")
-            raise
-        except Exception as error:
-            record.status = "failed"
-            self._emit("subagent.failed", record, error=f"{type(error).__name__}: {error}")
-            raise
-        finally:
-            self._running -= 1
-            active = self._cancellations.get(agent_id)
-            if active is not None:
-                active.discard(token)
-                if not active:
-                    self._cancellations.pop(agent_id, None)
-
-    def cancel(self, agent_id: str, reason: str | None = None) -> int:
-        if agent_id not in self._agents:
-            raise KeyError(agent_id)
-        active = tuple(self._cancellations.get(agent_id, ()))
-        return sum(
-            token.cancel(reason or "subagent cancellation requested")
-            for token in active
-        )
-
-    def list(self) -> list[SubagentRecord]:
-        return deepcopy([record for _, record in self._agents.values()])
-
-    def tree(self) -> list[dict[str, Any]]:
-        return [
-            {
-                "agent_id": record.agent_id,
-                "name": record.name,
-                "parent_agent_id": record.parent_agent_id,
-                "depth": record.depth,
-                "status": record.status,
-                "persistent": record.persistent,
-            }
-            for _, record in self._agents.values()
-        ]
-
-    def send(self, agent_id: str, content: Any, *, message_type: InboxMessageType | str = InboxMessageType.CONTEXT) -> Any:
-        if agent_id not in self._agents:
-            raise KeyError(agent_id)
-        agent, _ = self._agents[agent_id]
-        runtime = getattr(agent, "runtime", None)
-        if runtime is None or runtime.session is None:
-            raise RuntimeError("target subagent does not have an open runtime Session")
-        return runtime.inbox.enqueue(message_type, content)
-
-    def _emit(self, event_type: str, record: SubagentRecord, **extra: Any) -> None:
-        if self._event_sink:
-            data = {
-                "agent": {
-                    **asdict(record),
-                    "permissions": {
-                        "allowed": sorted(record.permissions.allowed),
-                        "denied": sorted(record.permissions.denied),
-                        "max_risk": record.permissions.max_risk.value,
-                    },
-                },
-                **extra,
-            }
-            self._event_sink(event_type, data)
-
-
 class AgentRuntime:
     """Bundle Session, Registry, Inbox, Goal, Budget, Job, and Subagent state."""
 
@@ -913,9 +452,12 @@ class AgentRuntime:
         self.inbox = AgentInbox(self._append)
         self.goals = GoalManager(self._append)
         self.budget = BudgetManager(budget_limits, self._append)
-        self.jobs = JobManager(self._append, self.inbox)
-        self.subagents = SubagentManager(event_sink=self._append)
         self.progress = ProgressTracker(event_sink=self._append)
+        self._state_lock = threading.RLock() if callable(getattr(self.session_store, "transaction", None)) else _runtime_store_lock
+        self.jobs = JobManager(self._append, self.inbox, state_scope=self._state_transaction,
+                               session_reader=self._require_session)
+        self.subagents = SubagentManager(event_sink=self._append, jobs=self.jobs,
+                                        state_scope=self._state_transaction, session_reader=self._require_session)
 
     def open_session(
             self,
@@ -926,6 +468,8 @@ class AgentRuntime:
             user_id: str | None = None,
             security_context: Any = None,
     ) -> Session:
+        if any(not task.done() for task in self.jobs._tasks.values()):
+            raise RuntimeError("cannot reopen or switch Session while local Jobs are active")
         session = self.session_store.get(session_id) if session_id else None
         if session is None:
             session = Session(session_id=session_id or uuid4().hex, metadata=metadata or {})
@@ -950,6 +494,8 @@ class AgentRuntime:
         self.budget.restore(session)
         self.jobs.restore(session)
         self.jobs.mark_interrupted()
+        self.jobs.recover_notifications()
+        self.subagents.restore(self._require_session())
         return deepcopy(session)
 
     def checkpoint(self, label: str | None = None, metadata: dict[str, Any] | None = None) -> SessionCheckpoint:
@@ -969,6 +515,10 @@ class AgentRuntime:
         return forked
 
     def snapshot(self) -> dict[str, Any]:
+        with self._state_transaction():
+            return self._snapshot()
+
+    def _snapshot(self) -> dict[str, Any]:
         session = self._require_session()
         return {
             "runtime_id": self.runtime_id,
@@ -982,6 +532,7 @@ class AgentRuntime:
                 "remaining": self.budget.remaining(),
             },
             "jobs": [job.to_dict() for job in self.jobs.list()],
+            "subagents": self.subagents.tree(),
             "progress": asdict(self.progress.state),
         }
 
@@ -992,21 +543,46 @@ class AgentRuntime:
         self._append("session.resumed", {"reason": reason})
 
     def cancel(self, reason: str | None = None) -> None:
-        self._append("session.cancelled", {"reason": reason})
+        with self._state_transaction():
+            self._append("session.cancelled", {"reason": reason})
+            for job in self.jobs.list():
+                self.jobs.cancel(job.job_id, reason or "session cancelled")
 
     def continue_run(self, reason: str | None = None) -> None:
         self._append("session.continued", {"reason": reason})
 
     def _append(self, event_type: str, data: dict[str, Any]) -> None:
-        session = self._require_session()
-        session.append(
-            event_type,
-            data,
-            turn_id=self.context.turn_id,
-            run_id=self.context.run_id,
-            agent_id=self.context.agent_id,
-        )
-        self.session_store.save(session)
+        with self._state_transaction():
+            session = self._require_session()
+            session.append(event_type, data, turn_id=self.context.turn_id,
+                           run_id=self.context.run_id, agent_id=self.context.agent_id)
+            self.session_store.save(session)
+
+    @contextmanager
+    def _state_transaction(self):
+        transaction = getattr(self.session_store, "transaction", None)
+        with self._state_lock:
+            try:
+                with transaction() if transaction else nullcontext():
+                    session = self._require_session()
+                    latest = self.session_store.get(session.session_id)
+                    if latest is not None:
+                        self.session = latest
+                    yield
+            except BaseException:
+                # Roll back materialized views too, not just the SQLite rows.
+                try:
+                    latest = self.session_store.get(self.session.session_id) if self.session else None
+                    if latest is not None:
+                        self.session = latest
+                        self.inbox.restore(latest)
+                        self.goals.restore(latest)
+                        self.budget.restore(latest)
+                        self.jobs.restore(latest, clear_live=False)
+                        self.subagents.restore(latest, clear_bindings=False)
+                except Exception:
+                    pass  # Preserve the original storage/authority failure.
+                raise
 
     def _require_session(self) -> Session:
         if self.session is None:

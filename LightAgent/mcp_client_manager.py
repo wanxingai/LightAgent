@@ -11,29 +11,38 @@ import inspect
 from functools import partial
 from typing import Optional, Dict, Any
 
-from mcp import ClientSession, StdioServerParameters
-from mcp.client.sse import sse_client
-from mcp.client.stdio import stdio_client
-try:
-    from mcp.client.streamable_http import streamablehttp_client
-except ImportError:  # removed in mcp 2.x; very old SDKs have no Streamable HTTP at all
-    streamablehttp_client = None
-try:
-    # mcp 1.24+ and 2.x; headers go on the httpx client instead of a keyword argument
-    from mcp.client.streamable_http import streamable_http_client
-    from mcp.shared._httpx_utils import create_mcp_http_client
-except ImportError:
-    streamable_http_client = None
-    create_mcp_http_client = None
 from contextlib import AsyncExitStack
-
 from .tools import ToolRegistry  # 关键修改：从当前包导入
+
+_MCP_IMPORT_ERROR = None
+try:
+    from mcp import ClientSession, StdioServerParameters
+except ModuleNotFoundError as error:
+    if error.name != "mcp":
+        raise
+    _MCP_IMPORT_ERROR = error
+else:
+    from mcp.client.sse import sse_client
+    from mcp.client.stdio import stdio_client
+    try:
+        from mcp.client.streamable_http import streamablehttp_client
+    except ImportError:  # removed in mcp 2.x; very old SDKs have no Streamable HTTP
+        streamablehttp_client = None
+    try:
+        # Newer SDKs put headers on the httpx client instead of a keyword argument.
+        from mcp.client.streamable_http import streamable_http_client
+        from mcp.shared._httpx_utils import create_mcp_http_client
+    except ImportError:
+        streamable_http_client = None
+        create_mcp_http_client = None
 
 
 class MCPClientManager:
     """增强版MCP客户端管理器"""
 
     def __init__(self, config: dict, tool_registry: ToolRegistry, credential_provider: Any = None):
+        if _MCP_IMPORT_ERROR is not None:
+            raise ImportError("MCP connections require the optional dependency: pip install 'LightAgent[mcp]'") from _MCP_IMPORT_ERROR
         self.config = config
         self.tool_registry = tool_registry
         self.session: Optional[ClientSession] = None

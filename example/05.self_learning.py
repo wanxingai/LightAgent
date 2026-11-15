@@ -1,5 +1,4 @@
 import os
-from loguru import logger
 from LightAgent import LightAgent, LightSwarm
 
 
@@ -55,7 +54,7 @@ agent = LightAgent(
     )
 
 def run_conversation(query: str, stream=False, max_retry=5, user_id="user1"):
-    logger.info(f"\n开始思考问题: {query}")
+    print(f"\n开始思考问题: {query}")
     response = agent.run(query, stream=stream, max_retry=max_retry, user_id=user_id)  # 使用 agent 运行查询
     # 处理响应
     if stream:
@@ -64,15 +63,15 @@ def run_conversation(query: str, stream=False, max_retry=5, user_id="user1"):
             # content = chunk.choices[0].delta.content or ""
             # print(content, end="", flush=True)
     else:
-        logger.info(f"Final Reply: \n{response}")
+        print(f"Final Reply: \n{response}")
     return response
 
 # agent自我学习的测试1
-logger.info("\n=========== next conversation ===========")
+print("\n=========== next conversation ===========")
 user_id = "test_user_1"
 query = "我现在有一个采购货款需要转账，我的审批流程是怎么样的？"
 run_conversation(query, stream=True, user_id=user_id)
-logger.info("\n=========== next conversation ===========")
+print("\n=========== next conversation ===========")
 query = "请记住：本公司新规定，2025年1月起，公司所有采购货款的转账需要先找负责采购的丁总签字，再交给财务经历审批，财务经历审批后，还需要公司总经理审批，出纳才能打款转过去。"
 run_conversation(query, stream=True, user_id=user_id)
 

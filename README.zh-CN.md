@@ -56,6 +56,8 @@
 
 ---
 ## 新闻
+
+- **[2026-10-04] v0.12.0 源码已实现（尚未发布）**：持久研究服务、目录驱动的 DAG 实验、消息与独立聊天、参考面板、版本评估/采用/回滚。默认普通调用不变；后台模式需显式启用。见 [持续研究指南](docs/persistent_research.zh-CN.md)。
 - <img src="https://img.alicdn.com/imgextra/i3/O1CN01SFL0Gu26nrQBFKXFR_!!6000000007707-2-tps-500-500.png" alt="new" width="30" height="30"/>**[2026-10-01]** LightAgent v0.11.0 正式发布：新增可选的持久化动态 DAG 多 Agent 执行、验证通过后才发布的不可变成果、可恢复租约与 fencing，以及统一且只能收窄权限的 `SecurityContext`、能力和审批控制。
 - **[2026-08-15]** LightAgent v0.10.0 正式发布：新增统一的事件溯源 Agent Runtime，支持可持久化 Session、异步执行、Capability Registry 与 Policy、Inbox/Goals/Budgets、上下文压缩与恢复、Jobs/子 Agent、标准化 Skills/MCP 适配器和 SQLite FTS5 检索。
 - **[2026-08-15]** LightAgent v0.9.7 正式发布：新增轻量、零依赖的 Connector 契约及离线校验与示例，强化 Python 执行器安全检查，补充可选的 Mem0 Graph 安全验证矩阵，并通过公共 API 兼容性清单为 v1.0 稳定化做准备。
@@ -103,6 +105,7 @@
 | --- | --- | --- |
 | 单 Agent 运行时 | `LightAgent` | 一个 Agent 的模型调用、工具、记忆、流式输出、trace 和 guardrails。 |
 | 持久化运行状态 | `Session`、`AgentRuntime` | 可回放事件、checkpoint、Inbox、Goals、Budgets、Jobs 和上下文恢复。 |
+| 持久执行（v1.0.0 开发中） | `ExecutionService`、`ExecutionHandle` | 普通可重连任务，不要求研究契约；显式指定宿主后端与安全上下文。 |
 | 能力层 | `CapabilityRegistry`、`PolicyEngine` | 分层 Provider、权限快照、生命周期、策略与审计。 |
 | 统一安全上下文 | `SecurityContext`、`CapabilityGate`、`ApprovalToken` | 身份、只能收窄的权限、授权与绑定具体操作的审批。 |
 | 多 Agent 路由 | `LightSwarm` | 在多个专业 Agent 之间进行角色化委托。 |
@@ -177,6 +180,14 @@ print(report.to_dict())
 待审批请求可写入 `JsonReviewStore`；使用 `ApprovalDecision` 完成审核后，通过
 `approval_id=request.request_id` 重新运行。LightFlow 也可通过
 `flow.approve(...); flow.resume(...)` 持久化并恢复步骤审批。
+
+## v1.0.0 开发边界
+
+此分支的目标版本为 `1.0.0`，尚未发布。普通持久任务使用 [ExecutionService](docs/durable_execution.zh-CN.md)；研究契约、评估、版本晋升、历史选择和可选调试面板位于同级的可选 LightResearch 项目，见[安装与迁移指南](docs/persistent_research.zh-CN.md)。LightAgent 默认 CI 不依赖扩展。旧 `mode="persistent"` 保持研究语义，需显式调用 `LightResearch.enable_legacy_api()`。核心不提供正式产品 UI，剩余发布门槛见 [v1.0.0 计划](docs/lightagent_v100_development_plan.zh-CN.md)。
+
+Subagent 执行现统一使用 Job，冷重连后需宿主显式绑定实例。状态、取消及历史回退边界见 [Job/历史迁移指南](docs/jobs_history_migration.zh-CN.md)和[离线示例](example/16.jobs_and_history.py)。
+
+可选的 [Provider 签名与重授信](docs/provider_supply_chain.zh-CN.md)要求发布者验签和宿主显式批准，不替代运行时权限与敏感操作审批。
 
 ## v0.11.0：动态验证工作流
 
@@ -289,13 +300,21 @@ pip install --upgrade "git+https://github.com/wanxingai/LightAgent.git@main"
 pip install lightagent
 ```
 
-（可选安装）通过 pip 安装 Mem0 包：
+v1.0.0 开发版将 MCP、Mem0 和 Langfuse 设为可选依赖，按需安装：
 
 ```bash
-pip install mem0ai
+pip install 'lightagent[mcp]'
+pip install 'lightagent[mem0]'
+pip install 'lightagent[langfuse]'
 ```
 
-或者，您可以通过一键点击在托管平台上使用 Mem0，[点击这里](https://www.mem0.ai/)。
+使用 `pip install 'lightagent[all]'` 可一次装齐 MCP、Mem0、Langfuse、LiteLLM、
+OSS/NOS 和 Provider 验签所需的 Python 依赖，不包含独立的 LightResearch 或 Codex CLI。
+基础安装 `pip install lightagent` 不会启用任何 extra。
+
+基础安装已包含 Skills 和 PyYAML。默认仍扫描 `skills/`，也支持原有的 `skills_directories`。不需要扫描技能时可设置 `auto_discover_skills=False`。
+
+MCP 仍使用原有的 `setup_mcp(mcp_setting=...)` 配置；Mem0 仍使用 `from mem0 import Memory`，并通过 `memory=` 接入。已单独安装相应 SDK 的应用无需重复安装。
 
 
 ### Hello world 示例代码
@@ -411,7 +430,7 @@ LightAgent 接受任何提供 `store(data, user_id)` 和 `retrieve(query, user_i
 从 v0.9.4 升级时，应先审查旧的内部记忆，再为通过审查的记录回填 `promotion_status="promoted"` 和 `injectable=True`；`require_promotion_for_internal_memory=False` 仅用于临时兼容。具体迁移说明请查看 [Memory Admission](docs/memory_admission.md#upgrading-from-v094)。
 
 ### 8. Trace 与 Langfuse
-LightAgent 可通过内置 trace 或 Langfuse 配置观察运行过程。
+内置 trace 不依赖 Langfuse。安装 `langfuse` extra 后，原 `tracetools["TraceToolConfig"]` 配置保持不变。
 
 ### 9. Agent 测评
 `LightEvaluator` 可围绕确定性业务用例评估输出、工具选择、策略事件、恢复能力、延迟、usage 和预估成本。

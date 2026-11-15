@@ -425,6 +425,12 @@ LightAgent supports the Model Context Protocol (MCP) for connecting to external
 tool servers. MCP servers can provide tools over stdio, SSE (Server-Sent
 Events), or Streamable HTTP transports.
 
+Starting with v1.0.0, install `lightagent[mcp]` for MCP connections and MCP stdio
+serving, or keep an independently installed compatible MCP SDK. Existing
+`mcpServers` configurations and `MCPClientManager` import paths do not change.
+Codex App Server dynamic tools use the same tool bridge without the MCP transport
+and do not require the extra.
+
 #### Configuration
 
 Configure MCP server settings and call `setup_mcp()` before running the agent:

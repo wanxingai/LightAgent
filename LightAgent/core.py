@@ -16,7 +16,8 @@ import random
 import re
 import time
 import traceback
-from copy import deepcopy
+from copy import copy, deepcopy
+from contextlib import ExitStack
 from datetime import datetime
 from typing import List, Dict, Any, Callable, Union, Optional, Generator, AsyncGenerator, Protocol, TypeVar, Coroutine
 from uuid import uuid4
@@ -41,7 +42,6 @@ from .result import RunResult, StreamEvent
 from .tracing import TraceRecorder, export_trace, normalize_usage, summarize_trace
 from .hooks import HOOK_BLOCK, HookContext, HookDecision, HookManager, PolicyHook
 from .guardrails import GuardrailManager
-from .mcp_client_manager import MCPClientManager
 from .skills import SkillManager
 from .skill_tools import create_skill_tools
 from .capabilities import (
@@ -76,6 +76,13 @@ from .builtin_tools.safe_expression import safe_expression
 
 # TypeVar for generic coroutine return type
 T = TypeVar('T')
+
+
+def __getattr__(name):
+    if name == "MCPClientManager":
+        from .mcp_client_manager import MCPClientManager
+        return MCPClientManager
+    raise AttributeError(name)
 
 
 def run_async_safely(coro: Coroutine[Any, Any, T]) -> T:
@@ -120,7 +127,10 @@ class LightAgent:
             name: Optional[str] = None,  # 代理名称
             instructions: Optional[str] = None,  # 代理指令
             role: Optional[str] = None,  # 代理角色
-            model: str,  # agent模型名称
+            model: str | None = None,  # agent模型名称；外部后端无需配置
+            backend=None,  # 可选 Agent 执行后端，如 "codex"
+            execution_provider=None,  # 显式工作目录执行 Provider
+            backend_session_store=None,  # 工作区会话绑定与跨进程锁
             api_key: str | None = None,  # 模型 api key
             base_url: str | httpx.URL | None = None,  # 模型 base url
             provider: str | None = None,  # LLM provider ("litellm" to route via LiteLLM SDK)
@@ -189,6 +199,38 @@ class LightAgent:
         :param log_file: 日志文件路径。
         :param tracetools: log跟踪工具。
         """
+
+        if isinstance(backend, str):
+            if backend != "codex":
+                raise ValueError("unknown agent backend; expected 'codex'")
+            from .backends import CodexBackend
+            backend = CodexBackend(model=model, session_store=backend_session_store)
+        if backend is not None and not callable(getattr(backend, "execute", None)):
+            raise TypeError("backend must implement execute(request)")
+        if backend is not None and (tools or memory or tree_of_thought or self_learning or tool_guardrails):
+            raise ValueError("external backends do not yet bridge Python tools, memory, or per-tool guardrails")
+        if backend is not None:
+            if any(value is not None for value in (
+                api_key, base_url, provider, websocket_base_url, execution_provider,
+                skills_directories, tot_model, tot_api_key, tot_base_url,
+            )) or enable_unsafe_python:
+                raise ValueError("external backend does not support native model, execution_provider or Skill configuration")
+            if budget_limits is not None or context_budget is not None or context_compactor is not None:
+                raise ValueError("external backend token/tool/context budgets are not supported yet; use execution_timeout")
+            supported_phases = {"before_run", "after_run", "on_error"}
+            for hook in hooks or []:
+                if isinstance(hook, PolicyHook) and (
+                    hook.phases is None or not hook.phases.issubset(supported_phases)
+                ):
+                    raise ValueError("external backend PolicyHooks must target before_run, after_run, or on_error")
+        self.backend = backend
+        self.execution_provider = execution_provider
+        from .backends.sessions import BackendSessionStore
+        self.backend_session_store = (
+            backend_session_store or getattr(backend, "session_store", None) or BackendSessionStore()
+        )
+        self._workspace_lock = threading.Lock()
+        self._has_custom_registry = capability_registry is not None
 
         # 初始化核心组件
         self.tool_registry = ToolRegistry()
@@ -301,7 +343,7 @@ class LightAgent:
         self.tool_dispatcher = AsyncToolDispatcher(self.tool_registry.function_mappings, self.tool_registry.function_info)
         # register_tool_manually(tools)
 
-        if api_key is None:
+        if api_key is None and self.backend is None:
             raise ValueError(
                 "The api_key client option must be set either by passing api_key to the client or by setting the OPENAI_API_KEY environment variable"
             )
@@ -320,7 +362,10 @@ class LightAgent:
             self.tot_model = tot_model
 
         # 初始化客户端
-        self._initialize_clients(tracetools, tot_api_key, tot_base_url, tot_model)
+        if self.backend is None:
+            self._initialize_clients(tracetools, tot_api_key, tot_base_url, tot_model)
+        else:
+            self.client = None
         self.tracetools = tracetools
         self.chat_params = {}  # history 存储器
         self._trace_recorder = TraceRecorder(enabled=False)
@@ -354,7 +399,12 @@ class LightAgent:
                     base_url=tot_base_url if tot_base_url and tot_base_url != "https://api.openai.com/v1" else None,
                 )
         elif tracetools:
-            from langfuse.openai import openai as la_openai
+            try:
+                from langfuse.openai import openai as la_openai
+            except ModuleNotFoundError as exc:
+                if exc.name != "langfuse":
+                    raise
+                raise ImportError("Langfuse tracing requires the optional dependency: pip install 'LightAgent[langfuse]'") from exc
             la_openai.langfuse_public_key = tracetools['TraceToolConfig']['langfuse_public_key']
             la_openai.langfuse_secret_key = tracetools['TraceToolConfig']['langfuse_secret_key']
             la_openai.langfuse_enabled = tracetools['TraceToolConfig']['langfuse_enabled']
@@ -463,6 +513,7 @@ class LightAgent:
             self.mcp_setting = mcp_setting
         """单独初始化 MCP 模块"""
         if self.mcp_setting and not self.mcp_client:
+            from .mcp_client_manager import MCPClientManager
             self.mcp_client = MCPClientManager(self.mcp_setting, self.tool_registry)
             await self.mcp_client.register_mcp_tool()
             self.log("INFO", "setup_mcp", "MCP 模块初始化成功")
@@ -476,6 +527,87 @@ class LightAgent:
         self.logger.log(level, action, data)
 
     def run(
+            self,
+            query: str,
+            tools: List[Union[str, Callable]] | None = None,
+            light_swarm=None,
+            stream: bool = False,
+            max_retry: int = 10,
+            max_tool_iterations: Optional[int] = None,
+            user_id: str = "default_user",
+            history: list = None,
+            metadata: Optional[Dict] = None,
+            use_skills: bool = True,
+            result_format: str = "str",
+            trace: bool = False,
+            parent_trace_id: str | None = None,
+            run_group_id: str | None = None,
+            approval_id: str | None = None,
+            session_id: str | None = None,
+            cancellation_token: CancellationToken | None = None,
+            idempotency_key: str | None = None,
+            workspace: str | None = None,
+            security_context=None,
+            execution_timeout: float = 1800,
+            on_backend_event=None,
+            backend_session_id: str | None = None,
+            mode: str = "once",
+            service=None,
+            service_root=None,
+            research_contract=None,
+            start_service: bool = True,
+    ) -> Union[Generator[str, None, None], str, RunResult]:
+        """Run once, or submit a durable research agent with mode="persistent".
+
+        Persistent calls return AgentHandle. Ordinary calls keep their existing
+        return/stream semantics; the persistent service owns worker lifetimes.
+        """
+        if mode not in ("once", "persistent"):
+            raise ValueError("mode must be once or persistent")
+        if mode == "persistent":
+            if (tools or light_swarm or stream or history or metadata or trace or
+                parent_trace_id or run_group_id or approval_id or session_id or
+                cancellation_token or on_backend_event or backend_session_id or
+                max_retry != 10 or max_tool_iterations is not None or execution_timeout != 1800 or
+                result_format != "str" or user_id != "default_user" or not use_skills):
+                raise ValueError("turn-scoped options are unsupported in persistent mode; use ResearchContract and SecurityContext")
+            from .persistent.entry import persistent_run
+            return persistent_run(self, query, workspace, service=service, service_root=service_root,
+                                  research_contract=research_contract, security_context=security_context,
+                                  start_service=start_service, idempotency_key=idempotency_key)
+        if service is not None or service_root is not None or research_contract is not None or not start_service:
+            raise ValueError("service options require mode='persistent'")
+        options = locals().copy()
+        for key in ("self", "mode", "service", "service_root", "research_contract", "start_service"):
+            options.pop(key)
+        guarded = workspace is not None or self.backend is not None
+        if guarded and not self._workspace_lock.acquire(blocking=False):
+            raise RuntimeError("workspace run is active; create a separate agent for concurrent work")
+        try:
+            if guarded:
+                self.last_backend_result = None
+            with ExitStack() as stack:
+                if guarded and workspace is not None:
+                    from .backends.sessions import session_binding
+                    context = self._workspace_security(workspace, security_context, user_id)
+                    if context.session_id not in (None, session_id):
+                        raise ValueError("SecurityContext session_id does not match the local Session")
+                    if context.user_id and user_id not in ("default_user", context.user_id):
+                        raise ValueError("SecurityContext user_id does not match the run user")
+                    options["security_context"] = context
+                    options["user_id"] = context.user_id or user_id
+                    if session_id:
+                        binding = session_binding(workspace, context, {
+                            "backend": type(self.backend).__name__ if self.backend else "native",
+                        })
+                        stack.enter_context(self.backend_session_store.claim(
+                            "lightagent", session_id, binding, create=True))
+                return self._run_impl(**options)
+        finally:
+            if guarded:
+                self._workspace_lock.release()
+
+    def _run_impl(
             self,
             query: str,
             tools: List[Union[str, Callable]] | None = None,  # 运行时传入的工具
@@ -495,6 +627,11 @@ class LightAgent:
             session_id: str | None = None,
             cancellation_token: CancellationToken | None = None,
             idempotency_key: str | None = None,
+            workspace: str | None = None,
+            security_context=None,
+            execution_timeout: float = 1800,
+            on_backend_event=None,
+            backend_session_id: str | None = None,
     ) -> Union[Generator[str, None, None], str, RunResult]:
         """
         运行代理，处理用户输入。
@@ -515,6 +652,7 @@ class LightAgent:
         :param run_group_id: 可选运行组 ID，用于把多个 sibling traces 归到同一任务。
         :param approval_id: 可选人工审批请求 ID，仅传给运行期 hooks，不发送给模型服务。
         :param session_id: 可选持久化 Session ID。省略时每次调用创建独立的内存 Session。
+        :param backend_session_id: 外部后端专用会话 ID；不会将 LightAgent session_id 用作 Codex resume ID。
         :param cancellation_token: 可选协作式取消令牌，在模型和工具调用安全边界检查。
         :param idempotency_key: 可选调用幂等键，记录到 Session 和 Trace 供上层执行器关联。
         :return: 代理的回复。
@@ -527,6 +665,29 @@ class LightAgent:
             raise ValueError("stream=True supports result_format='str' or result_format='event'")
         if max_tool_iterations is not None and max_tool_iterations < 1:
             raise ValueError("max_tool_iterations must be at least 1")
+        if backend_session_id is not None and self.backend is None:
+            raise ValueError("backend_session_id requires an external backend; native sessions use session_id")
+        if backend_session_id is not None and not getattr(getattr(self.backend, "capabilities", None), "resume", False):
+            raise ValueError("selected backend does not support session resume")
+        if self.backend is not None and (max_tool_iterations is not None or max_retry != 10):
+            raise ValueError("external backend cannot enforce max_retry or max_tool_iterations; use execution_timeout")
+        if workspace is not None or self.backend is not None:
+            if workspace is None:
+                raise ValueError("external backend execution requires workspace")
+            if stream:
+                raise ValueError("workspace backends currently use on_backend_event; streaming run is not yet supported")
+            if light_swarm is not None or tools or history or metadata or approval_id:
+                raise ValueError("workspace execution does not yet support per-run tools, history, metadata, approvals, or swarm")
+            if self.backend is None:
+                if trace or parent_trace_id or run_group_id:
+                    raise ValueError("native workspace trace export is not supported yet; use Session events")
+                return self._run_workspace(
+                    query, workspace, security_context, execution_timeout,
+                    cancellation_token, session_id, idempotency_key, on_backend_event,
+                    result_format, max_tool_iterations or max_retry, user_id,
+                )
+        elif security_context is not None or on_backend_event is not None:
+            raise ValueError("security_context and on_backend_event require workspace execution")
         effective_max_tool_iterations = max_tool_iterations if max_tool_iterations is not None else max_retry
 
         # 设置跟踪ID
@@ -625,6 +786,13 @@ class LightAgent:
             if input_decision.value != query:
                 self._record_policy_adapter_event("before_run", "input_guardrails", "replace")
             query = input_decision.value
+
+        if self.backend is not None:
+            return self._run_external_backend(
+                query, workspace, security_context, execution_timeout,
+                cancellation_token, backend_session_id, idempotency_key, on_backend_event,
+                result_format, traceid,
+            )
 
         # 初始化历史记录
         history = projected_history if history is None and session_id is not None else (history or [])
@@ -748,6 +916,130 @@ class LightAgent:
             return result
         return self._format_run_result(result, result_format, traceid)
 
+    def _workspace_clone(self):
+        """Isolate mutable run/tool/runtime state without cloning API clients."""
+        if self._has_custom_registry:
+            raise ValueError("workspace execution with custom registries requires NativeBackend(agent_factory=...)")
+        clone = copy(self)
+        clone.backend = None
+        clone._workspace_lock = threading.Lock()
+        clone.tool_registry = ToolRegistry()
+        clone.loaded_tools = {}
+        clone.tools = list(self.tools)
+        clone.runtime = AgentRuntime(
+            session_store=self.runtime.session_store,
+            capability_registry=CapabilityRegistry(policy_engine=self.capability_registry.policy_engine),
+            budget_limits=self.runtime.budget.limits,
+        )
+        clone.capability_registry = clone.runtime.registry
+        clone.capability_registry.audit = clone._record_session_event
+        clone._register_builtin_providers()
+        clone._current_session_id = clone._current_turn_id = None
+        clone._session_turn_finished = True
+        clone._session_store_error = None
+        return clone
+
+    def _workspace_security(self, workspace, security_context, user_id="default_user"):
+        from pathlib import Path
+        from .security import SecurityContext
+        root = str(Path(workspace).resolve(strict=True))
+        if security_context is not None:
+            return security_context
+        # A host provider is only usable after explicit application opt-in in
+        # its constructor. Other providers must enforce sandbox confinement.
+        from .workspace import LocalWorkspaceProvider
+        return SecurityContext(
+            agent_id=self.name, user_id=user_id, resources=frozenset({root}),
+            network_allowed=True,
+            sandbox_required=not isinstance(self.execution_provider, LocalWorkspaceProvider),
+        )
+
+    def _run_workspace(self, query, workspace, security_context, timeout, token,
+                       session_id, attempt_id, on_event, result_format, max_iterations, user_id):
+        from .backends import BackendRequest
+        from .backends.native import NativeBackend
+        from .security import CapabilityGate
+        gate = CapabilityGate(policy_engine=self.capability_registry.policy_engine)
+        backend = NativeBackend(self._workspace_clone, self.execution_provider,
+                                max_tool_iterations=max_iterations, gate=gate,
+                                session_store=self.backend_session_store)
+        result = run_async_safely(backend.execute(BackendRequest(
+            prompt=query, workspace=workspace,
+            security_context=self._workspace_security(workspace, security_context, user_id),
+            attempt_id=attempt_id or uuid4().hex, session_id=session_id,
+            timeout=timeout, cancellation_token=token, on_event=on_event,
+        )))
+        self.last_backend_result = result
+        self._current_session_id = result.session_id
+        content = result.content if not result.error else format_error_code("LA-BACKEND", result.error)
+        formatted = RunResult(content=content, usage=result.usage, error=result.error)
+        if result_format == "str":
+            return content
+        if result_format == "dict":
+            from dataclasses import asdict
+            return asdict(formatted)
+        return formatted
+
+    def _run_external_backend(self, query, workspace, security_context, timeout, token,
+                              session_id, attempt_id, on_event, result_format, traceid):
+        from .backends import BackendRequest
+        from .capabilities import CapabilitySpec, CapabilityRisk
+        from .security import CapabilityGate
+        from pathlib import Path
+        try:
+            context = self._workspace_security(workspace, security_context, self._current_user_id)
+            from dataclasses import replace
+            context = replace(context, session_id=self._current_session_id)
+            gate = CapabilityGate(policy_engine=self.capability_registry.policy_engine,
+                                  audit=self._record_session_event)
+            decision = gate.authorize_sync(
+                CapabilitySpec("backend.execute", execute=True, network=True, risk=CapabilityRisk.SENSITIVE),
+                "agent-backend", {"prompt": query, "workspace": workspace}, context,
+                resource=str(Path(workspace).resolve()),
+            )
+            args = decision.arguments or {"prompt": query, "workspace": workspace}
+            resolved_workspace = str(Path(args["workspace"]).resolve(strict=True))
+            if context.resources and resolved_workspace not in context.resources:
+                raise PermissionError("rewritten workspace is outside the security context")
+            if self._session_store_error:
+                raise RuntimeError(self._session_store_error)
+            prompt = f"Agent instructions:\n{self.instructions}\n"
+            if self.role:
+                prompt += f"Agent role:\n{self.role}\n"
+            prompt += f"\nUser request:\n{args['prompt']}"
+
+            def observe(event):
+                self._record_session_event(event.type, event.data)
+                if self._session_store_error:
+                    raise RuntimeError(self._session_store_error)
+                if on_event:
+                    on_event(event)
+
+            result = run_async_safely(self.backend.execute(BackendRequest(
+                prompt=prompt, workspace=resolved_workspace, security_context=context,
+                attempt_id=attempt_id or self._current_run_id, session_id=session_id,
+                timeout=timeout, cancellation_token=token, on_event=observe,
+            )))
+            self.last_backend_result = result
+            self._record_session_event("backend.result", {
+                "backend_session_id": result.session_id, "workspace": resolved_workspace,
+                "status": result.status, "attempt_id": attempt_id or self._current_run_id,
+            })
+            if self._session_store_error:
+                raise RuntimeError(self._session_store_error)
+            error = result.error or (None if result.status == "completed" else result.status)
+            self._current_usage = result.usage
+            content = format_error_code("LA-BACKEND", error) if error else self._apply_output_guardrails(result.content)
+            self._record_session_event("message.received", {"role": "assistant", "content": content})
+            if content.startswith("[LA-"):
+                error = error or content
+            self._finish_run(success=not error, error=error, content=content)
+            return self._format_run_result(content, result_format, traceid, error)
+        except Exception as exc:
+            error = format_lightagent_error(exc, "execute agent backend")
+            self._finish_run(success=False, error=error, stage="backend")
+            return self._format_run_result(error, result_format, traceid, error)
+
     async def arun(self, query: str, **kwargs: Any) -> Any:
         """Run without blocking the caller's event loop.
 
@@ -755,8 +1047,15 @@ class LightAgent:
         compatibility. Native async Providers and Jobs remain on the caller's
         event loop through ``CapabilityRegistry`` and ``AgentRuntime``.
         """
+        if kwargs.get("mode") == "persistent":
+            return await asyncio.to_thread(self.run, query, **kwargs)
         stream = bool(kwargs.get("stream", False))
         if not stream:
+            if kwargs.get("workspace") is not None or self.backend is not None:
+                from .backends.base import cancellable_thread
+                token = (kwargs.get("cancellation_token") or CancellationToken()).child()
+                kwargs["cancellation_token"] = token
+                return await cancellable_thread(lambda: self.run(query, **kwargs), token)
             return await asyncio.to_thread(self.run, query, **kwargs)
         return self.astream(query, **kwargs)
 
@@ -2911,7 +3210,7 @@ class LightAgent:
         EXAMPLE JSON OUTPUT:
         {'tools': [{
             "tool_name": "get_weather",
-            "tool_code": "import requests
+            "tool_code": "import httpx
             def get_weather(
         city_name: str
 ) -> str:
@@ -2925,7 +3224,7 @@ class LightAgent:
         "current_condition": ["temp_C", "FeelsLikeC", "humidity", "weatherDesc", "observation_time"],
     }
     try:
-        resp = requests.get(f"https://wttr.in/{city_name}?format=j1")
+        resp = httpx.get(f"https://wttr.in/{city_name}?format=j1", timeout=10.0)
         resp.raise_for_status()
         resp = resp.json()
         ret = {k: {_v: resp[k][0][_v] for _v in v} for k, v in key_selection.items()}
