@@ -1,4 +1,5 @@
 import asyncio
+import sqlite3
 
 import pytest
 
@@ -115,10 +116,26 @@ def test_rag_scope_owner_and_tenant_filters_are_combined(tmp_path):
         provider.search("runtime", limit=0)
 
 
-def test_rag_like_fallback_reports_degraded_health_and_searches(tmp_path):
-    provider = SqliteFTSRetrievalProvider(tmp_path / "rag.sqlite3")
+@pytest.fixture
+def rag_without_fts5(tmp_path, monkeypatch):
+    class ConnectionWithoutFTS5(sqlite3.Connection):
+        def execute(self, sql, parameters=()):
+            if sql.startswith("CREATE VIRTUAL TABLE") and "USING fts5(" in sql:
+                raise sqlite3.OperationalError("no such module: fts5")
+            return super().execute(sql, parameters)
+
+    def connect_without_fts5(provider):
+        connection = sqlite3.connect(provider.path, factory=ConnectionWithoutFTS5)
+        connection.row_factory = sqlite3.Row
+        return connection
+
+    monkeypatch.setattr(SqliteFTSRetrievalProvider, "_connect", connect_without_fts5)
+    return SqliteFTSRetrievalProvider(tmp_path / "rag.sqlite3")
+
+
+def test_rag_like_fallback_reports_degraded_health_and_searches(rag_without_fts5):
+    provider = rag_without_fts5
     provider.ingest(RetrievalDocument(document_id="fallback", content="Fallback Search Works"))
-    provider._fts5 = False
 
     health = asyncio.run(provider.health())
 
@@ -130,6 +147,8 @@ def test_rag_like_fallback_reports_degraded_health_and_searches(tmp_path):
 
 def test_rag_search_treats_punctuation_and_operators_as_text(tmp_path):
     provider = SqliteFTSRetrievalProvider(tmp_path / "rag.sqlite3", chunk_size=400, chunk_overlap=0)
+    if not provider._fts5:
+        pytest.skip("SQLite build does not provide FTS5")
     provider.ingest(RetrievalDocument(document_id="cpp", content="Use C++ for parsers"))
     provider.ingest(RetrievalDocument(document_id="hello", content="hello world"))
     provider.ingest(RetrievalDocument(document_id="both", content="foo OR bar"))
@@ -146,21 +165,21 @@ def test_rag_search_treats_punctuation_and_operators_as_text(tmp_path):
     assert [item.document_id for item in provider.search("foo OR")] == ["both"]
     assert [item.document_id for item in provider.search("100%")] == ["percent"]
     assert [item.document_id for item in provider.search("checkpoint recovery")] == ["apart"]
+    assert [item.document_id for item in provider.search("foo OR bar")] == ["both"]
+    assert provider.search("check*") == []
     assert provider.search("*") == []
     assert provider.search("NOT") == []
     assert provider.search("a:b") == []
     assert provider.search("(") == []
 
 
-def test_rag_like_fallback_escapes_wildcards(tmp_path):
-    provider = SqliteFTSRetrievalProvider(tmp_path / "rag.sqlite3", chunk_size=200, chunk_overlap=0)
+def test_rag_like_fallback_escapes_wildcards(rag_without_fts5):
+    provider = rag_without_fts5
     provider.ingest(RetrievalDocument(document_id="percent", content="score is 100% done"))
     provider.ingest(RetrievalDocument(document_id="thousand", content="score is 1000 points"))
     provider.ingest(RetrievalDocument(document_id="literal", content="file a_b.txt"))
     provider.ingest(RetrievalDocument(document_id="wild", content="file axb.txt"))
     provider.ingest(RetrievalDocument(document_id="slash", content=r"path a\b end"))
-    provider._fts5 = False
-
     assert [item.document_id for item in provider.search("100%")] == ["percent"]
     assert [item.document_id for item in provider.search("a_b")] == ["literal"]
     assert [item.document_id for item in provider.search(r"a\b")] == ["slash"]

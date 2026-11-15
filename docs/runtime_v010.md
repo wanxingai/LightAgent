@@ -146,6 +146,17 @@ for result in rag.search("deployment", tenant_id="acme"):
     print(result.citation_id, result.content)
 ```
 
+`search()` and `rag.search` accept plain text. With FTS5, all whitespace-separated
+terms must match in a chunk, but they need not be adjacent. SQLite still
+tokenizes text, so punctuation is not necessarily searchable as a literal
+character (for example, `C++` can match the token `C`). If FTS5 is unavailable,
+the LIKE fallback searches for a case-insensitive substring with `%`, `_`,
+and backslashes treated as text.
+
+**Compatibility:** Calls that previously relied on raw FTS5 syntax, such as
+`OR`, phrase queries, column filters, or prefix wildcards, now search for plain
+text instead. No index rebuild or data migration is required.
+
 `SessionSearchProvider` is intentionally separate from knowledge-base RAG and
 returns citations in `session:<session_id>:<sequence>` form.
 
