@@ -1,5 +1,4 @@
 import os
-from loguru import logger
 from LightAgent import LightAgent, LightSwarm
 
 agent = LightAgent(

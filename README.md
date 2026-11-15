@@ -38,7 +38,10 @@ LightAgent is a modular, open-source Python framework with reusable Skills, tool
 
 ---
 ## News
-- <img src="https://img.alicdn.com/imgextra/i3/O1CN01SFL0Gu26nrQBFKXFR_!!6000000007707-2-tps-500-500.png" alt="new" width="30" height="30"/>**[2026-10-01]** LightAgent v0.11.0 Released: Adds opt-in persistent Dynamic DAG multi-agent execution, verification-gated immutable artifacts, restart-safe leases and fencing, and a unified narrowing-only `SecurityContext` with capability and approval controls.
+
+- <img src="https://img.alicdn.com/imgextra/i3/O1CN01SFL0Gu26nrQBFKXFR_!!6000000007707-2-tps-500-500.png" alt="new" width="30" height="30"/>**[2026-11-15]** [LightAgent v1.0.0](https://github.com/wanxingai/LightAgent/releases/tag/v1.0.0) released on GitHub. Adds reconnectable execution, a shared Job/Subagent lifecycle, transactional recovery and optional signed Providers.
+- **[2026-10-04] v0.12.0 implemented in source (not yet published)**: opt-in persistent research, verified DAG experiments, durable inbox, independent chat, a local reference panel, and evaluated version adoption/rollback. See the [research service guide](docs/persistent_research.zh-CN.md).
+- **[2026-10-01]** LightAgent v0.11.0 Released: Adds opt-in persistent Dynamic DAG multi-agent execution, verification-gated immutable artifacts, restart-safe leases and fencing, and a unified narrowing-only `SecurityContext` with capability and approval controls.
 - **[2026-08-15]** LightAgent v0.10.0 Released: Adds the unified event-sourced Agent Runtime with durable Sessions, async execution, Capability Registry and Policy, Inbox/Goals/Budgets, compaction and recovery, Jobs/subagents, standardized Skills/MCP adapters, and SQLite FTS5 retrieval.
 - **[2026-08-15]** LightAgent v0.9.7 Released: Adds a dependency-free Connector contract with offline validation and examples, expands Python executor security checks, introduces an opt-in Mem0 Graph security matrix, and adds a public API compatibility inventory for v1.0 stabilization.
 - **[2026-07-30]** LightAgent v0.9.6 Released: Adds production trace summaries and exporters, deterministic evaluation, durable human approval for tools, handoffs, and LightFlow, plus fail-closed shared Graph Memory admission and audit controls.
@@ -86,6 +89,7 @@ Older release notes are available on [GitHub Releases](https://github.com/wanxin
 | --- | --- | --- |
 | Single agent runtime | `LightAgent` | One agent with model calls, tools, memory, streaming, trace, and guardrails. |
 | Durable runtime state | `Session`, `AgentRuntime` | Replayable events, checkpoints, Inbox, Goals, Budgets, Jobs, and context recovery. |
+| Durable execution (v1.0.0) | `ExecutionService`, `ExecutionHandle` | Ordinary reconnectable tasks without a research contract; explicit host backend and security context. |
 | Capability layer | `CapabilityRegistry`, `PolicyEngine` | Scoped Providers, permission snapshots, lifecycle, policy, and audit. |
 | Unified security context | `SecurityContext`, `CapabilityGate`, `ApprovalToken` | Identity, narrowing-only permissions, authorization, and operation-bound approval. |
 | Multi-agent routing | `LightSwarm` | Role-based delegation across specialized agents. |
@@ -161,6 +165,17 @@ print(report.to_dict())
 Pending approvals can be stored in `JsonReviewStore`; resolve them with an
 `ApprovalDecision`, then rerun with `approval_id=request.request_id`. LightFlow
 also persists step approvals through `flow.approve(...); flow.resume(...)`.
+
+## v1.0.0: Durable Execution And Recovery
+
+- **Reconnectable tasks:** [`ExecutionService`](docs/durable_execution.zh-CN.md) runs ordinary tasks through host-registered backends, without a research contract. Use `ExecutionHandle` after a restart to reconnect and inspect state, events, and receipts. See the [offline example](example/15.durable_execution.py).
+- **State and recovery:** Jobs and Subagents share a lifecycle, leases, and cooperative cancellation. SQLite transactions protect Session state, messages, and budget accounting. Restored Subagents require explicit host binding, and uncertain external outcomes must be reconciled before retrying. See [Job/history migration](docs/jobs_history_migration.zh-CN.md) and the [offline migration example](example/16.jobs_and_history.py).
+- **Safety and installation:** Optional [signed Provider bindings](docs/provider_supply_chain.zh-CN.md) verify publisher signatures and require explicit host approval without replacing runtime policy. Skills and PyYAML remain in the base install. MCP, Mem0, Langfuse, LiteLLM, OSS/NOS, and signature verification are optional.
+- **Compatibility:** Ordinary `run()` and streaming behavior are unchanged. Research contracts, evaluation, version promotion, and the debug panel live in the separate LightResearch extension. Legacy `mode="persistent"` keeps its research semantics and requires `LightResearch.enable_legacy_api()`. See the [research migration guide](docs/persistent_research.zh-CN.md).
+
+See the [GitHub Release](https://github.com/wanxingai/LightAgent/releases/tag/v1.0.0)
+for release notes and the [validation record](docs/v100_validation.zh-CN.md) for the scope of testing.
+The core ships no production UI, and default CI does not require LightResearch.
 
 ## v0.11.0: Verified Dynamic Workflows
 
@@ -306,17 +321,37 @@ See the [roadmap](roadmap.md) for delivered milestones and future plans. Inbox, 
 
 ## 🛠️ Quick Start
 
-### Install the latest version of LightAgent
+### Install LightAgent
+
+Install the package available on PyPI:
 
 ```bash
 pip install lightagent
 ```
 
-(Optional installation) Install the Mem0 package via pip:
+To install the exact v1.0.0 release from GitHub:
 
 ```bash
-pip install mem0ai
+python -m pip install 'git+https://github.com/wanxingai/LightAgent.git@v1.0.0'
 ```
+
+For a local v1.0.0 checkout, run the following from its root.
+Install only the extras you need:
+
+```bash
+python -m pip install .              # base only
+python -m pip install '.[mcp]'       # keep the existing setup_mcp() configuration
+python -m pip install '.[mem0]'      # from mem0 import Memory; pass it as memory=
+python -m pip install '.[langfuse]'  # keep the existing tracetools configuration
+```
+
+Use `python -m pip install '.[all]'` to install all optional Python dependencies
+for MCP, Mem0, Langfuse, LiteLLM, OSS/NOS, and Provider signature verification.
+This does not install LightResearch or the Codex CLI.
+
+Skills and their PyYAML dependency are included in the base install. Discovery
+still scans `skills/` (or the configured `skills_directories`). Set
+`auto_discover_skills=False` when you do not want to scan.
 
 Alternatively, you can use Mem0 on a hosted platform by clicking [here](https://www.mem0.ai/).
 
@@ -581,7 +616,8 @@ Recommended production controls:
 - Use `enforce_expires_at=True` when memory records carry expiration metadata.
 
 ### 8. Langfuse Log Tracking
-LightAgent can send trace data to Langfuse through `tracetools` configuration. For most local debugging, start with built-in trace events:
+With the `langfuse` extra installed, LightAgent can send trace data through the existing
+`tracetools["TraceToolConfig"]` configuration. Built-in trace events do not require Langfuse:
 
 ```python
 result = agent.run("Debug this workflow.", result_format="object", trace=True)

@@ -60,6 +60,47 @@ def spec(task_id="root", *, worker="worker", verifier="verify", decomposer=None,
     )
 
 
+@pytest.mark.parametrize("signature", ["positional_only", "keyword_only", "no_args", "keyword_args", "var_args"])
+def test_worker_factory_passes_context_according_to_signature(tmp_path, signature):
+    received = []
+
+    def worker(context):
+        return TaskOutcome.candidate(context.task.spec.task_id)
+
+    def positional_only(context, /):
+        received.append(context)
+        return worker
+
+    async def keyword_only(*, context):
+        received.append(context)
+        return worker
+
+    def no_args():
+        return worker
+
+    def keyword_args(**kwargs):
+        received.append(kwargs["context"])
+        return worker
+
+    def var_args(*context):
+        received.extend(context)
+        return worker
+
+    factories = {
+        "positional_only": positional_only,
+        "keyword_only": keyword_only,
+        "no_args": no_args,
+        "keyword_args": keyword_args,
+        "var_args": var_args,
+    }
+    dag = make_dag(tmp_path, CallableVerifier("verify", lambda request: request.candidate_content == b"root"))
+    dag.register_worker_factory("worker", factories[signature])
+    dag.create_run([spec()], run_id="factory", context=security())
+
+    assert dag.run("factory").success
+    assert [context.task.spec.task_id for context in received] == ([] if signature == "no_args" else ["root"])
+
+
 def test_lightdag_requires_explicit_verifier_and_structured_worker_output(tmp_path):
     dag = make_dag(tmp_path, CallableVerifier("verify", lambda request: True), config=DAGConfig(max_attempts_per_task=1))
     dag.register_worker("worker", lambda context: "plain text is not a TaskOutcome")

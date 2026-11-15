@@ -2,6 +2,8 @@
 
 一个专业的财经分析工具包，为AI Agent提供全面的财经分析能力。
 
+**LightAgent v1.0.0（2026-11-15）：** 已在 [GitHub 正式发布](https://github.com/wanxingai/LightAgent/releases/tag/v1.0.0)。LightAgent 基础安装继续包含 Skills 和 PyYAML，可发现 `SKILL.md`；本工具包自身的依赖仍按下方步骤安装。见 [LightAgent v1.0.0 功能介绍](../../README.zh-CN.md#v100通用持久执行与恢复)。
+
 ## 🌟 特性
 
 ### 核心功能

@@ -7,7 +7,6 @@
 """
 
 import os
-import yaml
 import re
 import subprocess
 import tempfile
@@ -45,6 +44,7 @@ class SkillManager:
         discovered = []
         self.skills = {}
         self.skill_conflicts = []
+        parse_frontmatter = None
 
         for precedence, base_dir in enumerate(self.skills_directories):
             if not os.path.exists(base_dir):
@@ -55,8 +55,18 @@ class SkillManager:
                 skill_file = os.path.join(skill_path, "SKILL.md")
 
                 if os.path.isdir(skill_path) and os.path.exists(skill_file):
+                    if parse_frontmatter is None:
+                        try:
+                            from yaml import safe_load as parse_frontmatter
+                        except ModuleNotFoundError as error:
+                            if error.name != "yaml":
+                                raise
+                            raise ImportError(
+                                f"Found a Skill at {skill_file}, but reading SKILL.md requires PyYAML. "
+                                "Reinstall LightAgent with its dependencies or run pip install 'PyYAML>=6.0.1'."
+                            ) from error
                     try:
-                        skill = self._load_skill_metadata(skill_path)
+                        skill = self._load_skill_metadata(skill_path, parse_frontmatter)
                         if skill:
                             skill.source_directory = str(Path(base_dir).resolve())
                             skill.precedence = precedence
@@ -107,7 +117,7 @@ class SkillManager:
             contents.append(f"# {instruction_file}\n{content.strip()}")
         return "\n\n".join(contents)
 
-    def _load_skill_metadata(self, skill_path: str) -> Optional[Skill]:
+    def _load_skill_metadata(self, skill_path: str, parse_frontmatter) -> Optional[Skill]:
         """从SKILL.md加载技能元数据（仅frontmatter）"""
         skill_file = os.path.join(skill_path, "SKILL.md")
 
@@ -119,7 +129,7 @@ class SkillManager:
         if not frontmatter_match:
             raise ValueError(f"Missing frontmatter in {skill_file}")
 
-        frontmatter = yaml.safe_load(frontmatter_match.group(1))
+        frontmatter = parse_frontmatter(frontmatter_match.group(1))
 
         # 验证必需字段
         if 'name' not in frontmatter or 'description' not in frontmatter:

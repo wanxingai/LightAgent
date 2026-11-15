@@ -37,6 +37,12 @@ or external server is required. The probe accepts only local URLs.
 2026-10-28: the only member served initialize, initialized, tools/list, and
 tools/call for all three SDK versions after the schema-field compatibility fix.
 The echo confirmed credential-header propagation and the probe confirmed cleanup.
+
+2026-11-14: all three versions passed again with the installed v0.13 development
+wheel and its `mcp` extra. The final three probes each produced four local POST
+requests (statuses 200, 202, 200, 200). Each returned the credential-provider
+header and left no registered sessions open. This repeats the stateless HTTP
+contract check; it does not exercise production authentication or services.
 <!-- end:observations -->
 
 ## What didn't work
