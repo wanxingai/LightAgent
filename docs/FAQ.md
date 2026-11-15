@@ -248,6 +248,10 @@ Configure MCP server settings and call `setup_mcp()` before running the agent. L
 
 Skills are discovered from skill directories containing `SKILL.md` files. By default, LightAgent looks under `skills/` and can expose skill activation tools when skills are discovered. Keep skill instructions focused and pair them with normal Python tools when external actions are required.
 
+The base install includes PyYAML for parsing Skill metadata. If a dependency-free
+installation finds a `SKILL.md` without PyYAML, discovery reports how to fix the
+installation rather than skipping the Skill.
+
 ### How do I enable streaming?
 
 Pass `stream=True` to `run()`. The method returns a generator that yields model chunks and tool events.

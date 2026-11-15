@@ -40,7 +40,8 @@
 ---
 
 ## ニュース
-- <img src="https://img.alicdn.com/imgextra/i3/O1CN01SFL0Gu26nrQBFKXFR_!!6000000007707-2-tps-500-500.png" alt="new" width="30" height="30"/>**[2026-10-01]** LightAgent v0.11.0 リリース：オプトインの永続的な動的マルチエージェント DAG、検証後にのみ公開する不変成果物、リースと fencing による再開、一方向に権限を制限する統一 `SecurityContext` と承認制御を追加しました。
+- <img src="https://img.alicdn.com/imgextra/i3/O1CN01SFL0Gu26nrQBFKXFR_!!6000000007707-2-tps-500-500.png" alt="new" width="30" height="30"/>**[2026-11-15]** [LightAgent v1.0.0](https://github.com/wanxingai/LightAgent/releases/tag/v1.0.0) を GitHub で正式にリリースしました。再接続可能な実行、Job とサブエージェントの統一ライフサイクル、トランザクションによる復旧、オプションの Provider 署名検証を追加しました。
+- **[2026-10-01]** LightAgent v0.11.0 リリース：オプトインの永続的な動的マルチエージェント DAG、検証後にのみ公開する不変成果物、リースと fencing による再開、一方向に権限を制限する統一 `SecurityContext` と承認制御を追加しました。
 - **[2026-08-15]** LightAgent v0.10.0 リリース：永続 Session、非同期実行、Capability Registry と Policy、Inbox、Goals、Budgets、Jobs、サブエージェント、コンテキスト圧縮、SQLite FTS5 検索を備えたイベントベースの Agent Runtime を導入しました。
 - **[2026-08-15]** LightAgent v0.9.7 リリース：オフライン検証とサンプルを備えた軽量かつ依存関係のない Connector 契約、Python executor のセキュリティ検査、オプトインの Mem0 Graph セキュリティ検証マトリクスを追加し、公開 API 互換性一覧によって v1.0 の安定化に備えました。
 - **[2026-07-30]** LightAgent v0.9.6 リリース：本番向け Trace 要約とエクスポーター、決定的評価、ツール・handoff・LightFlow の永続的な人間承認、共有 Graph Memory の fail-closed 書き込み承認と監査制御を追加。
@@ -110,6 +111,15 @@ LightAgent はデフォルトの呼び出しを簡単に保ちつつ、本番向
 | 動的ワークフロー | `LightDAG(...).create_run(...)` | タスクを動的に提案し、公開前に結果を検証します。 |
 | 永続 Session | `agent.run(query, session_id="project-42")` | 継続とリプレイには永続 SessionStore の設定が必要です。 |
 | 非同期 | `await agent.arun(query)` | asyncio アプリケーション向けの非ブロッキング入口。 |
+
+## v1.0.0: 永続実行と復旧
+
+- **再接続可能なタスク:** `ExecutionService` はホストが登録したバックエンドで通常タスクを実行します。再起動後は `ExecutionHandle` で再接続し、状態を確認できます。
+- **状態管理と復旧:** Job とサブエージェントは協調的なキャンセルを含む共通のライフサイクルを使用します。メッセージと予算の記録は SQLite のトランザクションで管理し、結果が不明な場合はホストが確認するまで外部操作を自動再実行しません。
+- **安全性とインストール:** 署名付き Provider ではランタイムのポリシーに加えて、ホストによる明示的な承認を要求できます。基本インストールには Skills と PyYAML が含まれます。MCP、Mem0、Langfuse、LiteLLM、OSS/NOS、署名検証はオプションです。
+- **互換性:** 通常の `run()` とストリーミングは従来どおりです。研究機能は独立した LightResearch 拡張に移り、従来の `mode="persistent"` には明示的な登録が必要です。
+
+[実行ガイド](docs/durable_execution.zh-CN.md) · [Job と履歴の移行](docs/jobs_history_migration.zh-CN.md) · [オフライン例](example/15.durable_execution.py)
 
 ## v0.11.0: 検証付き動的ワークフロー
 

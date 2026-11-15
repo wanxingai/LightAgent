@@ -369,6 +369,10 @@ class SkillProviderAdapter(BaseCapabilityProvider):
             ),
         ])
 
+    def attestation_state(self):
+        return {"directories": list(self.skill_manager.skills_directories),
+                "skills": {name: skill.path for name, skill in self.skill_manager.skills.items()}}
+
     async def invoke(self, capability: str, **arguments: Any) -> Any:
         if capability == "skill.list":
             return [asdict(skill) for skill in self.skill_manager.skills.values()]
@@ -396,6 +400,10 @@ class MCPProviderAdapter(BaseCapabilityProvider):
             )
             for name in names
         ])
+
+    def attestation_state(self):
+        return {"server_configuration": getattr(self.manager, "config", {}),
+                "tools": sorted(self.capabilities)}
 
     async def invoke(self, capability: str, **arguments: Any) -> Any:
         tool_name = capability.removeprefix("mcp.")

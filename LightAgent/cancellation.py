@@ -65,7 +65,11 @@ def accepts_keyword(function: Callable[..., Any], keyword: str) -> bool:
         parameters = inspect.signature(function).parameters
     except (TypeError, ValueError):
         return False
-    return keyword in parameters or any(
+    parameter = parameters.get(keyword)
+    return (parameter is not None and parameter.kind in (
+        inspect.Parameter.POSITIONAL_OR_KEYWORD,
+        inspect.Parameter.KEYWORD_ONLY,
+    )) or any(
         parameter.kind == inspect.Parameter.VAR_KEYWORD
         for parameter in parameters.values()
     )

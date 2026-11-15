@@ -38,7 +38,8 @@
 ---
 
 ## 뉴스
-- <img src="https://img.alicdn.com/imgextra/i3/O1CN01SFL0Gu26nrQBFKXFR_!!6000000007707-2-tps-500-500.png" alt="new" width="30" height="30"/>**[2026-10-01]** LightAgent v0.11.0 릴리스: 선택형 영속 동적 다중 에이전트 DAG, 검증 후에만 공개되는 불변 산출물, lease와 fencing을 통한 복구, 권한을 축소만 할 수 있는 통합 `SecurityContext` 및 승인 제어를 추가했습니다.
+- <img src="https://img.alicdn.com/imgextra/i3/O1CN01SFL0Gu26nrQBFKXFR_!!6000000007707-2-tps-500-500.png" alt="new" width="30" height="30"/>**[2026-11-15]** [LightAgent v1.0.0](https://github.com/wanxingai/LightAgent/releases/tag/v1.0.0)이 GitHub에 정식 릴리스되었습니다. 재연결 가능한 실행, Job과 하위 에이전트의 통합 수명 주기, 트랜잭션 기반 복구와 선택형 Provider 서명 검증을 추가했습니다.
+- **[2026-10-01]** LightAgent v0.11.0 릴리스: 선택형 영속 동적 다중 에이전트 DAG, 검증 후에만 공개되는 불변 산출물, lease와 fencing을 통한 복구, 권한을 축소만 할 수 있는 통합 `SecurityContext` 및 승인 제어를 추가했습니다.
 - **[2026-08-15]** LightAgent v0.10.0 릴리스: 영속 Session, 비동기 실행, Capability Registry와 Policy, Inbox, Goals, Budgets, Jobs, 하위 에이전트, 컨텍스트 압축 및 SQLite FTS5 검색을 갖춘 이벤트 기반 Agent Runtime을 도입했습니다.
 - **[2026-08-15]** LightAgent v0.9.7 릴리스: 오프라인 검증과 예제를 포함한 경량 무의존성 Connector 계약을 추가하고, Python executor 보안 검사를 강화했으며, 선택형 Mem0 Graph 보안 검증 매트릭스와 v1.0 안정화를 위한 공개 API 호환성 목록을 도입했습니다.
 - **[2026-07-30]** LightAgent v0.9.6 릴리스: 프로덕션 Trace 요약 및 내보내기, 결정론적 평가, 도구·handoff·LightFlow의 지속 가능한 사람 승인, 공유 Graph Memory의 fail-closed 쓰기 승인 및 감사 제어를 추가했습니다.
@@ -108,6 +109,15 @@ LightAgent는 기본 호출 경로를 단순하게 유지하면서 운영 제어
 | 동적 워크플로 | `LightDAG(...).create_run(...)` | 작업을 동적으로 제안하고 게시 전에 결과를 검증합니다. |
 | 영속 Session | `agent.run(query, session_id="project-42")` | 이어서 실행하거나 재생하려면 영속 SessionStore를 설정해야 합니다. |
 | 비동기 | `await agent.arun(query)` | asyncio 애플리케이션용 비차단 진입점입니다. |
+
+## v1.0.0: 영속 실행과 복구
+
+- **재연결 가능한 작업:** `ExecutionService`는 호스트가 등록한 백엔드에서 일반 작업을 실행합니다. 다시 시작한 뒤에도 `ExecutionHandle`로 재연결해 상태를 확인할 수 있습니다.
+- **상태 관리와 복구:** Job과 하위 에이전트가 협력적 취소를 포함한 수명 주기를 공유합니다. 메시지와 예산 기록은 SQLite 트랜잭션으로 관리하며, 결과가 불확실하면 호스트가 확인할 때까지 외부 작업을 자동으로 반복하지 않습니다.
+- **보안 및 설치:** 서명된 Provider에 대해 런타임 정책과 별도로 호스트의 명시적 승인을 요구할 수 있습니다. 기본 설치에는 Skills와 PyYAML이 포함됩니다. MCP, Mem0, Langfuse, LiteLLM, OSS/NOS 및 서명 검증은 선택 사항입니다.
+- **호환성:** 일반 `run()` 호출과 스트리밍은 기존과 동일합니다. 연구 기능은 별도 LightResearch 확장으로 이동했으며, 기존 `mode="persistent"`에는 명시적 등록이 필요합니다.
+
+[실행 가이드](docs/durable_execution.zh-CN.md) · [Job 및 기록 이전](docs/jobs_history_migration.zh-CN.md) · [오프라인 예제](example/15.durable_execution.py)
 
 ## v0.11.0: 검증 기반 동적 워크플로
 
