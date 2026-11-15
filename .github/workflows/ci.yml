@@ -51,7 +51,8 @@ jobs:
 
       - name: Verify base install with Skills and without MCP
         run: |
-          poetry run python -c "from importlib.util import find_spec; import yaml; assert find_spec('mcp') is None"
+          # The checkout's mcp/ examples form a namespace even without the SDK.
+          poetry run python -c "from importlib.metadata import distributions; import yaml; assert not list(distributions(name='mcp'))"
           poetry run python -m pytest -q tests/test_optional_dependencies.py tests/test_optional_skills.py tests/test_v012_app_server.py -k 'not real_mcp_stdio'
           poetry run python tests/wheel_smoke.py "$RUNNER_TEMP"/lightagent-wheels/*.whl
 
