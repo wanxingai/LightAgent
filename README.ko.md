@@ -38,7 +38,7 @@
 ---
 
 ## 뉴스
-- <img src="https://img.alicdn.com/imgextra/i3/O1CN01SFL0Gu26nrQBFKXFR_!!6000000007707-2-tps-500-500.png" alt="new" width="30" height="30"/>**[2026-11-15]** LightAgent v1.0.0이 `main`에 병합되었습니다([#128](https://github.com/wanxingai/LightAgent/pull/128)). 정식 릴리스는 아직 공개되지 않았습니다. 재연결 가능한 실행, Job과 하위 에이전트의 통합 수명 주기, 트랜잭션 기반 복구와 선택형 Provider 서명 검증을 추가했습니다.
+- <img src="https://img.alicdn.com/imgextra/i3/O1CN01SFL0Gu26nrQBFKXFR_!!6000000007707-2-tps-500-500.png" alt="new" width="30" height="30"/>**[2026-11-15]** [LightAgent v1.0.0](https://github.com/wanxingai/LightAgent/releases/tag/v1.0.0)이 GitHub에 정식 릴리스되었습니다. 재연결 가능한 실행, Job과 하위 에이전트의 통합 수명 주기, 트랜잭션 기반 복구와 선택형 Provider 서명 검증을 추가했습니다.
 - **[2026-10-01]** LightAgent v0.11.0 릴리스: 선택형 영속 동적 다중 에이전트 DAG, 검증 후에만 공개되는 불변 산출물, lease와 fencing을 통한 복구, 권한을 축소만 할 수 있는 통합 `SecurityContext` 및 승인 제어를 추가했습니다.
 - **[2026-08-15]** LightAgent v0.10.0 릴리스: 영속 Session, 비동기 실행, Capability Registry와 Policy, Inbox, Goals, Budgets, Jobs, 하위 에이전트, 컨텍스트 압축 및 SQLite FTS5 검색을 갖춘 이벤트 기반 Agent Runtime을 도입했습니다.
 - **[2026-08-15]** LightAgent v0.9.7 릴리스: 오프라인 검증과 예제를 포함한 경량 무의존성 Connector 계약을 추가하고, Python executor 보안 검사를 강화했으며, 선택형 Mem0 Graph 보안 검증 매트릭스와 v1.0 안정화를 위한 공개 API 호환성 목록을 도입했습니다.
