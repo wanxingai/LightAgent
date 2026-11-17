@@ -49,7 +49,7 @@ EvaluationCase(
 | `expected_tools` | Every named tool must appear in a `tool_call` event. |
 | `forbidden_tools` | Named tools must not be called. |
 | `expected_trace_events` | Required lifecycle, policy, memory, or review events. |
-| `expect_success` | Whether the structured result should have no error. |
+| `expect_success` | Whether the run should return without an error or exception, including exceptions with an empty message. |
 | `max_latency_ms` | End-to-end case latency budget. |
 | `require_recovery` | The run must succeed after at least one traced retry. |
 | `checks` | Application-defined callables for domain assertions. |

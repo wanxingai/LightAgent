@@ -1,3 +1,5 @@
+import pytest
+
 from LightAgent import EvaluationCase, LightEvaluator, RunResult
 
 
@@ -89,3 +91,24 @@ def test_evaluator_supports_recovery_and_custom_checks():
 
     assert report.results[0].passed is True
     assert report.results[0].summary.retry_count == 1
+
+
+@pytest.mark.parametrize("message", ["", "failed"])
+@pytest.mark.parametrize("expect_success", [False, True])
+def test_evaluator_preserves_exceptions_with_empty_messages(message: str, expect_success: bool):
+    class RaisingTarget:
+        def run(self, query: str, **kwargs: object) -> None:
+            raise ValueError(message)
+
+    report = LightEvaluator().run(RaisingTarget(), [EvaluationCase(
+        name="exception",
+        query="run",
+        expect_success=expect_success,
+    )])
+
+    result = report.results[0]
+    assert result.error == message
+    assert result.passed is (not expect_success)
+    assert result.failures == (
+        ["expected success=True, got success=False"] if expect_success else []
+    )
