@@ -125,7 +125,7 @@ class LightEvaluator:
         duration_ms = round((time.perf_counter() - started) * 1000, 3)
 
         content = "" if result is None else str(getattr(result, "content", result))
-        error = raised_error or getattr(result, "error", None)
+        error = raised_error if raised_error is not None else getattr(result, "error", None)
         trace = list(getattr(result, "trace", []) or [])
         usage = getattr(result, "usage", None)
         summary = summarize_trace(trace, usage=usage, pricing=self.pricing)
