@@ -117,15 +117,12 @@ def run_async_safely(coro: Coroutine[Any, Any, T]) -> T:
         return future.result()
 
 
-_MESSAGE_FIELDS = ("role", "content", "reasoning_content", "tool_calls", "function_call")
-
-
 def _json_native(value: Any) -> Any:
     """Return a JSON-native copy of a provider value or message part.
 
     Handles dicts, lists, Pydantic/SDK models (``model_dump``/``to_dict``) and
-    plain attribute objects, so a provider response never leaks into
-    ``chat_params`` as an opaque object.
+    plain attribute objects. Anything else raises instead of landing in
+    ``chat_params`` as an opaque object or shrinking to an empty dict.
     """
     if value is None or isinstance(value, (str, int, float, bool)):
         return value
@@ -142,23 +139,16 @@ def _json_native(value: Any) -> Any:
                 continue
             if isinstance(dumped, dict):
                 return _json_native(dumped)
-    try:
-        attributes = vars(value)
-    except TypeError:
-        attributes = {}
-    if attributes:
-        return {
-            str(key): _json_native(item)
-            for key, item in attributes.items()
-            if not key.startswith("_")
-        }
 
-    # Handle slot-based message objects by reading fields from _MESSAGE_FIELDS.
-    return {
-        field: _json_native(getattr(value, field))
-        for field in _MESSAGE_FIELDS
-        if getattr(value, field, None) is not None
+    attributes = getattr(value, "__dict__", None) or {}
+    public = {
+        str(key): _json_native(item)
+        for key, item in attributes.items()
+        if not key.startswith("_")
     }
+    if public:
+        return public
+    raise TypeError(f"cannot normalize {type(value).__name__} to JSON-native data")
 
 
 def _coerce_assistant_message(message: Any) -> Dict[str, Any]:
@@ -168,6 +158,8 @@ def _coerce_assistant_message(message: Any) -> Dict[str, Any]:
     ``role``, ``content``, ``reasoning_content`` and ``tool_calls``.
     """
     data = _json_native(message)
+    if not isinstance(data, dict):
+        raise TypeError(f"assistant message must normalize to a dict, got {type(message).__name__}")
     payload: Dict[str, Any] = {
         "role": "assistant",
         "content": data.get("content") or "",

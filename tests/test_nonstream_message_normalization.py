@@ -72,7 +72,11 @@ class TwoStepCompletions:
                 ),
             )
             return SimpleNamespace(choices=[SimpleNamespace(
-                message=SimpleNamespace(content=None, tool_calls=[tool_call]))])
+                message=SimpleNamespace(
+                    content=None,
+                    reasoning_content="deepseek reasoning",
+                    tool_calls=[tool_call],
+                ))])
         return SimpleNamespace(choices=[SimpleNamespace(
             message=SimpleNamespace(content="final-reply", tool_calls=None))])
 
@@ -103,7 +107,7 @@ def test_nonstream_tool_turn_stores_assistant_message_as_dict():
     assert len(assistants) == 1
     assert isinstance(assistants[0], dict)
     assert assistants[0]["content"] == ""
-    assert assistants[0]["reasoning_content"] == ""
+    assert assistants[0]["reasoning_content"] == "deepseek reasoning"
     assert assistants[0]["tool_calls"] == [{
         "id": "call_1",
         "type": "function",
@@ -191,27 +195,6 @@ def test_openai_sdk_message_is_normalized():
     assert assistant["content"] == ""
     assert assistant["tool_calls"][0]["id"] == "call_sdk"
     assert assistant["tool_calls"][0]["function"]["name"] == "echo_tool"
-
-
-def test_reasoning_content_is_preserved_for_attribute_objects():
-    def factory(tool_name, tool_args):
-        return SimpleNamespace(
-            role="assistant",
-            content=None,
-            reasoning_content="deepseek reasoning",
-            tool_calls=[SimpleNamespace(
-                id="call_reasoning",
-                function=SimpleNamespace(name=tool_name, arguments=json.dumps(tool_args)),
-            )],
-        )
-
-    completions = TwoStepCompletions(message_factory=factory)
-    agent = make_agent(completions)
-
-    agent.run("use echo_tool", tools=[echo_tool])
-
-    assistant = assistant_messages(agent)[0]
-    assert assistant["reasoning_content"] == "deepseek reasoning"
 
 
 def test_non_string_arguments_are_serialized():
@@ -303,8 +286,23 @@ def test_dict_assistant_message_is_not_mutated():
     assert assistant["tool_calls"][0]["id"] == "call_mapping"
 
 
-@pytest.mark.parametrize("budget", [None, ContextBudget(max_tokens=100_000, reserved_output_tokens=1024)])
-def test_stream_assistant_message_stays_json_native(budget):
+def test_non_dict_message_shape_raises_type_error():
+    from LightAgent.core import _coerce_assistant_message
+
+    with pytest.raises(TypeError):
+        _coerce_assistant_message("assistant")
+
+
+def test_unknown_object_raises_instead_of_becoming_empty_dict():
+    from datetime import datetime, timezone
+
+    from LightAgent.core import _json_native
+
+    with pytest.raises(TypeError):
+        _json_native(datetime(2026, 11, 17, tzinfo=timezone.utc))
+
+
+def test_stream_assistant_message_stays_json_native():
     class StreamCompletions:
         def __init__(self):
             self.calls = []
@@ -337,7 +335,10 @@ def test_stream_assistant_message_stays_json_native(budget):
             ])
 
     completions = StreamCompletions()
-    agent = make_agent(completions, context_budget=budget)
+    agent = make_agent(
+        completions,
+        context_budget=ContextBudget(max_tokens=100_000, reserved_output_tokens=1024),
+    )
 
     list(agent.run("use echo_tool", tools=[echo_tool], stream=True))
 
