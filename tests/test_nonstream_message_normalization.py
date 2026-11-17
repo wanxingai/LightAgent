@@ -103,11 +103,32 @@ def test_nonstream_tool_turn_stores_assistant_message_as_dict():
     assert len(assistants) == 1
     assert isinstance(assistants[0], dict)
     assert assistants[0]["content"] == ""
+    assert assistants[0]["reasoning_content"] == ""
     assert assistants[0]["tool_calls"] == [{
         "id": "call_1",
         "type": "function",
         "function": {"name": "echo_tool", "arguments": json.dumps({})},
     }]
+    assert set(assistants[0]) == {"role", "content", "reasoning_content", "tool_calls"}
+
+
+def test_multimodal_content_is_json_native():
+    from LightAgent.core import _coerce_assistant_message
+
+    message = SimpleNamespace(
+        role="assistant",
+        content=[SimpleNamespace(type="text", text="checking")],
+        reasoning_content=None,
+        tool_calls=[SimpleNamespace(
+            id="call_1",
+            function=SimpleNamespace(name="echo_tool", arguments="{}"),
+        )],
+    )
+
+    assistant = _coerce_assistant_message(message)
+
+    assert assistant["content"] == [{"type": "text", "text": "checking"}]
+    json.dumps(assistant)
 
 
 def test_nonstream_tool_turn_with_context_budget_issues_second_request():
