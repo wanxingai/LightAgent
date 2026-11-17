@@ -345,3 +345,58 @@ def test_stream_assistant_message_stays_json_native():
     assistant = assistant_messages(agent)[0]
     assert isinstance(assistant, dict)
     assert assistant["tool_calls"][0]["id"] == "call_stream"
+
+
+def test_history_unsupported_object_raises_after_run_finishes():
+    store = InMemorySessionStore()
+    completions = TwoStepCompletions()
+    agent = make_agent(completions, session_store=store)
+
+    with pytest.raises(TypeError) as excinfo:
+        agent.run(
+            "continue",
+            history=[{"role": "user", "content": "hi"}, object()],
+            session_id="session-bad-history",
+        )
+
+    # 定位到具体条目，且在第一笔请求之前就失败
+    assert "history[1]" in str(excinfo.value)
+    assert completions.calls == []
+    session = store.get("session-bad-history")
+    assert "turn.failed" in [event.type for event in session.events]
+    assert session.replay().incomplete_turns == []
+    assert agent._session_turn_finished is True
+
+
+def test_nonstream_unnormalizable_message_returns_error_result():
+    class SlotToolMessage:
+        __slots__ = ("content", "reasoning_content", "tool_calls")
+
+        def __init__(self):
+            self.content = None
+            self.reasoning_content = ""
+            self.tool_calls = [SimpleNamespace(
+                id="call_slot",
+                function=SimpleNamespace(name="echo_tool", arguments="{}"),
+            )]
+
+    completions = TwoStepCompletions(
+        message_factory=lambda tool_name, tool_args: SlotToolMessage())
+    agent = make_agent(completions)
+
+    result = agent.run("use echo_tool", tools=[echo_tool], result_format="object")
+
+    assert result.content.startswith("[LA-")
+    assert result.error is not None and result.error.startswith("[LA-")
+    assert len(completions.calls) == 1
+    assert assistant_messages(agent) == []
+
+
+def test_namedtuple_is_rejected_instead_of_becoming_a_list():
+    from collections import namedtuple
+
+    from LightAgent.core import _json_native
+
+    Message = namedtuple("Message", "role content")
+    with pytest.raises(TypeError):
+        _json_native(Message("assistant", "hi"))

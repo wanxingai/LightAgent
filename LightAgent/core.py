@@ -129,6 +129,11 @@ def _json_native(value: Any) -> Any:
     if isinstance(value, dict):
         return {str(key): _json_native(item) for key, item in value.items()}
     if isinstance(value, (list, tuple)):
+        # namedtuple 也是 tuple，直接展开会静默变成一条 list 消息
+        if hasattr(value, "_asdict"):
+            raise TypeError(
+                f"cannot normalize {type(value).__name__} (namedtuple) to JSON-native data"
+            )
         return [_json_native(item) for item in value]
     for dumper in ("to_dict", "model_dump"):
         method = getattr(value, dumper, None)
@@ -868,7 +873,17 @@ class LightAgent:
         history = projected_history if history is None and session_id is not None else (history or [])
         # 调用方可能直接把 provider 消息对象塞进 history（如 response.choices[0].message），
         # 统一转成 JSON 原生类型，否则 context_budget 估算与事件序列化会拿到不可序列化对象
-        history = [_json_native(item) for item in history]
+        normalized_history = []
+        for index, item in enumerate(history):
+            try:
+                normalized_history.append(_json_native(item))
+            except TypeError as exc:
+                # 不支持的对象属于调用方参数错误：先收尾再抛，避免留下未完成的 turn
+                error = f"history[{index}]: {exc}"
+                self._record_trace("error", {"stage": "message_normalization", "error": error})
+                self._finish_run(success=False, error=error, stage="message_normalization")
+                raise TypeError(error) from exc
+        history = normalized_history
 
         # 处理运行时传入的工具
         runtime_tools = []
@@ -2295,9 +2310,16 @@ class LightAgent:
                 # 将工具调用和响应添加到消息列表中
                 # 归一化为 dict：provider 返回的对象不一定是 JSON 原生类型，
                 # 直接存入会让 context_budget / 事件序列化拿到不可序列化对象
-                self.chat_params["messages"].append(
-                    _coerce_assistant_message(response.choices[0].message)
-                )
+                try:
+                    assistant_message = _coerce_assistant_message(response.choices[0].message)
+                except TypeError as exc:
+                    error_msg = format_error_code(
+                        "LA-UNKNOWN", f"assistant message normalization failed: {exc}")
+                    self.log("ERROR", "non_stream message_normalization_failed", {"error": error_msg})
+                    self._record_trace("error", {"stage": "message_normalization", "error": error_msg})
+                    self._finish_run(success=False, error=error_msg, stage="message_normalization")
+                    return error_msg
+                self.chat_params["messages"].append(assistant_message)
 
                 # 遍历所有工具调用
                 for tool_call in tool_calls:
