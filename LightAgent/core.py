@@ -120,64 +120,71 @@ def run_async_safely(coro: Coroutine[Any, Any, T]) -> T:
 _MESSAGE_FIELDS = ("role", "content", "reasoning_content", "tool_calls", "function_call")
 
 
-def _message_to_dict(message: Any) -> Dict[str, Any]:
-    """Return a JSON-native copy of a provider message or message part.
+def _json_native(value: Any) -> Any:
+    """Return a JSON-native copy of a provider value or message part.
 
-    Handles dicts, Pydantic/SDK models (``model_dump``/``to_dict``) and plain
-    attribute objects, so a provider response never leaks into ``chat_params``
-    as an opaque object.
+    Handles dicts, lists, Pydantic/SDK models (``model_dump``/``to_dict``) and
+    plain attribute objects, so a provider response never leaks into
+    ``chat_params`` as an opaque object.
     """
-    if isinstance(message, dict):
-        return dict(message)
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    if isinstance(value, dict):
+        return {str(key): _json_native(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_native(item) for item in value]
     for dumper in ("to_dict", "model_dump"):
-        method = getattr(message, dumper, None)
+        method = getattr(value, dumper, None)
         if callable(method):
             try:
                 dumped = method()
             except TypeError:
                 continue
             if isinstance(dumped, dict):
-                return dict(dumped)
+                return _json_native(dumped)
     try:
-        attributes = vars(message)
+        attributes = vars(value)
     except TypeError:
         attributes = {}
     if attributes:
         return {
-            key: value
-            for key, value in attributes.items()
+            str(key): _json_native(item)
+            for key, item in attributes.items()
             if not key.startswith("_")
         }
+
+    # Handle slot-based message objects by reading fields from _MESSAGE_FIELDS.
     return {
-        field: getattr(message, field)
+        field: _json_native(getattr(value, field))
         for field in _MESSAGE_FIELDS
-        if getattr(message, field, None) is not None
+        if getattr(value, field, None) is not None
     }
 
 
 def _coerce_assistant_message(message: Any) -> Dict[str, Any]:
-    """Normalize a provider assistant message into the OpenAI wire format."""
-    data = _message_to_dict(message)
+    """Normalize a provider assistant message into the OpenAI wire format.
+
+    Keeps the same fields the streaming path builds by hand:
+    ``role``, ``content``, ``reasoning_content`` and ``tool_calls``.
+    """
+    data = _json_native(message)
     payload: Dict[str, Any] = {
-        "role": data.get("role") or "assistant",
+        "role": "assistant",
         "content": data.get("content") or "",
+        "reasoning_content": data.get("reasoning_content") or "",
     }
-    reasoning_content = data.get("reasoning_content")
-    if reasoning_content is not None:
-        payload["reasoning_content"] = reasoning_content
 
     tool_calls = []
     for tool_call in data.get("tool_calls") or []:
-        call = _message_to_dict(tool_call)
-        function = _message_to_dict(call.get("function") or {})
+        function = tool_call.get("function") or {}
         arguments = function.get("arguments", "")
         if arguments is None:
             arguments = ""
         elif not isinstance(arguments, str):
             arguments = json.dumps(arguments, ensure_ascii=False)
         tool_calls.append({
-            "id": call.get("id"),
-            "type": call.get("type") or "function",
+            "id": tool_call.get("id"),
+            "type": "function",
             "function": {
                 "name": function.get("name"),
                 "arguments": arguments,
@@ -2292,7 +2299,7 @@ class LightAgent:
                 self.log("DEBUG", "non_stream tool_calls", {"tool_calls": tool_calls})
                 # 将工具调用和响应添加到消息列表中
                 # 归一化为 dict：provider 返回的对象不一定是 JSON 原生类型，
-                # 直接存入让 context_budget / 事件序列化拿到不可序列化对象
+                # 直接存入会让 context_budget / 事件序列化拿到不可序列化对象
                 self.chat_params["messages"].append(
                     _coerce_assistant_message(response.choices[0].message)
                 )
