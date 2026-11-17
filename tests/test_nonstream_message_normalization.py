@@ -97,11 +97,16 @@ def assistant_messages(agent):
     return [m for m in agent.chat_params["messages"] if m.get("role") == "assistant"]
 
 
-def test_nonstream_tool_turn_stores_assistant_message_as_dict():
+def test_nonstream_tool_turn_stores_wire_format_dict():
+    store = InMemorySessionStore()
     completions = TwoStepCompletions()
-    agent = make_agent(completions)
+    agent = make_agent(
+        completions,
+        session_store=store,
+        context_budget=ContextBudget(max_tokens=100_000, reserved_output_tokens=1024),
+    )
 
-    assert agent.run("use echo_tool", tools=[echo_tool]) == "final-reply"
+    assert agent.run("use echo_tool", tools=[echo_tool], session_id="session-1") == "final-reply"
 
     assistants = assistant_messages(agent)
     assert len(assistants) == 1
@@ -115,8 +120,20 @@ def test_nonstream_tool_turn_stores_assistant_message_as_dict():
     }]
     assert set(assistants[0]) == {"role", "content", "reasoning_content", "tool_calls"}
 
+    # 第二次请求必须发得出去：修复前 ContextBudget.estimate 会在这里抛 TypeError
+    assert len(completions.calls) == 2
+    assert completions.calls[1]["messages"][2]["role"] == "assistant"
 
-def test_multimodal_content_is_json_native():
+    # 事件日志里同样不能出现 provider 对象
+    session = store.get("session-1")
+    requests = [event for event in session.events if event.type == "model.requested"]
+    assert len(requests) == 2
+    for request in requests:
+        assert all(isinstance(message, dict) for message in request.data["messages"])
+    json.dumps(requests[-1].data["messages"])
+
+
+def test_multimodal_content_and_dict_arguments_are_json_native():
     from LightAgent.core import _coerce_assistant_message
 
     message = SimpleNamespace(
@@ -125,26 +142,16 @@ def test_multimodal_content_is_json_native():
         reasoning_content=None,
         tool_calls=[SimpleNamespace(
             id="call_1",
-            function=SimpleNamespace(name="echo_tool", arguments="{}"),
+            function=SimpleNamespace(name="echo_tool", arguments={"text": "hi"}),
         )],
     )
 
     assistant = _coerce_assistant_message(message)
 
     assert assistant["content"] == [{"type": "text", "text": "checking"}]
+    arguments = assistant["tool_calls"][0]["function"]["arguments"]
+    assert json.loads(arguments) == {"text": "hi"}
     json.dumps(assistant)
-
-
-def test_nonstream_tool_turn_with_context_budget_issues_second_request():
-    completions = TwoStepCompletions()
-    agent = make_agent(
-        completions,
-        context_budget=ContextBudget(max_tokens=100_000, reserved_output_tokens=1024),
-    )
-
-    assert agent.run("use echo_tool", tools=[echo_tool]) == "final-reply"
-    assert len(completions.calls) == 2
-    assert completions.calls[1]["messages"][2]["role"] == "assistant"
 
 
 def test_pydantic_v2_message_is_normalized():
@@ -195,39 +202,6 @@ def test_openai_sdk_message_is_normalized():
     assert assistant["content"] == ""
     assert assistant["tool_calls"][0]["id"] == "call_sdk"
     assert assistant["tool_calls"][0]["function"]["name"] == "echo_tool"
-
-
-def test_non_string_arguments_are_serialized():
-    from LightAgent.core import _coerce_assistant_message
-
-    message = SimpleNamespace(
-        role="assistant",
-        content=None,
-        tool_calls=[SimpleNamespace(
-            id="call_dict_args",
-            function=SimpleNamespace(name="echo_tool", arguments={"text": "hi"}),
-        )],
-    )
-
-    assistant = _coerce_assistant_message(message)
-
-    arguments = assistant["tool_calls"][0]["function"]["arguments"]
-    assert json.loads(arguments) == {"text": "hi"}
-
-
-def test_model_requested_event_messages_are_json_native():
-    store = InMemorySessionStore()
-    completions = TwoStepCompletions()
-    agent = make_agent(completions, session_store=store)
-
-    agent.run("use echo_tool", tools=[echo_tool], session_id="session-1")
-
-    session = store.get("session-1")
-    requests = [event for event in session.events if event.type == "model.requested"]
-    assert len(requests) == 2
-    for request in requests:
-        assert all(isinstance(message, dict) for message in request.data["messages"])
-    json.dumps(requests[-1].data["messages"])
 
 
 def test_history_provider_message_is_normalized_with_context_budget():
