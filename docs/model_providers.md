@@ -149,6 +149,15 @@ changing your code.
 For a full list of supported models and providers, see the
 [LiteLLM documentation](https://docs.litellm.ai/docs/providers).
 
+### Message Objects
+
+`run(..., history=[...])` accepts message dicts as well as provider message
+objects (Pydantic models, OpenAI SDK models, attribute objects). Each item is
+converted to JSON-native data before the first request; an object that cannot
+be converted raises `TypeError` naming the failing index (for example
+`history[3]: ...`). `get_history()` always returns message dicts, and non-stream
+tool turns store the assistant message in the OpenAI wire format.
+
 ### Troubleshooting
 
 - If you see `[LA-401]`, check the API key or provider account.

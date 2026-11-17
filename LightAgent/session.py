@@ -94,6 +94,11 @@ def _json_safe(value: Any, *, key: str | None = None) -> Any:
             return _json_safe(value.to_dict())
         except TypeError:
             pass
+    if hasattr(value, "model_dump") and callable(value.model_dump):
+        try:
+            return _json_safe(value.model_dump())
+        except TypeError:
+            pass
     if isinstance(value, dict):
         return {str(item_key): _json_safe(item, key=str(item_key)) for item_key, item in value.items()}
     if isinstance(value, (list, tuple, set)):
