@@ -874,6 +874,9 @@ class LightAgent:
 
         # 初始化历史记录
         history = projected_history if history is None and session_id is not None else (history or [])
+        # 调用方可能直接把 provider 消息对象塞进 history（如 response.choices[0].message），
+        # 统一转成 JSON 原生类型，否则 context_budget 估算与事件序列化会拿到不可序列化对象
+        history = [_json_native(item) for item in history]
 
         # 处理运行时传入的工具
         runtime_tools = []

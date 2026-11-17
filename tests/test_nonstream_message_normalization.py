@@ -247,6 +247,40 @@ def test_model_requested_event_messages_are_json_native():
     json.dumps(requests[-1].data["messages"])
 
 
+def test_history_provider_message_is_normalized_with_context_budget():
+    class OneShotCompletions:
+        def __init__(self):
+            self.calls = []
+
+        def create(self, **params):
+            self.calls.append(params)
+            return SimpleNamespace(choices=[SimpleNamespace(
+                message=SimpleNamespace(content="final-reply", tool_calls=None))])
+
+    store = InMemorySessionStore()
+    completions = OneShotCompletions()
+    agent = make_agent(
+        completions,
+        session_store=store,
+        context_budget=ContextBudget(max_tokens=100_000, reserved_output_tokens=1024),
+    )
+
+    result = agent.run(
+        "continue",
+        history=[SimpleNamespace(role="assistant", content="hi")],
+        session_id="session-history",
+    )
+
+    assert result == "final-reply"
+    assert completions.calls[0]["messages"][1] == {"role": "assistant", "content": "hi"}
+
+    session = store.get("session-history")
+    requests = [event for event in session.events if event.type == "model.requested"]
+    assert len(requests) == 1
+    assert all(isinstance(message, dict) for message in requests[0].data["messages"])
+    json.dumps(agent.get_history())
+
+
 def test_dict_assistant_message_is_not_mutated():
     from LightAgent.core import _coerce_assistant_message
 
