@@ -96,6 +96,17 @@ class JobManager:
 
     def start(self, name, operation, *, owner_agent_id=None, metadata=None, idempotency_key=None,
               cancellation_token=None, lease_seconds=None, parent_job_id=None, max_active=None):
+        record, _ = self.start_or_reuse(
+            name, operation, owner_agent_id=owner_agent_id, metadata=metadata,
+            idempotency_key=idempotency_key, cancellation_token=cancellation_token,
+            lease_seconds=lease_seconds, parent_job_id=parent_job_id, max_active=max_active,
+        )
+        return record
+
+    def start_or_reuse(self, name, operation, *, owner_agent_id=None, metadata=None, idempotency_key=None,
+                       cancellation_token=None, lease_seconds=None, parent_job_id=None,
+                       max_active=None) -> tuple[JobRecord, bool]:
+        """Returns the Job record and whether this call created it."""
         loop = asyncio.get_running_loop()
         if lease_seconds is not None:
             positive_seconds(lease_seconds)
@@ -115,7 +126,7 @@ class JobManager:
                         raise JobConflict("job idempotency key reused for different parameters")
                     if inspect.iscoroutine(operation):
                         operation.close()
-                    return deepcopy(previous)
+                    return deepcopy(previous), False
             if max_active is not None and sum(
                     r.metadata.get("kind") == "subagent" and (status_of(r.to_dict()) in ACTIVE or r.runner_stopped is not True)
                     for r in self._records.values()) >= max_active:
@@ -135,7 +146,7 @@ class JobManager:
             self._put("job.created", record)
             self._cancellations[record.job_id] = token
             self._tasks[record.job_id] = loop.create_task(self._execute(record, operation, token))
-            return deepcopy(record)
+            return deepcopy(record), True
 
     async def _execute(self, claimed, operation, token):
         job_id, attempt = claimed.job_id, identity(claimed.to_dict())

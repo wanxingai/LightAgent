@@ -112,7 +112,7 @@ class SubagentManager:
             return await method(query, **options) if callable(arun) else await asyncio.to_thread(method, query, **options)
 
         key = "subagent:" + agent_id + ":" + idempotency_key if idempotency_key is not None else None
-        job = self.jobs.start(record.name, operation, owner_agent_id=agent_id,
+        job, created = self.jobs.start_or_reuse(record.name, operation, owner_agent_id=agent_id,
             metadata={"kind": "subagent", "input_digest": fingerprint,
                       "runner_kind": "coroutine" if callable(getattr(agent, "arun", None)) else "thread"},
             idempotency_key=key, cancellation_token=cancellation_token,
@@ -120,7 +120,8 @@ class SubagentManager:
         try:
             completed = await self.jobs.wait(job.job_id)
         except asyncio.CancelledError:
-            self.jobs.cancel(job.job_id, "subagent caller cancelled")
+            if created:
+                self.jobs.cancel(job.job_id, "subagent caller cancelled")
             raise
         if completed.status == JobStatus.CANCELLED:
             raise asyncio.CancelledError(completed.error)
