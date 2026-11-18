@@ -39,6 +39,92 @@ def test_subagent_runs_are_jobs_and_restore_requires_explicit_binding(tmp_path):
         asyncio.run(restored.subagents.run(child.agent_id, "different", idempotency_key="one"))
 
 
+@pytest.mark.parametrize("separate_runtime", [False, True])
+def test_cancelling_reused_subagent_wait_keeps_job_running(tmp_path, separate_runtime):
+    async def scenario():
+        path = tmp_path / "sessions.db"
+        runtime = AgentRuntime(session_store=SqliteSessionStore(path))
+        runtime.open_session("shared")
+        started, release, joined = asyncio.Event(), asyncio.Event(), asyncio.Event()
+        calls = []
+
+        class Child:
+            async def arun(self, query: str) -> str:
+                calls.append(query)
+                started.set()
+                await release.wait()
+                return query.upper()
+
+        agent = Child()
+        child = runtime.subagents.register(agent, persistent=True)
+        waiter_runtime = runtime
+        if separate_runtime:
+            waiter_runtime = AgentRuntime(session_store=SqliteSessionStore(path))
+            waiter_runtime.open_session("shared")
+            waiter_runtime.subagents.bind(child.agent_id, agent)
+
+        async def join_job() -> str:
+            joined.set()
+            return await waiter_runtime.subagents.run(child.agent_id, "hello", idempotency_key="one")
+
+        original = asyncio.create_task(runtime.subagents.run(
+            child.agent_id, "hello", idempotency_key="one", lease_seconds=10,
+        ))
+        duplicate = None
+        try:
+            await asyncio.wait_for(started.wait(), 5)
+            duplicate = asyncio.create_task(join_job())
+            await asyncio.wait_for(joined.wait(), 5)
+
+            duplicate.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await duplicate
+
+            assert [job.status for job in runtime.jobs.list()] == [JobStatus.RUNNING]
+            release.set()
+            assert await asyncio.wait_for(original, 5) == "HELLO"
+        finally:
+            release.set()
+            if duplicate is not None:
+                duplicate.cancel()
+                await asyncio.gather(duplicate, return_exceptions=True)
+            await asyncio.gather(original, return_exceptions=True)
+
+        assert calls == ["hello"]
+        assert [job.status for job in runtime.jobs.list()] == [JobStatus.SUCCESS]
+
+    asyncio.run(scenario())
+
+
+def test_cancelling_subagent_job_creator_cancels_job():
+    async def scenario():
+        runtime = AgentRuntime()
+        runtime.open_session()
+        started = asyncio.Event()
+        release = asyncio.Event()
+
+        class Child:
+            async def arun(self, query: str) -> str:
+                started.set()
+                await release.wait()
+                return query.upper()
+
+        child = runtime.subagents.register(Child())
+        original = asyncio.create_task(runtime.subagents.run(child.agent_id, "hello", idempotency_key="one"))
+        try:
+            await asyncio.wait_for(started.wait(), 5)
+            original.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await original
+
+            assert [job.status for job in runtime.jobs.list()] == [JobStatus.CANCELLED]
+        finally:
+            release.set()
+            await asyncio.gather(original, return_exceptions=True)
+
+    asyncio.run(scenario())
+
+
 def test_live_lease_survives_second_runtime_open_and_remote_cancel(tmp_path):
     async def scenario():
         path = tmp_path / "sessions.db"

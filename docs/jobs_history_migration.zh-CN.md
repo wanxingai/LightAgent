@@ -36,7 +36,7 @@ print(runtime.jobs.status(job.job_id))
 restored.subagents.bind(child.agent_id, trusted_child_agent)
 ```
 
-`persistent=True` 保存注册信息，不承诺 Python 对象可跨进程存活。父注册必须存在，子权限不能扩大；父子取消和 Session 取消沿 Job/注册树传递。Subagent 幂等键按 agent 隔离，输入参数不同会拒绝复用；使用幂等键时输入需能规范化为 JSON。重复调用读取同一 Job，不启动第二份工作。
+`persistent=True` 保存注册信息，不承诺 Python 对象可跨进程存活。父注册必须存在，子权限不能扩大；父子取消和 Session 取消沿 Job/注册树传递。Subagent 幂等键按 agent 隔离，输入参数不同会拒绝复用；使用幂等键时输入需能规范化为 JSON。重复调用读取同一 Job，不启动第二份工作。取消重复调用只结束本次等待。取消创建 Job 的调用仍会取消该 Job。
 
 旧版独立状态机留下的 `running` Subagent 没有关联 Job 时，展示为中断，`bind(..., note=...)` 必须记录宿主对旧执行的核对；不把它直接算作已停止或已成功。同步 Job callable 现在在线程执行，需要当前事件循环的操作应写成 async callable。
 
