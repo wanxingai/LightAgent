@@ -257,9 +257,16 @@ def test_compact_session_refreshes_runtime_session(tmp_path):
     second, _ = make_agent(["second answer"], session_store=store)
     first.run("first question", session_id="shared")
     second.run("second question", session_id="shared")
+    before = store.get("shared")
 
     first.compact_session(max_messages=2)
     first.pause_session("after compact")
 
     after = store.get("shared")
+    assert len(after.events) == len(before.events) + 2
+    assert [event.sequence for event in after.events] == list(range(1, len(after.events) + 1))
+    assert any(
+        event.type == "turn.started" and event.data["query"] == "second question"
+        for event in after.events
+    )
     assert after.events[-1].type == "session.paused"
