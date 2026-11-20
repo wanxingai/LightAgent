@@ -143,12 +143,20 @@ def test_session_page_append_event_and_future_schema_validation():
         Session.from_dict(payload)
 
 
-def test_in_memory_store_rejects_stale_session_save():
-    store = InMemorySessionStore()
+@pytest.mark.parametrize("store_factory", [
+    lambda path: InMemorySessionStore(),
+    lambda path: JsonlSessionStore(path / "jsonl"),
+    lambda path: SqliteSessionStore(path / "sessions.sqlite3"),
+])
+def test_session_store_rejects_stale_session_save(tmp_path, store_factory):
+    store = store_factory(tmp_path)
     original = Session(session_id="session")
     original.append("first")
     stale = store.create(original)
+
     current = store.get("session")
+    store.save(current)
+
     current.append("second")
     store.save(current)
 

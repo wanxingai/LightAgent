@@ -1118,14 +1118,17 @@ class LightAgent:
         if session is None:
             raise KeyError(session_id or "current session")
         result = self.context_compactor.compact(ContextProjector().messages(session), max_messages=max_messages)
-        target = self.runtime.session if self.runtime.session and self.runtime.session.session_id == session.session_id else session
-        target.append("context.compacted", {
+        session.append("context.compacted", {
             "messages": result.messages,
             "removed_count": result.removed_count,
             "summary": result.summary,
             "spilled": result.spilled,
         })
-        self.runtime.session_store.save(target)
+        self.runtime.session_store.save(session)
+        # Keep the in-process runtime on the same object so later control events
+        # are not written through a stale snapshot.
+        if self.runtime.session is not None and self.runtime.session.session_id == session.session_id:
+            self.runtime.session = session
         return {
             "messages": result.messages,
             "removed_count": result.removed_count,

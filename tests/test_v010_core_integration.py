@@ -2,7 +2,7 @@ import asyncio
 import json
 from types import SimpleNamespace
 
-from LightAgent import BudgetLimits, InMemorySessionStore, LightAgent
+from LightAgent import BudgetLimits, InMemorySessionStore, JsonlSessionStore, LightAgent
 
 
 class StaticCompletions:
@@ -228,3 +228,45 @@ def test_public_compact_session_reduces_projected_history_and_persists_event():
     event = persisted.events[-1]
     assert event.type == "context.compacted"
     assert event.data["removed_count"] == result["removed_count"]
+
+
+def test_compact_session_preserves_events_written_by_another_agent(tmp_path):
+    store = JsonlSessionStore(tmp_path / "sessions")
+    first, _ = make_agent(["first answer"], session_store=store)
+    second, _ = make_agent(["second answer"], session_store=store)
+    first.run("first question", session_id="shared")
+    second.run("second question", session_id="shared")
+    before = store.get("shared")
+
+    first.compact_session(max_messages=2)
+
+    after = store.get("shared")
+    assert len(after.events) == len(before.events) + 1
+    assert [event.sequence for event in after.events] == list(range(1, len(after.events) + 1))
+    assert any(
+        event.type == "turn.started" and event.data["query"] == "second question"
+        for event in after.events
+    )
+    assert after.events[-1].type == "context.compacted"
+    assert after.events[-1].sequence == before.events[-1].sequence + 1
+
+
+def test_compact_session_refreshes_runtime_session(tmp_path):
+    store = JsonlSessionStore(tmp_path / "sessions")
+    first, _ = make_agent(["first answer"], session_store=store)
+    second, _ = make_agent(["second answer"], session_store=store)
+    first.run("first question", session_id="shared")
+    second.run("second question", session_id="shared")
+    before = store.get("shared")
+
+    first.compact_session(max_messages=2)
+    first.pause_session("after compact")
+
+    after = store.get("shared")
+    assert len(after.events) == len(before.events) + 2
+    assert [event.sequence for event in after.events] == list(range(1, len(after.events) + 1))
+    assert any(
+        event.type == "turn.started" and event.data["query"] == "second question"
+        for event in after.events
+    )
+    assert after.events[-1].type == "session.paused"

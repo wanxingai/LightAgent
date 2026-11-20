@@ -490,6 +490,13 @@ class JsonlSessionStore:
             "schema_version": session.schema_version,
         }
         with self._lock:
+            if path.exists():
+                current = self.get(session.session_id)
+                if current is not None and current.events and session.events:
+                    if session.events[-1].sequence < current.events[-1].sequence:
+                        raise SequenceConflict(
+                            "refusing to replace a Session with an older event sequence"
+                        )
             with temporary.open("w", encoding="utf-8") as handle:
                 handle.write(json.dumps({"kind": "session", "value": header}, ensure_ascii=False) + "\n")
                 for event in session.events:
