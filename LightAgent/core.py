@@ -1125,6 +1125,8 @@ class LightAgent:
             "spilled": result.spilled,
         })
         self.runtime.session_store.save(session)
+        # Keep the in-process runtime on the same object so later control events
+        # are not written through a stale snapshot.
         if self.runtime.session is not None and self.runtime.session.session_id == session.session_id:
             self.runtime.session = session
         return {
